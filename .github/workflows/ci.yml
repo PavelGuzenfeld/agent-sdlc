@@ -26,3 +26,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: pip install numpy pytest pyyaml
       - run: pytest skills/sol-budget/tests
+
+  bin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh

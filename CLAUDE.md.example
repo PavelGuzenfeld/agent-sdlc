@@ -1,0 +1,9 @@
+# Global preferences (apply to every project)
+
+## Attribution — NEVER attribute work to any AI model
+- Do **NOT** add `🤖 Generated with Claude Code` (or any equivalent) to PR bodies, issues, or any output.
+- Do **NOT** add `Co-Authored-By: Claude ...` (or any model/agent co-author) trailers to git commits.
+- Do not otherwise credit Claude/Claude Code/any model in commit messages, PR descriptions, or comments.
+- Write commit messages and PR descriptions as the user's own work, with no AI-authorship signal.
+- Do **NOT** add a `Signed-off-by:` trailer to commits. It carries an email address.
+  If an upstream requires DCO sign-off, name the requirement and let Pavel add it.
