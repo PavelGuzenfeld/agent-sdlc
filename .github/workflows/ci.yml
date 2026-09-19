@@ -42,3 +42,9 @@ jobs:
       - run: pip install --no-cache-dir -e . pytest pytest-cov pyyaml ast-grep-cli
       - run: ast-grep --version
       - run: pytest -q mutation_gate/tests
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/install.sh
