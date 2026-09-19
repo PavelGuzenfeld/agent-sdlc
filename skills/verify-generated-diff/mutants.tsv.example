@@ -1,0 +1,20 @@
+# Mutant set — keep this file in the repo. It is a regression check on the
+# test suite, which nothing else in the toolchain provides.
+#
+# file<TAB>literal-old<TAB>literal-new<TAB>test-filter
+#   \n        expands to a real newline (multi-line mutants)
+#   <DELETE>  as the replacement means "delete this text" (Pass B)
+#   leading spaces are significant — keep them
+#
+# --- Pass A: does the test suite test anything? -----------------------------
+# boundary
+src/trk/gate.cpp	d2 < gate_sq	d2 <= gate_sq	trk_gate
+# constant
+src/trk/predict.cpp	dt * dt / 2.0	dt * dt	trk_predict
+# branch always taken
+src/trk/gate.cpp	d2 < gate_sq	true	trk_gate
+# stub the body — if this SURVIVES the test is worthless, not weak
+src/trk/gate.cpp	bool Gate::accept(const Meas& m) const {	bool Gate::accept(const Meas& m) const { return true;	trk_gate
+#
+# --- Pass B: is the defensive code load-bearing? ---------------------------
+src/trk/gate.cpp	  if (dof < 1 || dof > 6) dof = 3;\n	<DELETE>	trk_gate
