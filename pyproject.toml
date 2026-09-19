@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mutation-gate"
+description = "Diff-scoped mutation gate for pre-commit and agent Stop hooks"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dynamic = ["version"]
+
+[project.scripts]
+mutation-gate = "mutation_gate.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/PavelGuzenfeld/agent-sdlc"
+
+[tool.setuptools]
+packages = ["mutation_gate"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mutation_gate.__version__" }
