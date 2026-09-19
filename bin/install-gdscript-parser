@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Builds the tree-sitter-gdscript parser as the dynamic library ast-grep loads as
+# a custom language — ast-grep ships no GDScript and would reject it on its
+# popularity gate, so every repo that greps .gd points sgconfig.yml at this file.
+#
+#   install-gdscript-parser [dest.so]
+#
+# The build runs in Docker so the toolchain is the same everywhere. A parser built
+# against an older glibc loads on a newer one, not the reverse.
+set -euo pipefail
+
+DEST="${1:-$HOME/.local/share/ast-grep/gdscript.so}"
+VERSION="${GDSCRIPT_GRAMMAR_VERSION:-6.1.0}"
+OUT_DIR="$(dirname "$DEST")"
+OUT_NAME="$(basename "$DEST")"
+
+mkdir -p "$OUT_DIR"
+docker run --rm \
+	--user "$(id -u):$(id -g)" \
+	-e HOME=/tmp \
+	-v "$OUT_DIR":/out \
+	node:22 bash -c "
+		set -e
+		cd /tmp
+		npm init -y >/dev/null 2>&1
+		npm install --silent tree-sitter-gdscript@${VERSION} >/dev/null 2>&1
+		cd node_modules/tree-sitter-gdscript
+		cc -shared -fPIC -I src src/parser.c src/scanner.c -o /out/${OUT_NAME}
+	"
+
+printf 'built %s from tree-sitter-gdscript@%s (%s bytes)\n' \
+	"$DEST" "$VERSION" "$(stat -c %s "$DEST")"
+cat <<EOF
+
+Point a repo at it by committing an sgconfig.yml at its root:
+
+customLanguages:
+  gdscript:
+    libraryPath: ${DEST}
+    extensions: [gd]
+    expandoChar: _
+EOF
