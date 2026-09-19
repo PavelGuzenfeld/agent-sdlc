@@ -32,3 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh
+
+  mutation-gate-tests:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends git
+      - uses: actions/checkout@v4
+      - run: pip install --no-cache-dir -e . pytest pytest-cov pyyaml ast-grep-cli
+      - run: ast-grep --version
+      - run: pytest -q mutation_gate/tests
