@@ -1,0 +1,48 @@
+site_name: agent-sdlc
+site_description: Software development lifecycle as installable agent config for Claude Code and Codex.
+site_url: https://pavelguzenfeld.github.io/agent-sdlc/
+repo_url: https://github.com/PavelGuzenfeld/agent-sdlc
+repo_name: PavelGuzenfeld/agent-sdlc
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - SDLC: sdlc.md
+  - Gate: gate.md
+  - Debugging: debugging.md
+  - Reporting: reporting.md
+  - Rules: rules.md
+  - Skills: skills.md
+
+validation:
+  links:
+    not_found: info

@@ -48,3 +48,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sh tests/install.sh
+
+  docs:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install mkdocs-material
+      - run: mkdocs build --strict
