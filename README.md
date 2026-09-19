@@ -15,7 +15,7 @@ directories into `~/.claude` and `~/.codex`. Not yet implemented; see the
 tracker.
 
 CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918
-addresses, `user@host`, `/home/<user>/` paths and non-personal `ghcr.io/`
-paths, and prints only `file:line`.
+addresses, user-at-host references, `/home/<user>/` paths and
+non-personal `ghcr.io/` paths, and prints only `file:line`.
 
 MIT, see [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).

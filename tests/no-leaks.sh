@@ -61,6 +61,7 @@ expect_clean "172.15 is public"            "host 172.15.0.1"
 expect_clean "172.32 is public"            "host 172.32.0.1"
 expect_clean "personal ghcr namespace"     "image ghcr.io/PavelGuzenfeld/agent-sdlc:latest"
 expect_clean "decorator is not a host"     "@pytest.mark.parametrize"
+expect_clean "actions ref is not a host"   "uses: actions/checkout@v4"
 
 repo=$(fixture_repo "clean line")
 printf '%s\n' "a@b.com" > "$repo/untracked.txt"
