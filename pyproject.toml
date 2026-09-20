@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mutation-gate"
+name = "agent-sdlc"
 description = "Diff-scoped mutation gate for pre-commit and agent Stop hooks"
 readme = "README.md"
 license = "MIT"
