@@ -1,0 +1,8 @@
+email|contact a@b.com for access
+ssh user@host|ssh deploy@build-box
+rfc1918 10/8|host ***REMOVED***
+rfc1918 192.168/16|host ***REMOVED***
+rfc1918 172.16/12 low edge|host 172.16.0.1
+rfc1918 172.16/12 high edge|host 172.31.255.254
+home path|see /home/someone/.claude/rules
+foreign ghcr namespace|image ghcr.io/other-org/tool:latest

@@ -3,6 +3,7 @@ set -eu
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 script="$dir/scripts/no-leaks.sh"
+fixtures="$dir/tests/fixtures"
 failures=0
 
 fixture_repo() {
@@ -45,26 +46,20 @@ expect_clean() {
     rm -rf "$repo"
 }
 
-expect_leak "email"                        "contact a@b.com for access"
-expect_leak "ssh user@host"                "ssh deploy@build-box"
-expect_leak "rfc1918 10/8"                 "host ***REMOVED***"
-expect_leak "rfc1918 192.168/16"           "host ***REMOVED***"
-expect_leak "rfc1918 172.16/12 low edge"   "host 172.16.0.1"
-expect_leak "rfc1918 172.16/12 high edge"  "host 172.31.255.254"
-expect_leak "home path"                    "see /home/someone/.claude/rules"
-expect_leak "foreign ghcr namespace"       "image ghcr.io/other-org/tool:latest"
+while IFS='|' read -r name content; do
+    [ -n "$name" ] || continue
+    expect_leak "$name" "$content"
+done < "$fixtures/leaky.txt"
 
-expect_clean "plain prose"                 "rotate the API token before the access token expires"
-expect_clean "tilde path"                  "edit ~/.claude/settings.json"
-expect_clean "public ip"                   "host 8.8.8.8"
-expect_clean "172.15 is public"            "host 172.15.0.1"
-expect_clean "172.32 is public"            "host 172.32.0.1"
-expect_clean "personal ghcr namespace"     "image ghcr.io/PavelGuzenfeld/agent-sdlc:latest"
-expect_clean "decorator is not a host"     "@pytest.mark.parametrize"
-expect_clean "actions ref is not a host"   "uses: actions/checkout@v4"
+while IFS='|' read -r name content; do
+    [ -n "$name" ] || continue
+    expect_clean "$name" "$content"
+done < "$fixtures/clean.txt"
 
+email_content=$(awk -F'|' '$1 == "email" { print $2 }' "$fixtures/leaky.txt")
+[ -n "$email_content" ] || { echo "FAIL: leaky.txt has no 'email' row" >&2; exit 1; }
 repo=$(fixture_repo "clean line")
-printf '%s\n' "a@b.com" > "$repo/untracked.txt"
+printf '%s\n' "$email_content" > "$repo/untracked.txt"
 scan "$repo"
 if [ "$code" -ne 0 ]; then
     echo "FAIL: untracked file is ignored (expected exit 0, got $code): $stderr" >&2
