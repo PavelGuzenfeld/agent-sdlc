@@ -26,3 +26,7 @@ nothing.
 
 `--deps` installs `git gh jq docker python3 ast-grep pytest` and the gate;
 `--deps=say` adds the Kokoro voice stack.
+
+The `mutation-gate` CLI alone, without the rest of the pack, installs with
+`pip install agent-sdlc` (the importable module stays `mutation_gate`, the
+console script stays `mutation-gate`).
