@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: mutation-gate
+        name: mutation gate (diff-scoped)
+        entry: mutation-gate --staged
+        language: system
+        files: ^(mutation_gate|skills/sol-budget/scripts)/.*\.py$
+        pass_filenames: false
