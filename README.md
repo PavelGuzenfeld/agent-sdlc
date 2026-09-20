@@ -14,7 +14,9 @@ Install: `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
 the directories into `~/.claude` and `~/.codex`, renders `commands/` as Codex
 skills, merges the hooks from `settings.example.json` and, with `--deps`,
 installs the tooling (`--deps=say` adds the Kokoro TTS stack). A second run
-changes nothing.
+changes nothing. It installs `ast-grep-cli` via pipx, which puts an `sg`
+shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it shadows the
+system `sg` (execute as a different group).
 
 CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918
 addresses, user-at-host references, `/home/<user>/` paths and
