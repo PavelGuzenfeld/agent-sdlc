@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  no-leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/no-leaks.sh
+      - run: sh scripts/no-leaks.sh
+
+  mutation-gate-tests:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends git
+      - uses: actions/checkout@v4
+      - run: pip install --no-cache-dir -e . pytest pytest-cov pyyaml ast-grep-cli
+      - run: ast-grep --version
+      - run: pytest -q mutation_gate/tests
+
+  sol-budget-tests:
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install numpy pytest pyyaml
+      - run: pytest skills/sol-budget/tests
+
+  bin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh
+
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh tests/install.sh
+
+  release:
+    needs: [no-leaks, mutation-gate-tests, sol-budget-tests, bin, install]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "## Changes since ${PREV_TAG}" > changelog.md
+          echo "" >> changelog.md
+          git log --oneline --no-merges "${PREV_TAG}..HEAD" | while read -r line; do
+            echo "- ${line}" >> changelog.md
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PRERELEASE_FLAGS=""
+          case "$GITHUB_REF_NAME" in
+            *rc*|*alpha*|*beta*) PRERELEASE_FLAGS="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file changelog.md \
+            $PRERELEASE_FLAGS
