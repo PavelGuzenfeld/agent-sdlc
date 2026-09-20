@@ -22,6 +22,19 @@ while [ $# -gt 0 ]; do
 done
 case "$target" in claude|codex|all) ;; *) usage ;; esac
 
+collisions=
+for d in "$repo"/skills/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if [ -f "$repo/commands/$name.md" ]; then
+        collisions="$collisions $name"
+    fi
+done
+if [ -n "$collisions" ]; then
+    echo "install.sh: name used by both a skill and a command:$collisions" >&2
+    exit 1
+fi
+
 wants() { [ "$target" = all ] || [ "$target" = "$1" ]; }
 
 link() {
