@@ -7,10 +7,6 @@ A software development lifecycle shipped as agent config: rules, skills, slash
 commands and a diff-scoped mutation gate, installable into Claude Code and
 Codex.
 
-Extracted from a private dotfiles setup and sanitized. Content lands one
-themed PR at a time; the [issue tracker](https://github.com/PavelGuzenfeld/agent-sdlc/issues)
-is the roadmap.
-
 ## Install
 
 `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
