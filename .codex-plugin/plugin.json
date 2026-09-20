@@ -1,0 +1,24 @@
+{
+  "name": "agent-sdlc",
+  "version": "0.1.0",
+  "description": "Skills, slash commands, rules and a diff-scoped mutation gate for a ticket-to-PR software development lifecycle.",
+  "author": {
+    "name": "Pavel Guzenfeld",
+    "url": "https://github.com/PavelGuzenfeld"
+  },
+  "homepage": "https://github.com/PavelGuzenfeld/agent-sdlc",
+  "repository": "https://github.com/PavelGuzenfeld/agent-sdlc",
+  "license": "MIT",
+  "keywords": ["claude-code", "codex", "agent-config", "mutation-testing"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Agent SDLC",
+    "shortDescription": "Ticket-to-PR agent config: skills, commands, rules, mutation gate",
+    "longDescription": "Installs a full software development lifecycle as agent config: skills for diagnosing, landing and reviewing changes, slash commands for the kata/done/grill workflow, rules for diff discipline and testing, and a diff-scoped mutation gate wired into commit and Stop hooks.",
+    "developerName": "Pavel Guzenfeld",
+    "category": "Productivity",
+    "capabilities": ["Skills", "Hooks"],
+    "websiteURL": "https://github.com/PavelGuzenfeld/agent-sdlc"
+  }
+}
