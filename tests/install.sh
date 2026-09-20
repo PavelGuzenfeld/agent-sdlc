@@ -58,6 +58,17 @@ expect "[codex only] no claude tree" test ! -e "$codex_only/.claude"
 
 rm -rf "$home" "$claude_only" "$codex_only"
 
+collide=$(mktemp -d)
+mkdir -p "$collide/skills/dup" "$collide/commands"
+: > "$collide/commands/dup.md"
+cp "$dir/install.sh" "$collide/install.sh"
+if HOME="$collide/home" sh "$collide/install.sh" --target all >"$collide/out" 2>&1; then
+    echo "FAIL: collision run exited zero" >&2
+    failures=$((failures + 1))
+fi
+expect "collision message names the colliding name" grep -q dup "$collide/out"
+rm -rf "$collide"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1
