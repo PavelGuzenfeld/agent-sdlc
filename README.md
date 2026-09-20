@@ -1,16 +1,15 @@
 # agent-sdlc
 
-Software development lifecycle as installable agent config: skills, slash
-commands, rules and a diff-scoped mutation gate, for Claude Code and Codex.
+[![CI](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/PavelGuzenfeld/agent-sdlc)](LICENSE)
 
-Extracted from a private dotfiles setup and sanitized. Content lands one
-themed PR at a time; the [issue tracker](https://github.com/PavelGuzenfeld/agent-sdlc/issues)
-is the roadmap.
+A software development lifecycle shipped as agent config: rules, skills, slash
+commands and a diff-scoped mutation gate, installable into Claude Code and
+Codex.
 
-Layout: `skills/ commands/ rules/ bin/ mutation_gate/` at the root, no agent
-home baked in.
+## Install
 
-Install: `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
+`./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
 the directories into `~/.claude` and `~/.codex`, renders `commands/` as Codex
 skills, merges the hooks from `settings.example.json` and, with `--deps`,
 installs the tooling (`--deps=say` adds the Kokoro TTS stack). A second run
@@ -26,8 +25,16 @@ Plugin install: `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and
   `.agents/plugins/marketplace.json` lists one plugin entry with
   `source.path` set to the repo root.
 
-CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918
-addresses, user-at-host references, `/home/<user>/` paths and
-non-personal `ghcr.io/` paths, and prints only `file:line`.
+## What's inside
+
+`skills/ commands/ rules/ bin/ mutation_gate/` at the root, no agent home
+baked in. CI runs `scripts/no-leaks.sh` on every PR — it flags emails, RFC1918
+addresses, user-at-host references, `/home/<user>/` paths and non-personal
+`ghcr.io/` paths, and prints only `file:line`.
+
+## Docs
+
+The SDLC, the gate, debugging, reporting, rules and skills, in depth:
+<https://pavelguzenfeld.com/agent-sdlc/>.
 
 MIT, see [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
