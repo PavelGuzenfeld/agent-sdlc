@@ -1,7 +1,6 @@
 # agent-sdlc
 
 [![CI](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/github/license/PavelGuzenfeld/agent-sdlc)](LICENSE)
 
 A software development lifecycle shipped as agent config: rules, skills, slash
 commands and a diff-scoped mutation gate, installable into Claude Code and
