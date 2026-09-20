@@ -37,4 +37,5 @@ addresses, user-at-host references, `/home/<user>/` paths and non-personal
 The SDLC, the gate, debugging, reporting, rules and skills, in depth:
 <https://pavelguzenfeld.com/agent-sdlc/>.
 
-MIT, see [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
+MIT, see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for one vendored
+third-party skill. Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
