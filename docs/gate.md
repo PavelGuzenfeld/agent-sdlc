@@ -38,13 +38,19 @@
 ```
 
 A suite can be green and blind at once; only a kill rate tells them apart.
-`mutation-gate` runs the diff's mutants from a pre-commit hook and from the
-Stop hook. A surviving mutant blocks the commit: write the test that kills it,
-from the intent rather than the code, or record a waiver whose reason names
-why no test should. When the diff touches a declared model path the spec
-issue must resolve, a touched model test must cite an `MS-n` line, and a
-code-only blind pass reconstructs the intent for comparison. On green an
-adversary that never sees the implementation reviews intent against tests and
-reports into the session.
+[**Mutation testing**](https://en.wikipedia.org/wiki/Mutation_testing) seeds
+small, deliberate bugs (mutants) into the diff and reruns the tests: a mutant
+the suite doesn't catch is a bug the suite wouldn't catch either. `mutation-gate`
+runs this from a pre-commit hook and from the Stop hook. A surviving mutant
+blocks the commit: write the test that kills it, from the intent rather than
+the code, or record a waiver whose reason names why no test should. When the
+diff touches a declared model path the spec issue must resolve, a touched
+model test must cite an `MS-n` line, and a code-only blind pass reconstructs
+the intent for comparison.
 
-Source: `rules/testing.md`, `rules/model-vv.md`, `mutation_gate/`.
+On green, an **adversary** — an isolated review shown the intent and the
+tests, never the implementation — checks whether the tests actually assert
+the requirement or just match what the code happens to do. It reports into
+the session; it never blocks.
+
+Source: [`rules/testing.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/testing.md), [`rules/model-vv.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/model-vv.md), [`mutation_gate/`](https://github.com/PavelGuzenfeld/agent-sdlc/tree/main/mutation_gate).

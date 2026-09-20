@@ -2,14 +2,10 @@
 
 A software development lifecycle shipped as agent config: rules, skills, slash
 commands and a diff-scoped mutation gate, installable into Claude Code and
-Codex. The pack came out of a private dotfiles tree and lands here one themed,
-sanitized PR at a time. Files are copied, not rewritten; the
-[tracker](https://github.com/PavelGuzenfeld/agent-sdlc/issues) is the roadmap.
+Codex.
 
 The layout is agent-agnostic: `skills/ commands/ rules/ bin/ mutation_gate/`
-at the root, no agent home baked in. This site draws the process in four ASCII
-charts and includes the rule and skill text verbatim from the repo, so it never
-drifts from what the agent actually reads.
+at the root, no agent home baked in.
 
 ## Install
 
