@@ -6,3 +6,5 @@ rfc1918 172.16/12 low edge|host 172.16.0.1
 rfc1918 172.16/12 high edge|host 172.31.255.254
 home path|see /home/someone/.claude/rules
 foreign ghcr namespace|image ghcr.io/other-org/tool:latest
+ssh clone internal host|clone with git@internal-host.example:x.git
+prefixed identity|mail alice.git@github.com:x
