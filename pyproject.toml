@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mutation-gate"
 description = "Diff-scoped mutation gate for pre-commit and agent Stop hooks"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
 requires-python = ">=3.11"
 dynamic = ["version"]
 
