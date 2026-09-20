@@ -46,10 +46,18 @@ expect_clean() {
     rm -rf "$repo"
 }
 
+rfc1918_addr() {
+    printf '%s.%s.%s.%s' "$1" "$2" "$3" "$4"
+}
+
 while IFS='|' read -r name content; do
     [ -n "$name" ] || continue
     expect_leak "$name" "$content"
 done < "$fixtures/leaky.txt"
+
+expect_leak "rfc1918 10/8" "host $(rfc1918_addr 10 7 13 21)"
+expect_leak "rfc1918 192.168/16" "host $(rfc1918_addr 192 168 34 55)"
+expect_leak "identity near ip octets" "contact user123@$(rfc1918_addr 10 21 34 7)"
 
 while IFS='|' read -r name content; do
     [ -n "$name" ] || continue
