@@ -179,6 +179,7 @@ install_deps() {
         echo "apt$apt_missing"
     fi
     command -v ast-grep >/dev/null 2>&1 || py_install ast-grep-cli
+    command -v pre-commit >/dev/null 2>&1 || py_install pre-commit
     command -v mutation-gate >/dev/null 2>&1 || py_install "$repo"
     [ "$deps" = say ] && install_say
     return 0
