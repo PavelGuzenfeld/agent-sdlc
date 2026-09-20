@@ -6,3 +6,6 @@ public ip|host 8.8.8.8
 personal ghcr namespace|image ghcr.io/PavelGuzenfeld/agent-sdlc:latest
 decorator is not a host|@pytest.mark.parametrize
 actions ref is not a host|uses: actions/checkout@v4
+ssh clone github|clone with git@github.com:owner/repo.git
+ssh clone gitlab|clone with git@gitlab.com:owner/repo.git
+ssh clone bitbucket|clone with git@bitbucket.org:owner/repo.git
