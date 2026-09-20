@@ -12,6 +12,9 @@ files=$(git ls-files -- . ':!tests/fixtures/**')
 
 hits=$(printf '%s\n' "$files" | while IFS= read -r file; do
     [ -f "$file" ] || continue
+    chunk_size=$(head -c 8000 "$file" | wc -c)
+    text_size=$(head -c 8000 "$file" | LC_ALL=C tr -d '\000' | wc -c)
+    [ "$chunk_size" -ne "$text_size" ] && continue
     sed -E "s#$public_git_ssh_clone_url#\\1public-git-ssh-clone-url#g" -- "$file" \
         | sed -E "s#$npm_version_specifier#\\1npm-package-version\\2#g" \
         | grep -nIE -e "$identity" -e "$rfc1918" -e "$home_path" | cut -d: -f1 | sed "s|^|$file:|"

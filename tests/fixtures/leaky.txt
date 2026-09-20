@@ -10,3 +10,4 @@ ssh clone internal host|clone with git@internal-host.example:x.git
 prefixed identity|mail alice.git@github.com:x
 identity near ip octets|contact user123@10.0.0.5
 identity near npm-shaped host|contact alice@pkg-registry.internal
+non-ascii text is still scanned|señor contact a@b.com for access

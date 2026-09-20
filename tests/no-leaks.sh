@@ -67,6 +67,21 @@ if [ "$code" -ne 0 ]; then
 fi
 rm -rf "$repo"
 
+repo=$(mktemp -d)
+git -C "$repo" init -q
+printf '\000\377\376%s' "$email_content" > "$repo/fixture.bin"
+git -C "$repo" add fixture.bin
+scan "$repo"
+if [ "$code" -ne 0 ]; then
+    echo "FAIL: binary file with leak-shaped content is skipped (expected exit 0, got $code): $stderr" >&2
+    failures=$((failures + 1))
+fi
+if printf '%s' "$stderr" | grep -qi multibyte; then
+    echo "FAIL: binary file scan printed an awk multibyte warning: $stderr" >&2
+    failures=$((failures + 1))
+fi
+rm -rf "$repo"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1
