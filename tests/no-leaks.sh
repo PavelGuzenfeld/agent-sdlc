@@ -82,6 +82,65 @@ if printf '%s' "$stderr" | grep -qi multibyte; then
 fi
 rm -rf "$repo"
 
+text_file_head_probe_size=8000
+padding_past_head_probe=$(awk -v n="$text_file_head_probe_size" 'BEGIN { for (i = 0; i < n + 500; i++) printf "a" }')
+repo=$(mktemp -d)
+git -C "$repo" init -q
+printf '%s\000%s' "$padding_past_head_probe" "$email_content" > "$repo/fixture.bin"
+git -C "$repo" add fixture.bin
+scan "$repo"
+if [ "$code" -ne 0 ]; then
+    echo "FAIL: binary file with a NUL past the text-file head probe is skipped (expected exit 0, got $code): $stderr" >&2
+    failures=$((failures + 1))
+fi
+if printf '%s' "$stderr" | grep -qi 'binary file'; then
+    echo "FAIL: binary file scan printed a grep binary-file notice: $stderr" >&2
+    failures=$((failures + 1))
+fi
+rm -rf "$repo"
+
+adjacent_identity_user='alice'
+adjacent_identity_host='internal.example'
+adjacent_identity="${adjacent_identity_user}@${adjacent_identity_host}"
+
+carveout_sample() {
+    case "$1" in
+        public_git_ssh_clone_url) printf '%s' 'git@github.com:' ;;
+        npm_version_specifier) printf '%s' 'pkg@1.2.3 ' ;;
+        *)
+            echo "FAIL: no boundary sample declared for carve-out: $1" >&2
+            failures=$((failures + 1))
+            printf '%s' ''
+            ;;
+    esac
+}
+
+carveout_expected_output() {
+    case "$1" in
+        public_git_ssh_clone_url) printf '%s%s' 'public-git-ssh-clone-url' "$adjacent_identity" ;;
+        npm_version_specifier) printf '%s %s' 'npm-package-version' "$adjacent_identity" ;;
+        *)
+            echo "FAIL: no expected boundary output declared for carve-out: $1" >&2
+            failures=$((failures + 1))
+            printf '%s' ''
+            ;;
+    esac
+}
+
+eval "$(grep -E '^(identity_carve_outs|[a-z_]+_(pattern|replacement))=' "$script")"
+
+for carve_out in $identity_carve_outs; do
+    eval "pattern=\$${carve_out}_pattern"
+    eval "replacement=\$${carve_out}_replacement"
+    sample=$(carveout_sample "$carve_out")
+    boundary_output=$(printf '%s%s' "$sample" "$adjacent_identity" | sed -E "s#$pattern#$replacement#g")
+    expected_output=$(carveout_expected_output "$carve_out")
+    if [ "$boundary_output" != "$expected_output" ]; then
+        echo "FAIL: carve-out boundary ($carve_out): expected '$expected_output', got '$boundary_output'" >&2
+        failures=$((failures + 1))
+    fi
+done
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1
