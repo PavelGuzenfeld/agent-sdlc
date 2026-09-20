@@ -1,0 +1,15 @@
+{
+  "name": "agent-sdlc",
+  "version": "0.1.0",
+  "description": "Skills, slash commands, rules and a diff-scoped mutation gate for a ticket-to-PR software development lifecycle.",
+  "author": {
+    "name": "Pavel Guzenfeld",
+    "url": "https://github.com/PavelGuzenfeld"
+  },
+  "homepage": "https://github.com/PavelGuzenfeld/agent-sdlc",
+  "repository": "https://github.com/PavelGuzenfeld/agent-sdlc",
+  "license": "MIT",
+  "commands": "./commands/",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}
