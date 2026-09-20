@@ -16,6 +16,6 @@ no-leaks check runs on every commit; it has no dependencies beyond `sh` and
 --deps`), a commit touching `mutation_gate/` or `skills/sol-budget/scripts/`
 also runs the gate — see `rules/testing.md`.
 
-See CODE_OF_CONDUCT.md for the standard a PR is held to.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard a PR is held to.
 
 No CLA. No DCO sign-off.
