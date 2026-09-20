@@ -41,4 +41,5 @@ The SDLC, the gate, debugging, reporting, rules and skills, in depth:
 <https://pavelguzenfeld.com/agent-sdlc/>.
 
 MIT, see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for one vendored
-third-party skill. Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
+third-party skill. Contributions: [CONTRIBUTING.md](CONTRIBUTING.md), bound
+by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Security: [SECURITY.md](SECURITY.md).
