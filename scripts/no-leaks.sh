@@ -5,12 +5,14 @@ identity='(^|[^A-Za-z0-9._%+/-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)
 octet='[0-9]{1,3}'
 rfc1918="(^|[^0-9.])(10\\.$octet|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\.$octet\\.$octet([^0-9]|\$)"
 home_path='/home/[A-Za-z0-9._-]+/'
+public_git_ssh_clone_url='(^|[^A-Za-z0-9._%+/-])git@(github\.com|gitlab\.com|bitbucket\.org):'
 
 files=$(git ls-files -- . ':!tests/fixtures/**')
 
 hits=$(printf '%s\n' "$files" | while IFS= read -r file; do
     [ -f "$file" ] || continue
-    grep -nIE -e "$identity" -e "$rfc1918" -e "$home_path" -- "$file" | cut -d: -f1 | sed "s|^|$file:|"
+    sed -E "s#$public_git_ssh_clone_url#\\1public-git-ssh-clone-url#g" -- "$file" \
+        | grep -nIE -e "$identity" -e "$rfc1918" -e "$home_path" | cut -d: -f1 | sed "s|^|$file:|"
     awk -v file="$file" '{
         line = tolower($0)
         gsub(/ghcr\.io\/pavelguzenfeld\//, "", line)
