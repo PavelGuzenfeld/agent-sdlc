@@ -1,6 +1,6 @@
 site_name: agent-sdlc
 site_description: Software development lifecycle as installable agent config for Claude Code and Codex.
-site_url: https://pavelguzenfeld.github.io/agent-sdlc/
+site_url: https://pavelguzenfeld.com/agent-sdlc/
 repo_url: https://github.com/PavelGuzenfeld/agent-sdlc
 repo_name: PavelGuzenfeld/agent-sdlc
 edit_uri: edit/main/docs/
@@ -36,6 +36,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Getting started: getting-started.md
   - SDLC: sdlc.md
   - Gate: gate.md
   - Debugging: debugging.md
