@@ -9,3 +9,6 @@ actions ref is not a host|uses: actions/checkout@v4
 ssh clone github|clone with git@github.com:owner/repo.git
 ssh clone gitlab|clone with git@gitlab.com:owner/repo.git
 ssh clone bitbucket|clone with git@bitbucket.org:owner/repo.git
+npm install pinned version|npm i pkg@1.2.3
+npm install scoped pinned version|npm install @scope/pkg@2.0.0-beta.1
+npm install caret range|npm i pkg@^1.2.3
