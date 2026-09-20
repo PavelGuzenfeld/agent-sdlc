@@ -35,5 +35,5 @@ tracker. Triage adds `ready` once the ticket is the plan and a `model:*`
 label for who runs it; from there the SDLC chart applies. No preamble, no
 restated brief, no closing summary.
 
-Source: `.github/ISSUE_TEMPLATE/`, `CONTRIBUTING.md`, `rules/tickets.md`,
-`rules/voice.md`.
+Source: [`.github/ISSUE_TEMPLATE/`](https://github.com/PavelGuzenfeld/agent-sdlc/tree/main/.github/ISSUE_TEMPLATE), [`CONTRIBUTING.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/CONTRIBUTING.md), [`rules/tickets.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/tickets.md),
+[`rules/voice.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/voice.md).

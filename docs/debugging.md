@@ -41,4 +41,4 @@ variable at a time. The regression test goes in before the fix, at a seam
 that reaches the real bug pattern; when no such seam exists, that is the
 finding.
 
-Source: `skills/diagnose/SKILL.md`.
+Source: [`skills/diagnose/SKILL.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/skills/diagnose/SKILL.md).
