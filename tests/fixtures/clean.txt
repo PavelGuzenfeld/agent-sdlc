@@ -1,0 +1,8 @@
+plain prose|rotate the API token before the access token expires
+tilde path|edit ~/.claude/settings.json
+public ip|host 8.8.8.8
+172.15 is public|host 172.15.0.1
+172.32 is public|host 172.32.0.1
+personal ghcr namespace|image ghcr.io/PavelGuzenfeld/agent-sdlc:latest
+decorator is not a host|@pytest.mark.parametrize
+actions ref is not a host|uses: actions/checkout@v4
