@@ -10,9 +10,11 @@ is the roadmap.
 Layout: `skills/ commands/ rules/ bin/ mutation_gate/` at the root, no agent
 home baked in.
 
-Install: `./install.sh --target claude|codex|all [--deps]` symlinks the
-directories into `~/.claude` and `~/.codex`. Not yet implemented; see the
-tracker.
+Install: `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
+the directories into `~/.claude` and `~/.codex`, renders `commands/` as Codex
+skills, merges the hooks from `settings.example.json` and, with `--deps`,
+installs the tooling (`--deps=say` adds the Kokoro TTS stack). A second run
+changes nothing.
 
 CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918
 addresses, user-at-host references, `/home/<user>/` paths and
