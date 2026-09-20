@@ -17,6 +17,10 @@ changes nothing. It installs `ast-grep-cli` via pipx, which puts an `sg`
 shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it shadows the
 system `sg` (execute as a different group).
 
+The `mutation-gate` CLI alone can be installed from a tagged
+[release](https://github.com/PavelGuzenfeld/agent-sdlc/releases)'s wheel:
+`pip install <release .whl URL>`.
+
 Plugin install: `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and
 `.agents/plugins/marketplace.json` ship at the repo root.
 

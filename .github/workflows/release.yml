@@ -72,6 +72,16 @@ jobs:
             echo "- ${line}" >> changelog.md
           done
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: |
+          pip install --no-cache-dir build
+          python -m build
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,4 +93,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file changelog.md \
-            $PRERELEASE_FLAGS
+            $PRERELEASE_FLAGS \
+            dist/*
