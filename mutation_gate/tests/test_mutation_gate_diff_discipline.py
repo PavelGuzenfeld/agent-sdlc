@@ -38,6 +38,8 @@ def _stub_git(monkeypatch, *, branch: str = "feature", numstat: str = "", log: s
             if args[-1] in verifiable:
                 return "f" * 40 + "\n"
             raise GateError("git rev-parse: fatal")
+        if args[:2] == ("rev-parse", "--git-path"):
+            return "MERGE_HEAD\n"
         if args[0] == "merge-base":
             if merge_base is None:
                 raise GateError("git merge-base: fatal: Not a valid object name HEAD")
@@ -232,6 +234,32 @@ def test_local_form_counts_the_index_against_the_merge_base(monkeypatch, tmp_pat
     _local(monkeypatch, tmp_path)
     assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "abc123") in calls
     assert ("log", "--format=%B", "abc123..HEAD") in calls
+
+
+def test_a_merge_in_progress_counts_the_index_against_the_merge_base_with_the_incoming_head(
+    monkeypatch, tmp_path
+):
+    incoming = "c" * 40
+    (tmp_path / "MERGE_HEAD").write_text(incoming + "\n")
+    calls = _stub_git(monkeypatch, merge_base="merged0")
+    _local(monkeypatch, tmp_path)
+    assert ("merge-base", ORIGIN_MAIN, "HEAD", incoming) in calls
+    assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "merged0") in calls
+    assert ("log", "--format=%B", "merged0..HEAD") in calls
+
+
+def test_an_octopus_merge_passes_every_incoming_head_without_crashing(monkeypatch, tmp_path):
+    heads = ["c" * 40, "d" * 40]
+    (tmp_path / "MERGE_HEAD").write_text("\n".join(heads) + "\n")
+    calls = _stub_git(monkeypatch, merge_base="merged0", numstat=_numstat({"src/a.py": 20}))
+    assert _local(monkeypatch, tmp_path) == 0
+    assert ("merge-base", ORIGIN_MAIN, "HEAD", *heads) in calls
+
+
+def test_no_merge_head_file_omits_it_from_the_merge_base_call(monkeypatch, tmp_path):
+    calls = _stub_git(monkeypatch, merge_base="base0")
+    _local(monkeypatch, tmp_path)
+    assert ("merge-base", ORIGIN_MAIN, "HEAD") in calls
 
 
 def test_local_form_prefers_origin_head_as_the_default_branch(monkeypatch, tmp_path):
