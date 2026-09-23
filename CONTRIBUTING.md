@@ -22,7 +22,9 @@ and every commit message is checked against `rules/voice.md`'s banned words
 and against AI attribution and sign-off trailers — see `rules/testing.md` and
 `rules/voice.md`. A branch that adds more than 40 production lines against
 `main` needs a ticket reference: an `N-slug` branch name or `#N` in a commit
-message — see `rules/diff-discipline.md`.
+message — see `rules/diff-discipline.md`. A newly added `.md` file outside the
+built-in allowlist needs a `doc_allow` entry with a reason in
+`.mutation-gate.toml` — see `rules/tickets.md`.
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard a PR is held to.
 

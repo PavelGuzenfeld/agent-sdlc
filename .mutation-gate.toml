@@ -8,3 +8,19 @@ coverage_data_file = ".coverage"
 [[model_exclude]]
 path = "mutation_gate/model_vv.py"
 reason = "the probe's own keyword table (atan2 etc.) is literal regex source here, not model code (dotfiles#68 item 2)"
+
+[[doc_allow]]
+glob = "docs/**/*"
+reason = "mkdocs site content"
+
+[[doc_allow]]
+glob = "skills/**/*"
+reason = "skill instructions ship as markdown"
+
+[[doc_allow]]
+glob = "commands/**/*"
+reason = "slash command specs ship as markdown"
+
+[[doc_allow]]
+glob = "rules/**/*"
+reason = "packaged rule prose, synced into consuming repos by rules sync"
