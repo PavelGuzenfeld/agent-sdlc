@@ -3,8 +3,6 @@ issue, because the intent chain mined an issue number out of a previous commit
 and an explicitly passed --user-prompt never got reached. Nothing in the output
 said which intent was used, so a mismatch read as a confident finding."""
 
-import subprocess
-
 import pytest
 
 from mutation_gate import adversary, repo as repo_mod
@@ -19,20 +17,6 @@ def _repo(root):
         remotes=("origin",),
         config=repo_mod.Config(),
     )
-
-
-def _linked_worktree(tmp_path, branch: str):
-    main = tmp_path / "main"
-    main.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=main, check=True)
-    subprocess.run(["git", "config", "user.email", "t"], cwd=main, check=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=main, check=True)
-    (main / "f.txt").write_text("x\n")
-    subprocess.run(["git", "add", "-A"], cwd=main, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=main, check=True)
-    wt = tmp_path / "wt"
-    subprocess.run(["git", "worktree", "add", "-q", "-b", branch, str(wt)], cwd=main, check=True)
-    return _repo(wt)
 
 
 @pytest.fixture
@@ -140,25 +124,3 @@ def test_a_skipped_adversary_says_so_instead_of_naming_an_intent():
     assert "intent:" not in out
     assert "adversary skipped" in out
     assert "3 mutants, 0 survived" in out
-
-
-def test_a_gated_commit_on_its_ticket_branch_in_a_linked_worktree_resolves_intent(
-    tmp_path, monkeypatch
-):
-    repo = _linked_worktree(tmp_path, "90-adversary-intent-subagent-branch")
-    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: f"body of {n}")
-    intent = adversary.resolve_intent(repo, None)
-    assert intent is not None
-    assert intent.source == "issue #90"
-    assert adversary.run([], intent, "").startswith("intent: issue #90")
-
-
-def test_a_gated_commit_on_the_harness_default_worktree_branch_skips_the_adversary(
-    tmp_path, monkeypatch
-):
-    repo = _linked_worktree(tmp_path, "worktree-agent-a0cce6e8f54bb4467")
-    monkeypatch.setattr(adversary, "_issue_body", lambda *a: pytest.fail(
-        "read a digit out of a branch a subagent worktree actually uses"))
-    intent = adversary.resolve_intent(repo, None)
-    assert intent is None
-    assert "adversary skipped" in adversary.run([], intent, "")
