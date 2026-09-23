@@ -105,9 +105,10 @@ prints its full title and body for a yes/no first. Unticked is dropped, not defe
 Past five, offer the strongest five and say how many were dropped. Scan every draft
 before filing it; a hit blocks that item and names the token, never redact and file.
 
-Build the alternation from the banned-name and identity lists in
-`~/.claude/rules/public-surface.md`, which is the only copy of them, and run it
-over the draft. Never restate the tokens here — this file is committed.
+Build the alternation from the banned-name list at the `banned_names_file`
+named in `.mutation-gate.toml`, which is the only copy of it, and run it over
+the draft — the no-leaks hook's own scan already covers identity patterns.
+Never restate the tokens here — this file is committed.
 
 Title states the defect or the task flat — no prefix tag, no Overview, no closing
 line. Body is these four fields and nothing else, `Noticed in` being the commit that

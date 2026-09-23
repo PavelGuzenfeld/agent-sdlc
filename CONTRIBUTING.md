@@ -21,10 +21,21 @@ touching `mutation_gate/` or `skills/sol-budget/scripts/` also runs the gate,
 and every commit message is checked against `rules/voice.md`'s banned words
 and against AI attribution and sign-off trailers — see `rules/testing.md` and
 `rules/voice.md`. A branch that adds more than 40 production lines against
-`main` needs a ticket reference: an `N-slug` branch name or `#N` in a commit
-message — see `rules/diff-discipline.md`. A newly added `.md` file outside the
-built-in allowlist needs a `doc_allow` entry with a reason in
-`.mutation-gate.toml` — see `rules/tickets.md`.
+the default branch (`origin/HEAD`, falling back to `origin/main`,
+`origin/master`, `main`, `master`) needs a ticket reference: an `N-slug`
+branch name or `#N` in a commit message — see `rules/diff-discipline.md`.
+A newly added `.md` file outside the built-in allowlist needs a `doc_allow`
+entry with a reason in `.mutation-gate.toml` — see `rules/tickets.md`. If on
+PATH, `mutation-gate` also runs the packaged `no-leaks` check on the staged
+diff and the commit message: the same identity, RFC1918 and home-path scan
+as `scripts/no-leaks.sh`, plus an optional `banned_names_file` in
+`.mutation-gate.toml` pointing outside the repo. Its lines map `X → Y` — an
+optional `- ` bullet, the left side optionally backticked and
+`/`-separated for more than one banned token, a `→`, then the replacement —
+and a line with no `→` is prose and is ignored. A staged line or commit
+message line containing a banned `X` is rejected with `Y` suggested; a
+missing or unset file skips only that check, and a file that exists but
+parses to no mapping refuses the commit rather than passing silently.
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard a PR is held to.
 

@@ -14,7 +14,7 @@ repos:
         entry: >-
           sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
           echo "rules-check: skipped (not on PATH — see install.sh --deps)"; exit 0; };
-          exec mutation-gate rules check'
+          exec bin/mutation-gate rules check'
         language: system
         always_run: true
         pass_filenames: false
@@ -23,7 +23,7 @@ repos:
         entry: >-
           sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
           echo "mutation-gate: skipped (not on PATH — see install.sh --deps)"; exit 0; };
-          exec mutation-gate --staged'
+          exec bin/mutation-gate --staged'
         language: system
         files: ^(mutation_gate|skills/sol-budget/scripts)/.*\.py$
         pass_filenames: false
@@ -32,7 +32,7 @@ repos:
         entry: >-
           sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
           echo "commit-msg: skipped (not on PATH — see install.sh --deps)"; exit 0; };
-          exec mutation-gate commit-msg "$1"' _
+          exec bin/mutation-gate commit-msg "$1"' _
         language: system
         stages: [commit-msg]
       - id: diff-discipline
@@ -40,7 +40,7 @@ repos:
         entry: >-
           sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
           echo "diff-discipline: skipped (not on PATH — see install.sh --deps)"; exit 0; };
-          exec mutation-gate diff-discipline "$1"' _
+          exec bin/mutation-gate diff-discipline "$1"' _
         language: system
         stages: [commit-msg]
       - id: no-new-docs
@@ -48,7 +48,15 @@ repos:
         entry: >-
           sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
           echo "no-new-docs: skipped (not on PATH — see install.sh --deps)"; exit 0; };
-          exec mutation-gate no-new-docs'
+          exec bin/mutation-gate no-new-docs'
         language: system
         always_run: true
         pass_filenames: false
+      - id: no-leaks
+        name: no-leaks (identity/RFC1918/home-path scan plus optional banned_names_file)
+        entry: >-
+          sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
+          echo "no-leaks: skipped (not on PATH — see install.sh --deps)"; exit 0; };
+          exec bin/mutation-gate no-leaks "$1"' _
+        language: system
+        stages: [commit-msg]

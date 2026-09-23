@@ -240,7 +240,12 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     try:
         repo = discover()
-        dictionary = load(repo.root, repo.config.vocabulary)
+    except GateError:
+        repo = None
+    root = repo.root if repo else Path.cwd()
+    domain = repo.config.vocabulary if repo else ""
+    try:
+        dictionary = load(root, domain)
     except GateError as exc:
         _emit(f"mutation-gate vocabulary refused: {exc}")
         return 2
