@@ -24,12 +24,19 @@ def _emit(line: str) -> None:
     print(line, file=sys.stderr)
 
 
-def _glob(prefix: str) -> str:
-    return prefix + "**" if prefix.endswith("/") else prefix
+_GLOB_CHARS = "*?["
+
+
+def _globs(entry: str) -> list[str]:
+    if entry.endswith("/"):
+        return [entry + "**"]
+    if any(c in entry for c in _GLOB_CHARS):
+        return [entry]
+    return [entry, entry + "/**"]
 
 
 def frontmatter(model_paths: list[str]) -> bytes:
-    lines = "".join(f'  - "{_glob(p)}"\n' for p in model_paths)
+    lines = "".join(f'  - "{g}"\n' for p in model_paths for g in _globs(p))
     return f"---\npaths:\n{lines}---\n".encode()
 
 
