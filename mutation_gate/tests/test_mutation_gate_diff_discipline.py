@@ -189,6 +189,11 @@ def test_branch_prefix_needs_the_dash(monkeypatch, tmp_path):
     assert _local(monkeypatch, tmp_path) == 1
 
 
+def test_a_dashed_non_numeric_branch_is_not_a_ticket_prefix(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, branch="feature-x", numstat=_numstat({"src/a.py": 41}))
+    assert _local(monkeypatch, tmp_path) == 1
+
+
 def test_type_slash_n_slug_branch_is_not_a_ticket_prefix(monkeypatch, tmp_path):
     _stub_git(monkeypatch, branch="fix/12-feature", numstat=_numstat({"src/a.py": 41}))
     assert _local(monkeypatch, tmp_path) == 1
@@ -289,6 +294,14 @@ def test_range_form_blocks_forty_one_lines_and_passes_forty(monkeypatch, tmp_pat
     assert _range(monkeypatch, tmp_path) == 1
     _stub_git(monkeypatch, numstat=_numstat({"src/a.py": 40}))
     assert _range(monkeypatch, tmp_path) == 0
+
+
+def test_range_form_applies_the_same_exclusions(monkeypatch, tmp_path):
+    config = Config(model_test_paths=["model_tests"])
+    _stub_git(monkeypatch, numstat=_numstat(
+        {"src/a.py": 40, "tests/test_a.py": 41, "model_tests/harness.py": 41}, deleted={"src/old.py": 41}
+    ))
+    assert _range(monkeypatch, tmp_path, config=config) == 0
 
 
 def test_range_form_diffs_and_logs_the_given_range(monkeypatch, tmp_path):
