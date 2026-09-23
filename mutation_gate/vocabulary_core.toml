@@ -1,0 +1,88 @@
+[[concept]]
+word = "position"
+meaning = "where a thing is, in some frame of reference"
+pos = ["noun"]
+reject = ["location", "pos"]
+forms = ["plural"]
+
+[[concept]]
+word = "frame"
+meaning = "one image or one sample of a stream, or a coordinate reference"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "count"
+meaning = "how many, or to find how many"
+pos = ["noun", "verb"]
+reject = ["num"]
+forms = ["plural", "-s", "-ed", "-ing"]
+head = true
+
+[[concept]]
+word = "index"
+meaning = "the position of an element in an ordered collection"
+pos = ["noun"]
+reject = ["idx"]
+forms = ["plural"]
+irregular = { plural = "indices" }
+head = true
+
+[[concept]]
+word = "read"
+meaning = "take bytes or values from a source"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+irregular = { "-ed" = "read" }
+returns = "value"
+
+[[symbol]]
+word = "i"
+meaning = "loop index"
+
+[[symbol]]
+word = "n"
+meaning = "an element count"
+
+[[symbol]]
+word = "x"
+meaning = "first axis coordinate"
+
+[[symbol]]
+word = "y"
+meaning = "second axis coordinate"
+
+[[vague]]
+word = "manager"
+hint = "name what it does: scheduler, registry, pool, cache"
+
+[[vague]]
+word = "helper"
+hint = "name the one thing it helps with"
+
+[[vague]]
+word = "util"
+hint = "name the operation the module holds"
+
+[[vague]]
+word = "data"
+hint = "name the kind of data: frame, sample, record"
+
+[[vague]]
+word = "info"
+hint = "name what is known: version, status, size"
+
+[collection]
+types = ["list", "set", "dict", "tuple", "deque", "std::vector", "std::array", "std::map", "std::set"]
+
+[function_words]
+preposition = ["to", "from", "per", "of", "since", "by", "at", "in", "for", "with", "on", "into"]
+determiner = ["all", "each", "every", "any"]
+ordinal = ["first", "last", "next", "previous"]
+particle = ["up", "down", "out", "off"]
+
+[function_words.rejected]
+and = "one action per name: split the function, or name the combined step"
+or = "name the outcome, not the alternatives"
+not = "name the positive predicate and negate at the call site"
+no = "name the positive predicate and negate at the call site"
