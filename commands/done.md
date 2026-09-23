@@ -11,14 +11,33 @@ Commit. **Never push** — pushing is its own deliberate act.
 
 ## Sequence
 
-Survey → verify → commit → file → handoff → report → offer cleanup. Handoff comes after
-the commit so it can name the real SHA, and after filing so it can name the real issue
-numbers.
+Checkpoint agents → survey → verify → commit → file → handoff → report → offer cleanup.
+Handoff comes after the commit so it can name the real SHA, and after filing so it can
+name the real issue numbers.
 
-### 1. Survey
+### 1. Checkpoint agents
 
-`git status` and `git diff` in every repo touched this session. Attribute each change:
-did this session make it, or not?
+Only on an explicit `/done`. Kata's post-merge tail — `/done`'s tail run without its
+handoff step — skips this too: that tail follows one ticket's own merge, not a session
+interrupt, and must never reach into another lane's live agents.
+
+`ListAgents`. Nothing live: skip to survey.
+
+Send each live agent a checkpoint request: stop at a clean point, commit WIP on its own
+branch, never push, and report back its branch, worktree, SHA, next step, and any
+follow-up candidates noticed but not acted on. The commit this causes is one `/done`
+makes happen, not one it pushes — "never push" still holds.
+
+Wait for every reply. An agent that never replies is named in the report and the
+handoff with no branch or SHA to give. Nothing to commit: the agent says so and no
+commit is made. Mid a gated commit: the agent finishes or aborts the gate cleanly before
+replying — never killed, a killed mutation-gate run leaves mutants on disk.
+
+### 2. Survey
+
+`git status` and `git diff` in every repo touched this session, and in every worktree of
+an agent that replied to the checkpoint. Attribute each change: did this session make
+it, or not?
 
 Anything you cannot attribute to this session is **foreign** — another terminal, the
 user's own edit, a harness rewrite of its own files. Foreign changes are never
@@ -28,11 +47,12 @@ Run git from the work-tree root. A subdirectory cwd silently scopes pathspecs, s
 `ls-files`, `grep <tree-ish>` and `apply` quietly operate on the wrong subset — with
 `--work-tree` set this fails without an error message.
 
-### 2. Verify
+### 3. Verify
 
-The cheapest check per changed file type, on changed files only: `bash -n`, `zsh -n`,
-an elisp `read` loop, `ruff`/`prettier`, a JSON parse. Never a build, never Docker —
-this command is a reflex and has to stay sub-second.
+The cheapest check per changed file type, on changed files only, in every repo Survey
+covered — main tree and each replying agent's worktree: `bash -n`, `zsh -n`, an elisp
+`read` loop, `ruff`/`prettier`, a JSON parse. Never a build, never Docker — this command
+is a reflex and has to stay sub-second.
 
 A deleted line range is the case that needs this most: confirm the file still parses
 and that only what you meant to remove is gone. If a check fails, fix before
@@ -40,7 +60,7 @@ committing.
 
 Full test suites are a deliberate ask, not part of `/done`.
 
-### 3. Commit
+### 4. Commit
 
 Stage selectively. If this session's work spans unrelated concerns, split it into
 separate commits rather than one mixed one.
@@ -61,7 +81,7 @@ the staged diff for lines you did not intend to touch.
 Report the changed-line count. Follow the repo's commit-message convention — read
 `git log` before writing one.
 
-### 4. File follow-ups
+### 5. File follow-ups
 
 A candidate needs an artifact from this session behind it: a defect you observed and
 did not fix, scope deferred out loud, a `TODO`/`FIXME` this diff added, a waiver
@@ -74,7 +94,9 @@ candidates and file nothing. Drop any the handoff already references, and any wh
 title matches an open issue — one `gh issue list --state open` per target repo. The
 handoff is overwritten each run, so only that match catches a repeat from last week.
 
-One gate, five candidates maximum across all repos, rows reading `<repo> — <title>`.
+One gate, five candidates maximum across all repos — a checkpointed agent's reported
+candidates count against the same five, not a pool of their own — rows reading
+`<repo> — <title>`.
 Private-remote rows come pre-selected; public-remote rows do not, and ticking one
 prints its full title and body for a yes/no first. Unticked is dropped, not deferred.
 Past five, offer the strongest five and say how many were dropped. Scan every draft
@@ -103,29 +125,32 @@ missing; if creation is refused, file without it rather than drop the item.
 Nothing qualifying prints nothing. Anything here failing — auth, network, API — prints
 the drafts and continues; the commit and the SHA report never depend on this step.
 
-### 5. Handoff
+### 6. Handoff
 
-Skip this step entirely when every commit this session landed is on a branch whose PR
-carries `Closes #N` — the ticket already holds the state. Delete a stale
-`project_current_work.md` and its pointer.
+Skip this step entirely when every commit this session landed, main's and every
+checkpointed agent's, is on a branch whose PR carries `Closes #N` — the ticket already
+holds the state. An agent branch with no PR open yet fails that test on its own, so a
+live checkpoint almost always forces this step even when main's commit alone would have
+skipped it. Delete a stale `project_current_work.md` and its pointer.
 
 Rewrite `project_current_work.md` in this project's memory directory. **Overwrite it.**
 It is one rolling file, never a per-session note — accumulating stopping points is the
 failure this design exists to avoid.
 
 It holds only what git cannot: the commit SHA and what landed, the next concrete step,
-and anything blocked with the reason. Anything that outlives this thread of work is an
-issue, not a line here — reference those by number and do not restate them. Keep its
-`MEMORY.md` pointer to one line.
+anything blocked with the reason, and — one line per checkpointed agent — its branch,
+worktree, SHA and next step. Anything that outlives this thread of work is an issue, not
+a line here — reference those by number and do not restate them. Keep its `MEMORY.md`
+pointer to one line.
 
 When the work is finished, delete the file and its pointer. A stale handoff is worse
 than none.
 
-### 6. Report
+### 7. Report
 
 The SHA and subject. The changed-line count. What was left unstaged and why. What is
 unpushed. The issues filed, by number, if any were — or the reason filing failed.
 
-### 7. Offer cleanup
+### 8. Offer cleanup
 
 One line offering `/cleanup` and `/debrief-agent`. Do not run either.
