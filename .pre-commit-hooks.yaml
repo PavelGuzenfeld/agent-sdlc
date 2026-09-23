@@ -15,3 +15,8 @@
   entry: mutation-gate commit-msg
   language: python
   stages: [commit-msg]
+- id: diff-discipline
+  name: diff discipline (branch line limit without a ticket reference)
+  entry: mutation-gate diff-discipline
+  language: python
+  stages: [commit-msg]
