@@ -114,6 +114,26 @@ def test_cpp_leading_underscore_member_blocks_suggesting_count_(tmp_path, monkey
     assert "try `count_`" in err
 
 
+def test_staged_test_function_of_core_words_passes(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {"tests/test_a.py": "def test_read_frame():\n    pass\n"})
+    assert _gate(monkeypatch, tmp_path, repo, {"tests/test_a.py": {1, 2}}) == 0
+
+
+def test_staged_test_function_with_an_unknown_word_blocks(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {"tests/test_a.py": "def test_frob_frame():\n    pass\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {"tests/test_a.py": {1, 2}})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "tests/test_a.py:1: function `test_frob_frame` — `frob` is not in the dictionary" in err
+
+
+def test_lookup_test_answers_noun_and_verb_from_the_core(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(vocabulary, "discover", lambda cwd=None: Repo(
+        root=tmp_path, origin="", remotes=(), config=Config()))
+    assert cli.main(["vocabulary", "lookup", "test"]) == 0
+    assert capsys.readouterr().out.startswith("test: noun, verb\n")
+
+
 def test_key_unset_runs_nothing(tmp_path, monkeypatch):
     repo = _repo(tmp_path, "", {"pkg/a.py": "loc = 1\n"})
     monkeypatch.setattr(vocabulary_check, "declarations", lambda *a: pytest.fail("scanned"))

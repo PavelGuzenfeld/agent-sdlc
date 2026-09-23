@@ -29,6 +29,12 @@ irregular = { plural = "indices" }
 head = true
 
 [[concept]]
+word = "test"
+meaning = "a check that code does what its requirement says, or to run one"
+pos = ["noun", "verb"]
+forms = ["plural", "-s", "-ed", "-ing"]
+
+[[concept]]
 word = "read"
 meaning = "take bytes or values from a source"
 pos = ["verb"]
