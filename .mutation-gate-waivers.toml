@@ -586,7 +586,7 @@ reason = "ms's default is only reached by callers that pass no ms — the no-com
 
 [[waiver]]
 file = "mutation_gate/rules.py"
-line = 70
+line = 77
 column = 7
 old = """stop < start"""
 new = """stop <= start"""

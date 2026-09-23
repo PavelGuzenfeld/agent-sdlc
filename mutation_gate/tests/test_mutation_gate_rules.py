@@ -67,8 +67,32 @@ def test_model_vv_leads_with_paths_frontmatter_built_from_model_paths(tmp_path, 
     )
     cli.main(["rules", "sync"])
     body = (rules.RULES_DIR / rules.SCOPED_RULE).read_bytes()
-    frontmatter = b'---\npaths:\n  - "filters/**"\n  - "gst/common/kalman_box.cpp"\n---\n'
+    frontmatter = (
+        b'---\npaths:\n  - "filters/**"\n'
+        b'  - "gst/common/kalman_box.cpp"\n  - "gst/common/kalman_box.cpp/**"\n---\n'
+    )
     assert (synced / rules.SCOPED_RULE).read_bytes() == frontmatter + body
+
+
+@pytest.mark.parametrize("entry", ["filters", "gst/common"])
+def test_slashless_directory_entry_renders_as_both_the_entry_and_its_glob_in_model_vv_and_agents(
+    tmp_path, monkeypatch, entry
+):
+    root = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{entry}"]\n').parents[1]
+    assert cli.main(["rules", "sync"]) == 0
+    expected = f'---\npaths:\n  - "{entry}"\n  - "{entry}/**"\n---\n'.encode()
+    model_vv = (root / ".claude" / "rules" / rules.SCOPED_RULE).read_bytes()
+    assert model_vv.startswith(expected)
+    agents = (root / "AGENTS.md").read_bytes()
+    assert b"## model-vv\n\n" + expected in agents
+
+
+@pytest.mark.parametrize("entry", ["src/*.py", "src/?.py", "src/[ab].py", "src/**"])
+def test_glob_entry_stays_verbatim_as_a_single_line(tmp_path, monkeypatch, entry):
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{entry}"]\n')
+    cli.main(["rules", "sync"])
+    body = (synced / rules.SCOPED_RULE).read_bytes()
+    assert body.startswith(f'---\npaths:\n  - "{entry}"\n---\n'.encode())
 
 
 def _flip_byte(path: Path, index: int) -> None:

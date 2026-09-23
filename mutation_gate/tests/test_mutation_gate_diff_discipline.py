@@ -12,6 +12,7 @@ from mutation_gate import cli, diff_discipline
 from mutation_gate.repo import Config, GateError, Golden, Repo
 
 ORIGIN_MAIN = "refs/remotes/origin/main"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _numstat(added: dict[str, int], deleted: dict[str, int] | None = None) -> str:
@@ -140,6 +141,14 @@ def test_model_test_paths_are_vv_artefacts(monkeypatch, tmp_path):
     config = Config(model_test_paths=["model_tests"])
     _stub_git(monkeypatch, numstat=_numstat({"model_tests/harness.py": 41}))
     assert _local(monkeypatch, tmp_path, config=config) == 0
+
+
+def test_a_slice_script_under_this_repos_tests_dir_counts_as_a_test_line(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, numstat=_numstat({"src/a.py": 41, "tests/diff-discipline-hook.sh": 7}))
+    assert _range(monkeypatch, tmp_path, config=Config.load(REPO_ROOT)) == 1
+    err = capsys.readouterr().err
+    assert "41 added production line(s)" in err
+    assert "excluded: 7 under test_paths" in err
 
 
 def test_golden_source_and_artifact_are_vv_artefacts(monkeypatch, tmp_path):

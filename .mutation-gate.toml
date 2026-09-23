@@ -1,10 +1,26 @@
 language = "python"
-test_paths = ["mutation_gate/tests", "skills/sol-budget/tests"]
+test_paths = ["mutation_gate/tests", "skills/sol-budget/tests", "tests"]
 
-test_command = '''printf 'FROM python:3.12-slim\nRUN pip install --no-cache-dir pytest pytest-cov pyyaml numpy ast-grep-cli\n' | docker build -q -t agent-sdlc-mutation-gate-py:3.12 - >/dev/null && docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/repo -w /repo agent-sdlc-mutation-gate-py:3.12 python -m pytest -q -p no:cacheprovider {tests}'''
-coverage_command = '''printf 'FROM python:3.12-slim\nRUN pip install --no-cache-dir pytest pytest-cov pyyaml numpy ast-grep-cli\n' | docker build -q -t agent-sdlc-mutation-gate-py:3.12 - >/dev/null && docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/repo -w /repo agent-sdlc-mutation-gate-py:3.12 python -m pytest -q -p no:cacheprovider --cov={file} --cov-context=test --cov-report= {tests}'''
+test_command = '''printf 'FROM python:3.12-slim\nRUN pip install --no-cache-dir pytest pytest-cov pyyaml numpy ast-grep-cli\n' | docker build -q -t agent-sdlc-mutation-gate-py:3.12 - >/dev/null && docker run --rm -u "$(id -u):$(id -g)" -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/repo -w /repo agent-sdlc-mutation-gate-py:3.12 python -m pytest -q -p no:cacheprovider {tests}'''
+coverage_command = '''printf 'FROM python:3.12-slim\nRUN pip install --no-cache-dir pytest pytest-cov pyyaml numpy ast-grep-cli\n' | docker build -q -t agent-sdlc-mutation-gate-py:3.12 - >/dev/null && docker run --rm -u "$(id -u):$(id -g)" -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/repo -w /repo agent-sdlc-mutation-gate-py:3.12 python -m pytest -q -p no:cacheprovider --cov={file} --cov-context=test --cov-report= {tests}'''
 coverage_data_file = ".coverage"
 
 [[model_exclude]]
 path = "mutation_gate/model_vv.py"
 reason = "the probe's own keyword table (atan2 etc.) is literal regex source here, not model code (dotfiles#68 item 2)"
+
+[[doc_allow]]
+glob = "docs/**/*"
+reason = "mkdocs site content"
+
+[[doc_allow]]
+glob = "skills/**/*"
+reason = "skill instructions ship as markdown"
+
+[[doc_allow]]
+glob = "commands/**/*"
+reason = "slash command specs ship as markdown"
+
+[[doc_allow]]
+glob = "rules/**/*"
+reason = "packaged rule prose, synced into consuming repos by rules sync"

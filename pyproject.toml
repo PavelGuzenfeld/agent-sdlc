@@ -9,6 +9,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dynamic = ["version"]
+dependencies = ["ast-grep-cli"]
 
 [project.scripts]
 mutation-gate = "mutation_gate.cli:main"

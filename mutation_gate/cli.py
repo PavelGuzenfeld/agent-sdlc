@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, rules, runner, token, vocabulary, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_new_docs, rules, runner, token, vocabulary, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -151,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         return vocabulary.main(argv[1:])
     if argv[:1] == ["diff-discipline"]:
         return diff_discipline.main(argv[1:])
+    if argv[:1] == ["no-new-docs"]:
+        return no_new_docs.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")
@@ -196,7 +198,6 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run(repo, args, staged: bool) -> int:
     try:
-        mutants.require_ast_grep()
         runner.guard_clean_start(repo)
         wvs = waivers.load(repo)
     except (GateError, ValueError) as exc:
@@ -249,6 +250,12 @@ def _run(repo, args, staged: bool) -> int:
     if not changed:
         _emit("mutation-gate: no gated source files in this change")
         return 0
+
+    try:
+        mutants.require_ast_grep()
+    except GateError as exc:
+        _emit(f"mutation-gate refused: {exc}")
+        return 2
 
     if args.dry_run:
         for rel, lines in sorted(changed.items()):
