@@ -58,8 +58,9 @@ else rather than guessing.
    `Report: ~/workspace/<YYYY-MM>-activity.md`
 
    Never publish it as an Artifact or to any other external surface: the report names
-   internal repos and hosts, which `~/.claude/rules/public-surface.md` bars from
-   leaving the machine. If a shareable copy is ever wanted, ask first and sanitize.
+   internal repos and hosts, which the banned-name list at the `banned_names_file`
+   named in `.mutation-gate.toml` bars from leaving the machine. If a shareable
+   copy is ever wanted, ask first and sanitize.
 
 ## Definitions — keep these stable so months stay comparable
 
