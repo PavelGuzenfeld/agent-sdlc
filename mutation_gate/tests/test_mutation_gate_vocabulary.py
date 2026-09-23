@@ -431,6 +431,15 @@ def test_audit_domain_reject_of_loc_still_counts_the_declarations_by_rule(
     )
 
 
+def test_audit_per_rule_counts_group_two_faults_on_one_declaration_by_kind(
+    tmp_path, monkeypatch, capsys
+):
+    _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "_frob = 1\n"})
+    code, out, _ = _audit([], capsys)
+    assert code == 0
+    assert "  variable: 2\n" in out
+
+
 def test_audit_format_toml_stub_is_accepted_once_meaning_is_filled(tmp_path, monkeypatch, capsys):
     _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "loc = 1\n"})
     code, out, _ = _audit(["--format", "toml"], capsys)
@@ -470,6 +479,29 @@ def test_audit_format_toml_emits_one_stub_per_unknown_word_ranked_by_frequency(
     )
 
 
+def test_audit_format_toml_emits_no_stub_for_a_vague_word(tmp_path, monkeypatch, capsys):
+    _audit_repo(tmp_path, monkeypatch, MIXED_UNKNOWN_FILES)
+    code, out, _ = _audit(["--format", "toml"], capsys)
+    assert code == 0
+    assert out == (
+        "# review (2): pkg/a.py:4: parameter `loc` — `loc` is not in the dictionary\n"
+        '[[concept]]\nword = "loc"\nmeaning = ""\npos = ["noun"]\n\n'
+        "# review (1): pkg/a.py:3: variable `frob` — `frob` is not in the dictionary\n"
+        '[[concept]]\nword = "frob"\nmeaning = ""\npos = ["noun"]\n\n'
+    )
+
+
+def test_audit_format_toml_emits_no_stub_for_a_rejected_synonym(tmp_path, monkeypatch, capsys):
+    files = {"pkg/a.py": "loc = 1\nfrob = 1\n"}
+    _audit_repo(tmp_path, monkeypatch, files, OPTED_IN, '[reject]\nloc = "position"\n')
+    code, out, _ = _audit(["--format", "toml"], capsys)
+    assert code == 0
+    assert out == (
+        "# review (1): pkg/a.py:2: variable `frob` — `frob` is not in the dictionary\n"
+        '[[concept]]\nword = "frob"\nmeaning = ""\npos = ["noun"]\n\n'
+    )
+
+
 LEADING_UNDERSCORE_FILES = {
     "pkg/a.py": "def _parse_frame():\n    pass\n\n\ndef __repr__():\n    return ''\n",
     "src/_impl.py": "x = 1\n",
@@ -496,6 +528,35 @@ def test_leading_underscore_flags_a_private_directory_segment(tmp_path, monkeypa
     out = capsys.readouterr().out
     assert code == 0
     assert out == "_private/x.py:0 _private private_\n"
+
+
+def test_leading_underscore_flags_a_private_variable_declaration(tmp_path, monkeypatch, capsys):
+    _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "_count = 1\n"})
+    code = cli.main(["vocabulary", "audit", "--leading-underscore"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == "pkg/a.py:1 _count count_\n"
+
+
+def test_leading_underscore_mangles_a_class_attribute_to_its_trailing_form(
+    tmp_path, monkeypatch, capsys
+):
+    _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "class A:\n    __count = 1\n"})
+    code = cli.main(["vocabulary", "audit", "--leading-underscore"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == "pkg/a.py:2 __count count_\n"
+
+
+def test_leading_underscore_skips_bare_underscore_convention_and_a_bare_reference(
+    tmp_path, monkeypatch, capsys
+):
+    files = {"pkg/a.py": "_ = 1\ndef main():\n    return _parse_frame()\n"}
+    _audit_repo(tmp_path, monkeypatch, files)
+    code = cli.main(["vocabulary", "audit", "--leading-underscore"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == ""
 
 
 def test_audit_refuses_when_not_a_git_repository(tmp_path, monkeypatch, capsys):
