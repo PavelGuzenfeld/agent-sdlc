@@ -49,5 +49,26 @@ if ! printf '%s' "$out" | grep -qF ".claude/rules/$name: differs from the packag
     exit 1
 fi
 
+(cd "$consumer" && mutation-gate rules sync)
+agents="$consumer/AGENTS.md"
+sed -i 's/<!-- BEGIN mutation-gate rules -->/<!-- BEGIN mutation-gate rules -->x/' "$agents"
+
+set +e
+out=$(cd "$consumer" && pre-commit run rules-check --all-files 2>&1)
+code=$?
+set -e
+
+if [ "$code" -eq 0 ]; then
+    echo "FAIL: rules-check should fail after editing the AGENTS.md block" >&2
+    rm -rf "$consumer"
+    exit 1
+fi
+if ! printf '%s' "$out" | grep -qF "AGENTS.md: rules block differs from the packaged rules"; then
+    echo "FAIL: rules-check failure did not name AGENTS.md" >&2
+    printf '%s\n' "$out" >&2
+    rm -rf "$consumer"
+    exit 1
+fi
+
 rm -rf "$consumer"
 echo "all cases passed"
