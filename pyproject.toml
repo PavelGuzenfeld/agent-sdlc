@@ -23,6 +23,7 @@ packages = ["mutation_gate", "mutation_gate.bundled_rules"]
 "mutation_gate.bundled_rules" = "rules"
 
 [tool.setuptools.package-data]
+"mutation_gate" = ["*.toml"]
 "mutation_gate.bundled_rules" = ["*.md"]
 
 [tool.setuptools.dynamic]

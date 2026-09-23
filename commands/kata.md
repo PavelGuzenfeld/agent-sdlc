@@ -62,7 +62,9 @@ removes the worktree, then deletes the branch. The merge closes the ticket
 through `Closes #N`.
 
 Then file the agent's follow-up candidates, run `/done`'s tail without its
-handoff step, and move to the next ticket.
+handoff step or its agent-checkpoint step, and move to the next ticket. That
+tail follows one ticket's own merge, not a session interrupt, and must never
+reach into another lane's live agents.
 
 ## Acceptance
 
