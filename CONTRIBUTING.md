@@ -34,7 +34,8 @@ optional `- ` bullet, the left side optionally backticked and
 `/`-separated for more than one banned token, a `→`, then the replacement —
 and a line with no `→` is prose and is ignored. A staged line or commit
 message line containing a banned `X` is rejected with `Y` suggested; a
-missing or unset file skips only that check.
+missing or unset file skips only that check, and a file that exists but
+parses to no mapping refuses the commit rather than passing silently.
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard a PR is held to.
 

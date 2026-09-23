@@ -76,9 +76,13 @@ def load_banned_names(path_str: str) -> list[BannedName]:
     if not path.is_file():
         return []
     try:
-        return parse_banned_names(path.read_text())
+        text = path.read_text()
     except OSError as exc:
         raise GateError(f"banned_names_file: {exc}") from exc
+    names = parse_banned_names(text)
+    if not names:
+        raise GateError(f"banned_names_file {path}: parsed to no `X → Y` mapping")
+    return names
 
 
 def _banned_hit(line: str, name: BannedName) -> bool:

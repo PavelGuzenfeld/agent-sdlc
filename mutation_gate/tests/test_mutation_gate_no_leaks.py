@@ -26,6 +26,15 @@ def _rows(name: str) -> list[tuple[str, str]]:
 LEAKY_ROWS = [(label, content) for label, content in _rows("leaky.txt") if "ghcr.io" not in content]
 CLEAN_ROWS = _rows("clean.txt")
 EMAIL = next(content for label, content in _rows("leaky.txt") if label == "email")
+GHCR_ROW = next(content for label, content in _rows("leaky.txt") if "ghcr.io" in content)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REFERENCE_DOCS = [
+    REPO_ROOT / "skills" / "upstream" / "SKILL.md",
+    REPO_ROOT / "commands" / "done.md",
+    REPO_ROOT / "commands" / "debrief-agent.md",
+    REPO_ROOT / "commands" / "activity.md",
+]
 
 
 def _diff(path: str, *lines: str, start: int = 1) -> str:
@@ -86,6 +95,17 @@ def test_generic_scan_matches_every_leaky_fixture_row(label, content):
 @pytest.mark.parametrize("label,content", CLEAN_ROWS)
 def test_generic_scan_passes_every_clean_fixture_row(label, content):
     assert not no_leaks.generic_hit(content), label
+
+
+def test_the_ghcr_namespace_check_stays_shell_only():
+    assert not no_leaks.generic_hit(GHCR_ROW)
+
+
+@pytest.mark.parametrize("path", REFERENCE_DOCS, ids=lambda p: p.name)
+def test_the_leak_reference_docs_point_at_the_setting_not_the_old_path(path):
+    text = path.read_text()
+    assert "banned_names_file" in text
+    assert "public-surface" not in text
 
 
 def test_a_staged_email_is_blocked_without_echoing_it(monkeypatch, tmp_path, capsys):
@@ -210,6 +230,28 @@ def test_a_banned_name_match_is_whole_word(monkeypatch, tmp_path, banned_config)
 def test_an_email_is_blocked_even_with_a_banned_names_file_configured(monkeypatch, tmp_path, banned_config):
     _stub_git(monkeypatch, diff=_diff("fixture.txt", EMAIL))
     assert _local(monkeypatch, tmp_path, config=banned_config) == 1
+
+
+def test_a_banned_name_in_the_message_being_written_is_blocked(monkeypatch, tmp_path, capsys, banned_config):
+    _stub_git(monkeypatch, diff="")
+    assert _local(monkeypatch, tmp_path, message="mentions foo here", config=banned_config) == 1
+    err = capsys.readouterr().err
+    assert "commit-msg:1" in err
+    assert 'use "bar"' in err
+
+
+def test_banned_names_file_loads_from_mutation_gate_toml(tmp_path):
+    (tmp_path / ".mutation-gate.toml").write_text('banned_names_file = "/outside/banned-names.txt"\n')
+    assert Config.load(tmp_path).banned_names_file == "/outside/banned-names.txt"
+
+
+def test_a_banned_names_file_that_parses_to_no_mapping_refuses(monkeypatch, tmp_path):
+    empty_file = tmp_path.parent / f"{tmp_path.name}-empty.txt"
+    empty_file.write_text("just prose, no mappings here\n")
+    config = Config(banned_names_file=str(empty_file))
+    _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
+    assert _local(monkeypatch, tmp_path, config=config) == 2
+    empty_file.unlink()
 
 
 def test_a_missing_banned_names_file_skips_that_check_only(monkeypatch, tmp_path):
