@@ -186,8 +186,10 @@ def test_rejected_word_rename_keeps_the_case_style(tmp_path, name, word, suggest
 
 def test_leading_underscore_and_unknown_word_are_separate_findings(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "_frob = 1\n", {1})
-    assert [f.split(":", 4)[4] for f in found] == ["frob_", ""]
-    assert found[0].startswith("1:variable:_frob:a leading `_` is not the private mark")
+    assert found == [
+        "1:variable:_frob:a leading `_` is not the private mark; private is a trailing `_`:frob_",
+        "1:variable:_frob:`frob` is not in the dictionary:",
+    ]
 
 
 @pytest.mark.parametrize("name", ["_", "__slots__", "self", "cls", "main", "kwargs", "tmp_path"])
@@ -200,8 +202,9 @@ def test_name_mangled_double_underscore_is_not_a_dunder(tmp_path):
     assert [f.split(":", 4)[4] for f in found] == ["count_"]
 
 
-def test_typing_override_decorator_exempts_the_python_method(tmp_path):
-    text = "class Frame:\n    @typing.override\n    def frob(self):\n        pass\n"
+@pytest.mark.parametrize("decorator", ["@override", "@typing.override"])
+def test_override_decorator_exempts_the_python_method(tmp_path, decorator):
+    text = f"class Frame:\n    {decorator}\n    def frob(self):\n        pass\n"
     assert _findings(tmp_path, "pkg/a.py", text, {1, 2, 3, 4}) == []
 
 
@@ -225,6 +228,18 @@ def test_python_class_body_assignment_is_a_field_and_self_attribute_too(tmp_path
 def test_python_local_and_parameter_take_a_symbol(tmp_path):
     text = "def read(Q, n=1, *args, **kwargs):\n    Q = n\n    return Q\n"
     assert _findings(tmp_path, "pkg/a.py", text, {1, 2, 3}, Q_SYMBOL) == []
+
+
+def test_python_parameter_and_local_are_declarations(tmp_path):
+    text = "def read(loc, idx: int = 1):\n    pos = loc\n    return pos\n"
+    found = _findings(tmp_path, "pkg/a.py", text, {1, 2, 3})
+    assert [f.split(":")[:3] for f in found] == [
+        ["1", "parameter", "idx"], ["1", "parameter", "loc"], ["2", "local", "pos"]
+    ]
+
+
+def test_cpp_parameter_takes_a_symbol(tmp_path):
+    assert _findings(tmp_path, "src/k.cpp", "void read(double Q);\n", {1}, Q_SYMBOL) == []
 
 
 def test_lower_case_symbol_spelling_matches_the_symbol_table(tmp_path):
@@ -291,6 +306,7 @@ def test_failed_scan_refuses_instead_of_passing(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("name, expected", [
     ("parse_frame_", ["parse", "frame"]),
+    ("frame__", ["frame"]),
     ("parseFrame", ["parse", "Frame"]),
     ("HTTPServer", ["HTTP", "Server"]),
     ("sha256_digest", ["sha256", "digest"]),
