@@ -63,6 +63,15 @@ class ModelExclude:
 
 
 @dataclass(frozen=True)
+class DocAllow:
+    """A new `.md` file the built-in allowlist does not cover. The reason is
+    the record, the way a waiver's reason is for the mutant catalogue."""
+
+    glob: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Golden:
     """Layer 3: the generated F/Q artefact must carry the sha256 of the SymPy
     source it was generated from (dotfiles#56 decision 8)."""
@@ -122,6 +131,7 @@ class Config:
     no_comments: bool = False
     vocabulary: str = ""
     own_namespaces: list[str] = field(default_factory=list)
+    doc_allow: list[DocAllow] = field(default_factory=list)
 
     def for_language(self, language: str) -> LanguageConfig:
         override = self.languages.get(language)
@@ -146,16 +156,18 @@ class Config:
         languages = _load_languages(raw.pop("languages", {}))
         model_exclude = _load_model_exclude(raw.pop("model_exclude", []))
         golden = _load_golden(raw.pop("golden", []))
+        doc_allow = _load_doc_allow(raw.pop("doc_allow", []))
         # Named, not silently dropped: a key that does nothing is how a repo
         # believes it is scoping the gate while the gate ignores it.
-        nested = {"languages", "model_exclude", "golden"}
+        nested = {"languages", "model_exclude", "golden", "doc_allow"}
         unknown = sorted(set(raw) - {f.name for f in fields(cls) if f.name not in nested})
         if unknown:
             raise GateError(
                 f"{CONFIG_NAME}: unknown key(s) {', '.join(unknown)} — delete them; "
                 "nothing reads them. Scope the gate with exclude_paths."
             )
-        return cls(**raw, languages=languages, model_exclude=model_exclude, golden=golden)
+        return cls(**raw, languages=languages, model_exclude=model_exclude, golden=golden,
+                   doc_allow=doc_allow)
 
     def test_prefixes(self) -> set[str]:
         paths = set(self.test_paths)
@@ -184,6 +196,18 @@ def _load_model_exclude(raw: list) -> list[ModelExclude]:
                 "naming why the probe hit is not model code"
             )
         out.append(ModelExclude(path=entry["path"], reason=entry["reason"]))
+    return out
+
+
+def _load_doc_allow(raw: list) -> list[DocAllow]:
+    out: list[DocAllow] = []
+    for entry in raw:
+        if not entry.get("glob") or not entry.get("reason"):
+            raise GateError(
+                f"{CONFIG_NAME}: every [[doc_allow]] needs `glob` and a `reason` "
+                "naming why these new docs are allowed"
+            )
+        out.append(DocAllow(glob=entry["glob"], reason=entry["reason"]))
     return out
 
 

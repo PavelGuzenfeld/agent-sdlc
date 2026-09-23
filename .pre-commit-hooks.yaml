@@ -20,3 +20,9 @@
   entry: mutation-gate diff-discipline
   language: python
   stages: [commit-msg]
+- id: no-new-docs
+  name: no new docs (newly added .md files must be allowlisted)
+  entry: mutation-gate no-new-docs
+  language: python
+  always_run: true
+  pass_filenames: false
