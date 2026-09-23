@@ -75,6 +75,14 @@ hint = "name what is known: version, status, size"
 [collection]
 types = ["list", "set", "dict", "tuple", "deque", "std::vector", "std::array", "std::map", "std::set"]
 
+[convention]
+names = [
+  "main", "argc", "argv", "self", "cls", "args", "kwargs",
+  "setUp", "tearDown", "setUpClass", "tearDownClass",
+  "tmp_path", "tmp_path_factory", "tmpdir", "monkeypatch", "capsys", "capfd", "caplog",
+  "request", "recwarn", "pytestconfig",
+]
+
 [function_words]
 preposition = ["to", "from", "per", "of", "since", "by", "at", "in", "for", "with", "on", "into"]
 determiner = ["all", "each", "every", "any"]

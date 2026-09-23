@@ -20,7 +20,7 @@ RETURNS = ("value", "none")
 CONCEPT_KEYS = {"word", "meaning", "pos", "reject", "forms", "irregular", "head", "returns"}
 CONCEPT_KINDS = ("canonical", "rejected", "form")
 DOMAIN_TABLES = {"concept", "reject", "symbol", "vague", "collection", "distinct"}
-CORE_TABLES = DOMAIN_TABLES | {"function_words"}
+CORE_TABLES = DOMAIN_TABLES | {"function_words", "convention"}
 
 _SIBILANT_ENDINGS = ("s", "x", "z", "ch", "sh")
 _SINGLE_VOWEL_CLOSED_SYLLABLE = re.compile(r"[^aeiou]*[aeiou][^aeiouwxy]")
@@ -55,6 +55,7 @@ class Dictionary:
     matches: dict[str, Match]
     collections: frozenset[str]
     distinct: frozenset[frozenset[str]]
+    conventions: frozenset[str]
 
     def resolve(self, word: str) -> Match | None:
         return self.matches.get(word)
@@ -223,7 +224,8 @@ def load(root: Path, domain: str) -> Dictionary:
                     f"{source}: [[distinct]] {pair} names a word that is not canonical"
                 )
             distinct.add(frozenset(pair))
-    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct))
+    conventions = frozenset(layers[0][1].get("convention", {}).get("names", []))
+    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct), conventions)
 
 
 def describe(match: Match) -> str:
