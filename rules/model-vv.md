@@ -15,7 +15,7 @@ magnitude work runs in a container, never in-head. Commit the script.
   The file path is not an option.
 - Absent → draft the skeleton from the code as the body of a new tracking issue, tag every
   line `(reconstructed)` or `(needs intent)`, **stop**. A spec derived from the implementation
-  can only agree with it. The intent lines are Pavel's.
+  can only agree with it. The intent lines are the maintainer's.
 - Every test under this file cites its spec line in its one-line docstring: `"""MS-7: Q stays
   PSD across the dt envelope."""`. No traceable line means the spec is incomplete (propose the
   line) or the test is unrequested (drop it).
@@ -29,12 +29,12 @@ magnitude work runs in a container, never in-head. Commit the script.
   intent, neglected effects and envelope, diffed against the spec. Divergence means the intent
   is not in the code. This file authorises the subagent; it reports, never blocks. It is not
   testing.md's adversary — opposite blindfold. Run both.
-- A CAS calculates. It never adjudicates sufficiency; Pavel does.
+- A CAS calculates. It never adjudicates sufficiency; the maintainer does.
 
 ## Layer 1 — Before editing
 - Assumption inventory for the touched code, one line each: frame, units, time base, noise
   model, linearisation, discretisation. Read out of the code, never out of the request.
-  Conflict with what Pavel said → stop and flag.
+  Conflict with the request → stop and flag.
 - Derive every numeric tolerance (float precision, dt order) and state the derivation. Never
   tune one until it goes green.
 
@@ -97,7 +97,7 @@ magnitude work runs in a container, never in-head. Commit the script.
 - Runtime asserts (Cholesky success, P symmetry, trace monotonicity): hard in debug, counter
   plus periodic report in release. Never add allocation, locking or logging to the real-time
   path. Existing real-time carve-outs still apply.
-- The mutation gate enforces Layer 0 mechanically (dotfiles#56): spec present (the pinned
+- The mutation gate enforces Layer 0 mechanically: spec present (the pinned
   issue resolves) when a `model_paths` file changes, a diff-touched model test cites an
   `MS-n` that exists and is
   untagged, and a keyword probe blocks once on model code not declared in `model_paths`. A

@@ -6,7 +6,7 @@ a gate config — or it is README, LICENSE, or CONTRIBUTING. Never write a desig
 doc, an RFC, or a decision log as a file in the repo; open a ticket and point to
 it instead.
 
-This binds repos I own. An upstream tree keeps its own doc conventions.
+This binds this repo. An upstream tree keeps its own doc conventions.
 
 ## Model spec
 
@@ -19,8 +19,5 @@ file.
 
 An approved ticket is the plan, and satisfies diff-discipline's stop on its own
 — no ticket, no change past the line-count limit; open one first. A ticket maps
-to exactly one branch and one PR, and the PR body carries `Closes #N`. Every
-repo I own defaults to squash-only merges with delete-branch-on-merge.
-
-At work the same ticket-and-slice discipline applies; nothing here changes for
-that context.
+to exactly one branch and one PR, and the PR body carries `Closes #N`. This
+repo defaults to squash-only merges with delete-branch-on-merge.

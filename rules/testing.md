@@ -26,8 +26,6 @@ the mutation is not a reason.
 A slice test counts as a covering test for the diff, same standing as any unit
 test — the gate does not care which kind killed the mutant.
 
-Spec and all 29 decisions: `PavelGuzenfeld/dotfiles#9`.
-
 ## Writing tests the gate will not embarrass
 
 **Assert the tight bound.** `assert x > 0` where the spec says `x == 4.5` passes
