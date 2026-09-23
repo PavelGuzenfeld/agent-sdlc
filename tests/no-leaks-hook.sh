@@ -93,6 +93,44 @@ set -e
 [ "$email_code" -ne 0 ] || fail "the hook should reject a staged email address even with a missing banned_names_file"
 printf '%s' "$email_out" | grep -qF "identity.txt:1" || fail "the hook rejection did not name identity.txt:1" "$email_out"
 printf '%s' "$email_out" | grep -qF "$email_content" && fail "the hook rejection echoed the email address" "$email_out"
+cgit reset -q --hard main
+
+cgit config diff.noprefix true
+printf '%s\n' "$email_content" > "$consumer/identity.txt"
+cgit add identity.txt
+set +e
+noprefix_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+noprefix_code=$?
+set -e
+[ "$noprefix_code" -ne 0 ] || fail "the hook should reject a staged email address under diff.noprefix"
+printf '%s' "$noprefix_out" | grep -qF "identity.txt:1" || fail "the hook rejection under diff.noprefix did not name identity.txt:1" "$noprefix_out"
+printf '%s' "$noprefix_out" | grep -qF "$email_content" && fail "the hook rejection under diff.noprefix echoed the email address" "$noprefix_out"
+cgit config --unset diff.noprefix
+cgit reset -q --hard main
+
+cgit config diff.mnemonicPrefix true
+printf '%s\n' "$email_content" > "$consumer/identity.txt"
+cgit add identity.txt
+set +e
+mnemonic_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+mnemonic_code=$?
+set -e
+[ "$mnemonic_code" -ne 0 ] || fail "the hook should reject a staged email address under diff.mnemonicPrefix"
+printf '%s' "$mnemonic_out" | grep -qF "identity.txt:1" || fail "the hook rejection under diff.mnemonicPrefix did not name identity.txt:1" "$mnemonic_out"
+printf '%s' "$mnemonic_out" | grep -qF "$email_content" && fail "the hook rejection under diff.mnemonicPrefix echoed the email address" "$mnemonic_out"
+cgit config --unset diff.mnemonicPrefix
+cgit reset -q --hard main
+
+printf '%s\n' "$email_content" > "$consumer/café identity.txt"
+cgit add "café identity.txt"
+set +e
+quoted_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+quoted_code=$?
+set -e
+[ "$quoted_code" -ne 0 ] || fail "the hook should reject a staged email address behind a quoted non-ascii path"
+printf '%s' "$quoted_out" | grep -qF "identity.txt:1" || fail "the hook rejection behind a quoted path did not name the file" "$quoted_out"
+printf '%s' "$quoted_out" | grep -qF "$email_content" && fail "the hook rejection behind a quoted path echoed the email address" "$quoted_out"
+cgit reset -q --hard main
 
 rm -rf "$consumer" "$work"
 echo "all cases passed"
