@@ -35,7 +35,10 @@ NO_PASS_MARKER = "exited 0 without reporting a pass"
 BASELINE_COLLECTION_FAILED = "failed to collect"
 
 _COLLECTION_FAILURE_EXIT_CODE = 2
-_COLLECTION_FAILURE_MARKERS = ("error collecting", "during collection")
+_COLLECTION_FAILURE_SUBSTRING = "error collecting"
+_COLLECTION_FAILURE_INTERRUPTED_RE = re.compile(
+    r"interrupted:\s*\d+\s+errors?\s+during\s+collection"
+)
 
 # Seconds a SIGTERMed test command gets to stop its container before SIGKILL.
 TERM_GRACE_SECONDS = 15.0
@@ -191,7 +194,9 @@ def _looks_like_collection_failure(returncode: int, output: bytes) -> bool:
     if returncode == _COLLECTION_FAILURE_EXIT_CODE:
         return True
     text = output.decode(errors="ignore").lower()
-    return any(marker in text for marker in _COLLECTION_FAILURE_MARKERS)
+    return _COLLECTION_FAILURE_SUBSTRING in text or bool(
+        _COLLECTION_FAILURE_INTERRUPTED_RE.search(text)
+    )
 
 
 def _baseline_outcome(repo: Repo, command: str, timeout: float | None) -> str:

@@ -58,7 +58,7 @@ def _repo(tmp_path):
     [
         (2, b""),
         (1, b"ERROR collecting tests/test_x.py\n"),
-        (1, b"1 error during collection\n"),
+        (1, b"!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n"),
     ],
 )
 def test_a_baseline_that_could_not_import_its_tests_is_a_collection_failure(returncode, output):
@@ -67,6 +67,12 @@ def test_a_baseline_that_could_not_import_its_tests_is_a_collection_failure(retu
 
 def test_a_baseline_that_ran_and_lost_is_not_a_collection_failure():
     assert not runner._looks_like_collection_failure(1, b"1 failed, 3 passed\n")
+
+
+def test_a_summary_that_merely_mentions_a_test_named_during_collection_is_not_a_false_positive():
+    assert not runner._looks_like_collection_failure(
+        1, b"FAILED tests/test_during_collection_ordering.py::test_x - assert False\n"
+    )
 
 
 def test_a_baseline_that_fails_to_collect_names_the_stale_image_not_the_suite(tmp_path):
