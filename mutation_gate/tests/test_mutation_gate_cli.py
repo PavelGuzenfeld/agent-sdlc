@@ -92,6 +92,15 @@ def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_f
     assert "ast-grep" in capsys.readouterr().err
 
 
+def test_staged_refuses_cleanly_when_git_is_missing_from_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert cli.main(["--staged", "--dry-run"]) == 2
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert "git" in err
+
+
 def test_worktree_reads_cwd_from_the_hook_stdin_json(tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(cli, "discover", _discover_spy(tmp_path, seen))
