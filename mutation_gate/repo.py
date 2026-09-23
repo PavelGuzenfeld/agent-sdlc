@@ -134,6 +134,7 @@ class Config:
     no_comments: bool = False
     vocabulary: str = ""
     vocabulary_molds: dict[str, list[str]] = field(default_factory=dict)
+    vocabulary_synonyms: str = "block"
     own_namespaces: list[str] = field(default_factory=list)
     doc_allow: list[DocAllow] = field(default_factory=list)
     banned_names_file: str = ""

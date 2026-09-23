@@ -154,7 +154,7 @@ def test_a_malformed_hunk_header_falls_back_to_line_zero(monkeypatch, tmp_path):
     assert no_leaks._diff_added_lines(_repo(tmp_path), "--cached") == [("fixture.txt", 0, "plain line")]
 
 
-def test_an_added_line_with_no_recognized_file_header_is_not_attributed(monkeypatch, tmp_path):
+def test_an_added_line_after_a_dev_null_post_image_is_not_attributed(monkeypatch, tmp_path):
     diff = (
         "diff --git a/fixture.txt b/fixture.txt\n"
         "--- a/fixture.txt\n"
@@ -164,6 +164,68 @@ def test_an_added_line_with_no_recognized_file_header_is_not_attributed(monkeypa
     )
     _stub_git(monkeypatch, diff=diff)
     assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_quoted_post_image_header_for_a_non_ascii_name_still_attributes_the_line(monkeypatch, tmp_path, capsys):
+    diff = (
+        'diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"\n'
+        '--- "a/caf\\303\\251.txt"\n'
+        '+++ "b/caf\\303\\251.txt"\n'
+        "@@ -0,0 +1,1 @@\n"
+        f"+{EMAIL}\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert _local(monkeypatch, tmp_path) == 1
+    assert "caf\\303\\251.txt:1" in capsys.readouterr().err
+
+
+def test_a_post_image_header_with_a_trailing_tab_for_a_spaced_name_still_attributes_the_line(monkeypatch, tmp_path, capsys):
+    diff = (
+        "diff --git a/my file.txt b/my file.txt\n"
+        "--- a/my file.txt\n"
+        "+++ b/my file.txt\t\n"
+        "@@ -0,0 +1,1 @@\n"
+        f"+{EMAIL}\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert _local(monkeypatch, tmp_path) == 1
+    assert "my file.txt:1" in capsys.readouterr().err
+
+
+def test_a_post_image_header_without_the_pinned_prefix_refuses(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/fixture.txt b/fixture.txt\n"
+        "--- fixture.txt\n"
+        "+++ fixture.txt\n"
+        "@@ -0,0 +1,1 @@\n"
+        f"+{EMAIL}\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert _local(monkeypatch, tmp_path) == 2
+
+
+def test_a_mnemonic_prefixed_post_image_header_refuses(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/fixture.txt i/fixture.txt\n"
+        "--- w/fixture.txt\n"
+        "+++ i/fixture.txt\n"
+        "@@ -0,0 +1,1 @@\n"
+        f"+{EMAIL}\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert _local(monkeypatch, tmp_path) == 2
+
+
+def test_a_post_image_header_quoted_on_only_one_side_refuses(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/fixture.txt b/fixture.txt\n"
+        "--- a/fixture.txt\n"
+        '+++ "b/fixture.txt\n'
+        "@@ -0,0 +1,1 @@\n"
+        f"+{EMAIL}\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert _local(monkeypatch, tmp_path) == 2
 
 
 def test_a_commit_message_line_with_an_email_is_blocked_without_echoing_it(monkeypatch, tmp_path, capsys):
@@ -268,16 +330,19 @@ def test_an_unset_banned_names_file_still_blocks_the_generic_scan(monkeypatch, t
     assert _local(monkeypatch, tmp_path) == 1
 
 
+_DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+
+
 def test_local_form_uses_the_staged_index(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _local(monkeypatch, tmp_path)
-    assert ("diff", "-U0", "--no-color", "--no-renames", "--cached") in calls
+    assert (*_DIFF_ARGS, "--cached") in calls
 
 
 def test_range_form_diffs_the_given_range_and_walks_its_commit_messages(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _range(monkeypatch, tmp_path)
-    assert ("diff", "-U0", "--no-color", "--no-renames", "base..HEAD") in calls
+    assert (*_DIFF_ARGS, "base..HEAD") in calls
     assert ("log", "-z", "base..HEAD", "--pretty=format:%H%x1f%B") in calls
 
 

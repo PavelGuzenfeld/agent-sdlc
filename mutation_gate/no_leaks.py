@@ -89,8 +89,22 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
+def _post_image_path(field: str) -> str | None:
+    field = field.removesuffix("\t")
+    if field.startswith('"') and field.endswith('"'):
+        field = field[1:-1]
+    if field == "/dev/null":
+        return None
+    if not field.startswith("b/"):
+        raise GateError("no-leaks: a diff post-image header did not parse")
+    return field[2:]
+
+
 def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]:
-    out = git("diff", "-U0", "--no-color", "--no-renames", *diff_args, cwd=repo.root)
+    out = git(
+        "diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff",
+        "--src-prefix=a/", "--dst-prefix=b/", *diff_args, cwd=repo.root,
+    )
     hits: list[tuple[str, int, str]] = []
     current: str | None = None
     in_hunk = False
@@ -99,7 +113,7 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
         if raw.startswith("diff --git "):
             current, in_hunk = None, False
         elif not in_hunk and raw.startswith("+++ "):
-            current = raw[6:] if raw.startswith("+++ b/") else None
+            current = _post_image_path(raw[4:])
         elif raw.startswith("@@"):
             in_hunk = True
             m = re.search(r"\+(\d+)", raw)
