@@ -234,8 +234,12 @@ def describe(match: Match) -> str:
 
 
 def main(argv: list[str]) -> int:
+    from . import vocabulary_check, vocabulary_molds
+
     parser = argparse.ArgumentParser(prog="mutation-gate vocabulary")
     parser.add_argument("action", choices=["lookup"])
+    parser.add_argument("--kind", choices=sorted(vocabulary_molds.KINDS),
+                        help="judge the word as a declared name of this kind")
     parser.add_argument("word")
     args = parser.parse_args(argv)
     try:
@@ -246,9 +250,19 @@ def main(argv: list[str]) -> int:
     domain = repo.config.vocabulary if repo else ""
     try:
         dictionary = load(root, domain)
+        catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds if repo else {})
     except GateError as exc:
         _emit(f"mutation-gate vocabulary refused: {exc}")
         return 2
+    if args.kind:
+        faults = vocabulary_check.judge(dictionary, args.kind, args.word, catalogue)
+        if not faults:
+            print(f"{args.word}: fits the {args.kind} mold")
+            return 0
+        detail, suggestion = faults[0]
+        _emit(f"vocabulary lookup: `{args.word}` as a {args.kind}: {detail}"
+              + (f" — try `{suggestion}`" if suggestion else ""))
+        return 1
     match = dictionary.resolve(args.word)
     if match is None:
         _emit(f"vocabulary lookup: `{args.word}` is not in the dictionary")

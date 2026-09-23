@@ -15,10 +15,10 @@ from mutation_gate.repo import Config, GateError, Repo
 DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
 
-PARSE = '''
+MERGE = '''
 [[concept]]
-word = "parse"
-meaning = "turn text into a structure"
+word = "merge"
+meaning = "combine two structures into one"
 pos = ["verb"]
 '''
 
@@ -47,19 +47,19 @@ def test_domain_reject_of_loc_prints_the_core_canonical_position(tmp_path, monke
     assert out == "position: noun\n  loc is a rejected synonym of position\n"
 
 
-def test_parsed_resolves_to_parse_when_parse_opts_into_ed(tmp_path, monkeypatch, capsys):
-    _repo(tmp_path, monkeypatch, OPTED_IN, PARSE + 'forms = ["-ed"]\n')
-    code, out, _ = _lookup("parsed", capsys)
+def test_merged_resolves_to_merge_when_merge_opts_into_ed(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch, OPTED_IN, MERGE + 'forms = ["-ed"]\n')
+    code, out, _ = _lookup("merged", capsys)
     assert code == 0
-    assert out == "parse: verb\n  parsed is the -ed form of parse\n"
+    assert out == "merge: verb\n  merged is the -ed form of merge\n"
 
 
-def test_parsed_is_unknown_when_parse_does_not_opt_into_ed(tmp_path, monkeypatch, capsys):
-    _repo(tmp_path, monkeypatch, OPTED_IN, PARSE + 'forms = ["-ing"]\n')
-    code, out, err = _lookup("parsed", capsys)
+def test_merged_is_unknown_when_merge_does_not_opt_into_ed(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch, OPTED_IN, MERGE + 'forms = ["-ing"]\n')
+    code, out, err = _lookup("merged", capsys)
     assert code == 1
     assert out == ""
-    assert "`parsed` is not in the dictionary" in err
+    assert "`merged` is not in the dictionary" in err
 
 
 def test_domain_making_vague_manager_canonical_fails_naming_file_and_word(
@@ -100,10 +100,10 @@ def test_core_concept_reject_list_resolves_to_its_concept(tmp_path, monkeypatch,
 
 
 def test_canonical_lookup_lists_the_derived_forms(tmp_path, monkeypatch, capsys):
-    _repo(tmp_path, monkeypatch, OPTED_IN, PARSE + 'forms = ["-s", "-ed", "-ing", "-er"]\n')
-    code, out, _ = _lookup("parse", capsys)
+    _repo(tmp_path, monkeypatch, OPTED_IN, MERGE + 'forms = ["-s", "-ed", "-ing", "-er"]\n')
+    code, out, _ = _lookup("merge", capsys)
     assert code == 0
-    assert out == "parse: verb\n  forms: parses, parsed, parsing, parser\n"
+    assert out == "merge: verb\n  forms: merges, merged, merging, merger\n"
 
 
 def test_two_part_of_speech_concept_prints_both(tmp_path, monkeypatch, capsys):
