@@ -15,6 +15,18 @@ SCOPED = "filters/"
 PACKAGED = sorted(p.name for p in rules.RULES_DIR.glob("*.md"))
 UNSCOPED = [name for name in PACKAGED if name != rules.SCOPED_RULE]
 
+AGENTS_BEGIN = "<!-- BEGIN mutation-gate rules -->"
+AGENTS_END = "<!-- END mutation-gate rules -->"
+
+
+def _expected_block(items: dict[str, bytes]) -> bytes:
+    sections = [f"## {name[:-3]}\n\n".encode() + content for name, content in items.items()]
+    return f"{AGENTS_BEGIN}\n".encode() + b"\n".join(sections) + f"\n{AGENTS_END}".encode()
+
+
+def _unscoped_bytes() -> dict[str, bytes]:
+    return {name: (rules.RULES_DIR / name).read_bytes() for name in UNSCOPED}
+
 
 def _fresh_repo(tmp_path: Path, monkeypatch, toml: str) -> Path:
     (tmp_path / ".mutation-gate.toml").write_text(toml)
@@ -153,3 +165,109 @@ def test_rules_outside_a_git_repo_are_refused(monkeypatch, capsys):
     monkeypatch.setattr(rules, "discover", _not_a_repo)
     assert cli.main(["rules", "sync"]) == 2
     assert "refused" in _named(capsys)
+
+
+def test_sync_writes_agents_md_block_when_absent(tmp_path, monkeypatch):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    assert cli.main(["rules", "sync"]) == 0
+    expected = _expected_block(_unscoped_bytes()) + b"\n"
+    assert (root / "AGENTS.md").read_bytes() == expected
+
+
+def test_sync_preserves_hand_written_agents_md_and_appends_block(tmp_path, monkeypatch):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    hand = b"# My notes\n\nDo not touch this.\n"
+    (root / "AGENTS.md").write_bytes(hand)
+    assert cli.main(["rules", "sync"]) == 0
+    written = (root / "AGENTS.md").read_bytes()
+    assert written.startswith(hand)
+    assert _expected_block(_unscoped_bytes()) in written
+
+
+def test_tampering_inside_the_agents_md_block_fails_check_naming_it(tmp_path, monkeypatch, capsys):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    cli.main(["rules", "sync"])
+    agents = root / "AGENTS.md"
+    original = agents.read_bytes()
+    index = original.index(AGENTS_BEGIN.encode()) + 60
+    agents.write_bytes(original[:index] + bytes([original[index] ^ 1]) + original[index + 1:])
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert "AGENTS.md" in _named(capsys)
+
+
+def test_check_fails_when_agents_md_is_missing(tmp_path, monkeypatch, capsys):
+    _fresh_repo(tmp_path, monkeypatch, "")
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert "AGENTS.md: missing" in _named(capsys)
+
+
+def test_check_fails_when_agents_md_exists_without_the_block(tmp_path, monkeypatch, capsys):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    (root / "AGENTS.md").write_bytes(b"# Notes\n\nNo block here.\n")
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert "AGENTS.md: missing the mutation-gate rules block" in _named(capsys)
+
+
+def test_sync_is_idempotent_for_agents_md(tmp_path, monkeypatch):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    cli.main(["rules", "sync"])
+    first = (root / "AGENTS.md").read_bytes()
+    cli.main(["rules", "sync"])
+    assert (root / "AGENTS.md").read_bytes() == first
+
+
+def test_sync_replaces_stale_block_between_markers_preserving_surrounding_text(tmp_path, monkeypatch):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    before = b"# Notes before\n\n"
+    stale = f"{AGENTS_BEGIN}\nstale\n{AGENTS_END}".encode()
+    after = b"\n\n# Notes after\n"
+    (root / "AGENTS.md").write_bytes(before + stale + after)
+    assert cli.main(["rules", "sync"]) == 0
+    written = (root / "AGENTS.md").read_bytes()
+    assert written.startswith(before)
+    assert written.endswith(after)
+    assert _expected_block(_unscoped_bytes()) in written
+    assert b"stale" not in written
+
+
+def test_editing_outside_the_agents_md_block_does_not_fail_check(tmp_path, monkeypatch):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    cli.main(["rules", "sync"])
+    agents = root / "AGENTS.md"
+    agents.write_bytes(agents.read_bytes() + b"\n# Appended by hand\n")
+    assert cli.main(["rules", "check"]) == 0
+
+
+_MALFORMED_AGENTS_MD = {
+    "begin_only": f"{AGENTS_BEGIN}\nsomething\n".encode(),
+    "end_only": f"something\n{AGENTS_END}\n".encode(),
+    "duplicate_pair": (
+        f"{AGENTS_BEGIN}\na\n{AGENTS_END}\n{AGENTS_BEGIN}\nb\n{AGENTS_END}\n"
+    ).encode(),
+    "end_before_begin": f"{AGENTS_END}\n{AGENTS_BEGIN}\n".encode(),
+}
+
+
+@pytest.mark.parametrize("action", ["sync", "check"])
+@pytest.mark.parametrize("shape", sorted(_MALFORMED_AGENTS_MD))
+def test_malformed_agents_md_markers_are_refused(tmp_path, monkeypatch, capsys, shape, action):
+    root = _fresh_repo(tmp_path, monkeypatch, "").parents[1]
+    content = _MALFORMED_AGENTS_MD[shape]
+    (root / "AGENTS.md").write_bytes(content)
+    capsys.readouterr()
+    assert cli.main(["rules", action]) == 2
+    assert "refused" in _named(capsys)
+    assert (root / "AGENTS.md").read_bytes() == content
+
+
+def test_model_vv_leads_agents_md_section_with_its_globs(tmp_path, monkeypatch):
+    paths = ["filters/", "gst/common/kalman_box.cpp"]
+    root = _fresh_repo(tmp_path, monkeypatch, f'model_paths = {paths!r}\n').parents[1]
+    assert cli.main(["rules", "sync"]) == 0
+    written = (root / "AGENTS.md").read_bytes()
+    frontmatter = rules.frontmatter(paths)
+    body = (rules.RULES_DIR / rules.SCOPED_RULE).read_bytes()
+    assert b"## model-vv\n\n" + frontmatter + body in written

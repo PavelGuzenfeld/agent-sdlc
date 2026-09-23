@@ -581,3 +581,13 @@ column = 76
 old = """0"""
 new = """1"""
 reason = "ms's default is only reached by callers that pass no ms — the no-comments check, whose findings carry no ms and whose waivers have no `ms` key to compare it against — so its value never reaches a verdict; the model-vv callers pass ms explicitly. The line is in the diff only because `line` joined the signature."
+
+# --- rules.py AGENTS.md marker parsing, from #74 --------------------------------
+
+[[waiver]]
+file = "mutation_gate/rules.py"
+line = 70
+column = 7
+old = """stop < start"""
+new = """stop <= start"""
+reason = "stop and start are text.index() hits for AGENTS_BEGIN and AGENTS_END, which share only a 5-byte prefix (\"<!-- \") before diverging at 'B' vs 'E'; no byte string can make both .index() calls return the same offset, so stop == start is unreachable and < / <= are behaviourally identical for every input this function can see"

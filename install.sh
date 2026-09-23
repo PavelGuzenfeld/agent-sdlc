@@ -139,7 +139,6 @@ install_codex() {
     for f in "$repo"/commands/*.md; do
         render_codex_command "$f"
     done
-    sh "$repo/scripts/gen-agents-md.sh"
     link "$repo/AGENTS.md" "$HOME/.codex/AGENTS.md"
 }
 

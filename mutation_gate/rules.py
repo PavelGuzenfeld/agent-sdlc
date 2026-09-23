@@ -12,6 +12,10 @@ from .repo import GateError, Repo, discover
 TARGET = Path(".claude") / "rules"
 SCOPED_RULE = "model-vv.md"
 
+AGENTS_PATH = Path("AGENTS.md")
+AGENTS_BEGIN = "<!-- BEGIN mutation-gate rules -->"
+AGENTS_END = "<!-- END mutation-gate rules -->"
+
 _INSTALLED = Path(__file__).resolve().parent / "bundled_rules"
 RULES_DIR = _INSTALLED if _INSTALLED.is_dir() else Path(__file__).resolve().parent.parent / "rules"
 
@@ -41,6 +45,63 @@ def expected(repo: Repo) -> dict[str, bytes]:
     return out
 
 
+def _agents_block(repo: Repo) -> bytes:
+    sections = [
+        f"## {name.removesuffix('.md')}\n\n".encode() + content
+        for name, content in expected(repo).items()
+    ]
+    body = b"\n".join(sections)
+    return f"{AGENTS_BEGIN}\n".encode() + body + f"\n{AGENTS_END}".encode()
+
+
+def _locate_agents_block(text: bytes) -> tuple[int, int] | None:
+    """Returns (start, end) spanning BEGIN..END with no trailing newline, or
+    None when neither marker is present. Raises on any other shape."""
+    begin, end = AGENTS_BEGIN.encode(), AGENTS_END.encode()
+    begin_count, end_count = text.count(begin), text.count(end)
+    if begin_count == 0 and end_count == 0:
+        return None
+    if begin_count != 1 or end_count != 1:
+        raise GateError(
+            f"{AGENTS_PATH}: expected exactly one BEGIN/END marker pair, "
+            f"found {begin_count} begin, {end_count} end"
+        )
+    start, stop = text.index(begin), text.index(end)
+    if stop < start:
+        raise GateError(f"{AGENTS_PATH}: END marker precedes BEGIN marker")
+    return start, stop + len(end)
+
+
+def agents_sync(repo: Repo) -> None:
+    path = repo.root / AGENTS_PATH
+    block = _agents_block(repo)
+    existing = path.read_bytes() if path.exists() else b""
+    located = _locate_agents_block(existing)
+    if located is None:
+        sep = b"" if not existing else (b"\n" if existing.endswith(b"\n") else b"\n\n")
+        new = existing + sep + block
+    else:
+        start, stop = located
+        new = existing[:start] + block + existing[stop:]
+    if not new.endswith(b"\n"):
+        new += b"\n"
+    path.write_bytes(new)
+
+
+def agents_check(repo: Repo) -> list[str]:
+    path = repo.root / AGENTS_PATH
+    if not path.exists():
+        return [f"{AGENTS_PATH}: missing"]
+    existing = path.read_bytes()
+    located = _locate_agents_block(existing)
+    if located is None:
+        return [f"{AGENTS_PATH}: missing the mutation-gate rules block"]
+    start, stop = located
+    if existing[start:stop] != _agents_block(repo):
+        return [f"{AGENTS_PATH}: rules block differs from the packaged rules"]
+    return []
+
+
 def sync(repo: Repo) -> None:
     target = repo.root / TARGET
     target.mkdir(parents=True, exist_ok=True)
@@ -49,6 +110,7 @@ def sync(repo: Repo) -> None:
         (target / name).write_bytes(content)
     if SCOPED_RULE not in wanted:
         (target / SCOPED_RULE).unlink(missing_ok=True)
+    agents_sync(repo)
 
 
 def check(repo: Repo) -> list[str]:
@@ -63,6 +125,7 @@ def check(repo: Repo) -> list[str]:
             drift.append(f"{TARGET / name}: differs from the packaged rule")
     if SCOPED_RULE not in wanted and (target / SCOPED_RULE).exists():
         drift.append(f"{TARGET / SCOPED_RULE}: present but model_paths is empty")
+    drift.extend(agents_check(repo))
     return drift
 
 
@@ -72,13 +135,13 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     try:
         repo = discover()
+        if args.action == "sync":
+            sync(repo)
+            return 0
+        drift = check(repo)
     except GateError as exc:
         _emit(f"mutation-gate rules refused: {exc}")
         return 2
-    if args.action == "sync":
-        sync(repo)
-        return 0
-    drift = check(repo)
     for line in drift:
         _emit(f"rules check: {line}")
     if drift:

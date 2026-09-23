@@ -18,13 +18,6 @@ jobs:
       - run: sh tests/no-leaks-env.sh
       - run: sh scripts/no-leaks.sh
 
-  agents-md-fresh:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sh scripts/gen-agents-md.sh
-      - run: git diff --exit-code AGENTS.md
-
   sol-budget-tests:
     runs-on: ubuntu-latest
     container: python:3.12-slim
