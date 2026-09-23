@@ -10,8 +10,8 @@ unclear: fix the code, then delete the comment.
 
 ## Hard limits
 
-- Comments: **zero.** No hand-written `#` or `//` comments in new code, in repos I
-  own. Carve-outs: pragmas (`# pyright: ignore`, `# noqa`, `NOLINT`), shebangs,
+- Comments: **zero.** No hand-written `#` or `//` comments in new code, in this
+  repo. Carve-outs: pragmas (`# pyright: ignore`, `# noqa`, `NOLINT`), shebangs,
   license/SPDX headers, and vendored or generated files — their comments are
   upstream's; check with a diff against the skeleton before assuming a config is
   yours.
