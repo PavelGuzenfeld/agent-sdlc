@@ -32,6 +32,13 @@ def test_banned_words_pins_the_parse_of_the_bundled_voice_md():
     assert "leverage" in EXPECTED_BANNED_WORDS
 
 
+def test_voice_text_reads_the_packaged_rules_dir_not_a_hardcoded_copy(monkeypatch, tmp_path):
+    custom = tmp_path / "voice.md"
+    custom.write_text("Never use: zorbing.\n")
+    monkeypatch.setattr(commit_msg, "RULES_DIR", tmp_path)
+    assert commit_msg.banned_words(commit_msg._voice_text()) == ["zorbing"]
+
+
 def test_banned_words_raises_when_the_never_use_line_is_missing():
     with pytest.raises(GateError):
         commit_msg.banned_words("# Voice\n\nNo banned line here.\n")
@@ -65,6 +72,16 @@ def test_signed_off_by_trailer_is_rejected():
     assert any(f.reason == "Signed-off-by trailer is not allowed" for f in findings)
 
 
+def test_lowercase_signed_off_by_trailer_is_rejected():
+    findings = commit_msg.check_message(f"fix a thing\n\nsigned-off-by: Pavel <{_at('pavel', 'example.com')}>", [])
+    assert any(f.reason == "Signed-off-by trailer is not allowed" for f in findings)
+
+
+def test_quoted_phrase_matches_regardless_of_case():
+    findings = commit_msg.check_message("IT'S WORTH NOTING this fixes the bug", EXPECTED_BANNED_WORDS)
+    assert any(f.reason.startswith('banned word "it\'s worth noting"') for f in findings)
+
+
 def test_generated_with_line_is_rejected():
     findings = commit_msg.check_message(
         "fix a thing\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)", []
@@ -82,6 +99,11 @@ def test_finding_names_the_actual_line_number():
 def test_generated_with_mid_sentence_is_allowed():
     findings = commit_msg.check_message("this lockfile was generated with npm", [])
     assert findings == []
+
+
+def test_generated_with_line_without_an_emoji_prefix_is_rejected():
+    findings = commit_msg.check_message("fix a thing\n\nGenerated with npm", [])
+    assert any(f.reason == '"Generated with" line is not allowed' for f in findings)
 
 
 @pytest.mark.parametrize(
@@ -165,6 +187,12 @@ def test_cli_rejects_a_banned_word_and_names_the_reason(tmp_path, capsys):
 def test_cli_accepts_a_plain_message(tmp_path):
     msgfile = _msgfile(tmp_path, "fix a plain thing")
     assert cli.main(["commit-msg", msgfile]) == 0
+
+
+def test_cli_rejects_a_signed_off_by_trailer(tmp_path, capsys):
+    msgfile = _msgfile(tmp_path, f"fix a thing\n\nSigned-off-by: Pavel <{_at('pavel', 'example.com')}>")
+    assert cli.main(["commit-msg", msgfile]) == 1
+    assert "Signed-off-by trailer is not allowed" in capsys.readouterr().err
 
 
 def test_cli_refuses_with_no_msgfile_and_no_range():
@@ -251,3 +279,22 @@ def test_range_form_skips_an_empty_record_without_dropping_the_next_commit(monke
     monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: log_with_empty_record)
     assert cli.main(["commit-msg", "--range", "base..head"]) == 1
     assert f"commit-msg: {SHA_B[:12]}\n" in capsys.readouterr().err
+
+
+def test_range_form_catches_an_ai_trailer_not_just_a_banned_word(monkeypatch, capsys):
+    log = f"{SHA_A}\x1ffix a thing\n\nCo-Authored-By: Claude <{_at('noreply', 'anthropic.com')}>\n\x00"
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: log)
+    assert cli.main(["commit-msg", "--range", "base..head"]) == 1
+    assert "Co-Authored-By names an AI" in capsys.readouterr().err
+
+
+def test_range_messages_passes_the_given_range_to_git(monkeypatch):
+    seen = {}
+
+    def fake_git(*args, cwd=None):
+        seen["args"] = args
+        return ""
+
+    monkeypatch.setattr(commit_msg, "git", fake_git)
+    commit_msg._range_messages("base..head")
+    assert seen["args"] == ("log", "-z", "base..head", "--pretty=format:%H%x1f%B")
