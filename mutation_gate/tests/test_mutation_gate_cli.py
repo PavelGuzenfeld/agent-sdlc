@@ -6,6 +6,7 @@ launch directory, not wherever a Bash `cd` took the shell; --worktree must
 read the real one from the hook's JSON payload on stdin, and --staged must
 never touch stdin at all."""
 
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -42,6 +43,17 @@ def test_staged_still_refuses_when_the_repo_is_locked(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
     monkeypatch.setattr(cli.runner, "repo_lock", _locked)
     assert cli.main(["--staged"]) == 2
+
+
+def test_staged_refuses_cleanly_when_ast_grep_is_missing_from_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert cli.main(["--staged", "--dry-run"]) == 2
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert "ast-grep" in err
 
 
 def test_worktree_reads_cwd_from_the_hook_stdin_json(tmp_path, monkeypatch):
