@@ -83,7 +83,21 @@ def test_locus_added_beside_position_blocks_naming_both(tmp_path, monkeypatch, c
     err = capsys.readouterr().err
     assert code == 1
     assert "`locus` shares a WordNet sense with `position`" in err
-    assert 'locus = "position"' in err
+    assert 'Add `locus = "position"` under [reject]' in err
+
+
+def test_noun_concept_is_never_matched_against_an_existing_verb_only_word(
+    tmp_path, monkeypatch, capsys
+):
+    pre_domain = '[[concept]]\nword = "vroom"\nmeaning = "to go fast"\npos = ["verb"]\n'
+    post_domain = pre_domain + GIZMO
+    repo = _repo(tmp_path, OPTED_IN, post_domain)
+    synsets = _fake_synsets({
+        ("gizmo", "noun"): frozenset({"s1"}),
+        ("vroom", "noun"): frozenset({"s1"}),
+    })
+    code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {5}}, {DOMAIN: pre_domain}, synsets)
+    assert code == 0
 
 
 def test_buffer_beside_cushion_passes_when_the_pair_is_distinct(tmp_path, monkeypatch, capsys):
@@ -95,7 +109,9 @@ def test_buffer_beside_cushion_passes_when_the_pair_is_distinct(tmp_path, monkey
         ("cushion", "verb"): frozenset({"v1"}),
     })
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {5}}, {DOMAIN: pre_domain}, synsets)
+    err = capsys.readouterr().err
     assert code == 0
+    assert "shares a WordNet sense" not in err
 
 
 def test_buffer_beside_cushion_blocks_without_a_distinct_entry(tmp_path, monkeypatch, capsys):
@@ -128,9 +144,15 @@ def test_new_word_with_no_collision_passes_and_reports_it_added(tmp_path, monkey
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {2}}, {}, synsets)
     err = capsys.readouterr().err
     assert code == 0
-    assert "Dictionary" in err
-    assert f"{DOMAIN}" in err
-    assert "added: gizmo" in err
+    assert err.splitlines()[:3] == ["Dictionary", f"  {DOMAIN}", "    added: gizmo"]
+
+
+def test_removed_concept_prints_under_the_dictionary_heading(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, "")
+    code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {1}}, {DOMAIN: GIZMO})
+    err = capsys.readouterr().err
+    assert code == 0
+    assert err.splitlines()[:3] == ["Dictionary", f"  {DOMAIN}", "    removed: gizmo"]
 
 
 def test_report_mode_prints_the_collision_and_does_not_block(tmp_path, monkeypatch, capsys):
@@ -157,7 +179,9 @@ def test_waived_collision_does_not_block(tmp_path, monkeypatch, capsys):
         ("position", "noun"): frozenset({"s1"}),
     })
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {2}}, {}, synsets)
+    err = capsys.readouterr().err
     assert code == 0
+    assert "shares a WordNet sense" not in err
 
 
 def test_missing_nltk_refuses_cleanly_when_a_lookup_is_needed(tmp_path, monkeypatch, capsys):
@@ -271,7 +295,7 @@ def test_check_never_loads_the_dictionary_when_nothing_was_added(tmp_path, monke
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {2}}, {DOMAIN: pre})
     err = capsys.readouterr().err
     assert code == 0
-    assert "changed: locus" in err
+    assert err.splitlines()[:3] == ["Dictionary", f"  {DOMAIN}", "    changed: locus"]
 
 
 def test_collisions_for_skips_a_word_missing_from_the_dictionary_without_stopping_the_rest(
@@ -371,6 +395,38 @@ def test_ensure_data_refuses_cleanly_when_the_fetch_fails(tmp_path, monkeypatch)
                          _FakeNltk(ready_after=99, download_ok=False, write_zip=False))
     with pytest.raises(GateError, match="could not be fetched"):
         vocabulary_wordnet._ensure_data()
+
+
+def test_ensure_data_skips_the_download_when_already_found(tmp_path, monkeypatch):
+    monkeypatch.setattr(vocabulary_wordnet, "NLTK_DATA_DIR", tmp_path / "nltk_data")
+    fake = _FakeNltk(ready_after=0, download_ok=True, write_zip=False)
+
+    def boom(*a, **k):
+        raise AssertionError("download must not run when the data is already found")
+
+    fake.download = boom
+    monkeypatch.setattr(vocabulary_wordnet, "nltk", fake)
+    vocabulary_wordnet._ensure_data()
+
+
+def test_nltk_data_dir_lives_under_the_user_cache_root():
+    from mutation_gate.repo import CACHE_ROOT
+    assert vocabulary_wordnet.NLTK_DATA_DIR == CACHE_ROOT / "nltk_data"
+
+
+def test_layers_includes_the_packaged_core_file_when_it_sits_under_the_repo_root(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "repo"
+    fake_core = root / "mutation_gate" / "vocabulary_core.toml"
+    monkeypatch.setattr(vocabulary, "CORE_PATH", fake_core)
+    repo = Repo(root=root, origin="", remotes=(), config=Config(vocabulary=DOMAIN))
+    assert vocabulary_wordnet.layers(repo) == ["mutation_gate/vocabulary_core.toml", DOMAIN]
+
+
+def test_layers_omits_the_core_file_when_it_sits_outside_the_repo_root(tmp_path, monkeypatch):
+    repo = Repo(root=tmp_path / "repo", origin="", remotes=(), config=Config(vocabulary=DOMAIN))
+    assert vocabulary_wordnet.layers(repo) == [DOMAIN]
 
 
 def test_real_wordnet_finds_place_and_position_sharing_a_noun_sense():
