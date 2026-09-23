@@ -28,17 +28,22 @@ Spawn a fresh implementation agent per ticket, with the ticket's number and
 body, its `model:<name>` label as the agent's model override, and its own
 locked worktree. The agent:
 
-1. Writes the ticket's slice test first and confirms it fails.
-2. Implements to green.
-3. Runs the gate. A waiver is fine only when it is an equivalence waiver proved
+1. Renames its branch to `NN-slug` before touching any code. The worktree
+   tool's own branch carries no issue number, and mutation-gate's adversary
+   review reads the linked ticket off the branch name — a renamed branch is
+   the only thing standing between a gated commit and a silently skipped
+   review.
+2. Writes the ticket's slice test first and confirms it fails.
+3. Implements to green.
+4. Runs the gate. A waiver is fine only when it is an equivalence waiver proved
    by rebuild-and-diff — any other waiver stops the agent, which reports back
    instead of pushing.
-4. Pushes, then waits for checks to go green on the pushed sha. No
+5. Pushes, then waits for checks to go green on the pushed sha. No
    `.github/workflows/` in the repo means no checks to wait for — skip
    straight to opening the PR.
-5. Opens a PR with `Closes #N` in the body, and a Human-testing section when
+6. Opens a PR with `Closes #N` in the body, and a Human-testing section when
    the change is user-observable.
-6. Exits, reporting the PR number, the ticket number, and any follow-up
+7. Exits, reporting the PR number, the ticket number, and any follow-up
    candidates noticed but not acted on.
 
 `/verify-generated-diff` still applies to this diff like any other.
