@@ -198,7 +198,6 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run(repo, args, staged: bool) -> int:
     try:
-        mutants.require_ast_grep()
         runner.guard_clean_start(repo)
         wvs = waivers.load(repo)
     except (GateError, ValueError) as exc:
@@ -251,6 +250,12 @@ def _run(repo, args, staged: bool) -> int:
     if not changed:
         _emit("mutation-gate: no gated source files in this change")
         return 0
+
+    try:
+        mutants.require_ast_grep()
+    except GateError as exc:
+        _emit(f"mutation-gate refused: {exc}")
+        return 2
 
     if args.dry_run:
         for rel, lines in sorted(changed.items()):

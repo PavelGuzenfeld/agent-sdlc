@@ -102,13 +102,22 @@ def _check(repo: Repo, branch: str | None, rev_range: str, message: str, diff_ar
     return 1
 
 
+def _merge_heads(root: Path) -> list[str]:
+    """MERGE_HEAD holds the commit(s) a `git merge` in progress is bringing in —
+    one per line, several for an octopus merge."""
+    merge_head = root / git("rev-parse", "--git-path", "MERGE_HEAD", cwd=root).strip()
+    if not merge_head.exists():
+        return []
+    return merge_head.read_text().split()
+
+
 def _local_base(root: Path) -> str | None:
     branch = default_branch(root)
     if branch is None:
         _emit("diff-discipline skipped: no default branch (origin/HEAD, origin/main, origin/master, main, master)")
         return None
     try:
-        return git("merge-base", branch, "HEAD", cwd=root).strip()
+        return git("merge-base", branch, "HEAD", *_merge_heads(root), cwd=root).strip()
     except GateError:
         _emit(f"diff-discipline skipped: no merge-base between {branch} and HEAD")
         return None
