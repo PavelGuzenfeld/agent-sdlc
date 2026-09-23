@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_new_docs, rules, runner, token, vocabulary, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -153,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         return diff_discipline.main(argv[1:])
     if argv[:1] == ["no-new-docs"]:
         return no_new_docs.main(argv[1:])
+    if argv[:1] == ["no-leaks"]:
+        return no_leaks.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")
