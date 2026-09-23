@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_wordnet, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -250,6 +250,30 @@ def _run(repo, args, staged: bool) -> int:
             _emit("")
             _emit(vocabulary_check.suggest(repo, names[0]))
             return 1
+
+    if repo.config.vocabulary:
+        try:
+            diffs, collisions = vocabulary_wordnet.check(repo, all_changed, wvs, staged)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
+        if diffs:
+            _emit(vocabulary_wordnet.report(diffs))
+            _emit("")
+        if collisions:
+            lines = [f"  {c.source}:{c.line}: `{c.word}` shares a WordNet sense with "
+                     f"`{c.other}` ({c.pos})" for c in collisions]
+            if repo.config.vocabulary_synonyms == "report":
+                _emit(f"REPORT: vocabulary-synonyms — {len(collisions)} WordNet collision(s).")
+                for line in lines:
+                    _emit(line)
+            else:
+                _emit(f"BLOCKED: vocabulary-synonyms — {len(collisions)} WordNet collision(s).")
+                for line in lines:
+                    _emit(line)
+                _emit("")
+                _emit(vocabulary_wordnet.suggest(repo, collisions[0]))
+                return 1
 
     if args.file:
         changed = all_changed
