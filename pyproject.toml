@@ -11,6 +11,9 @@ requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = ["ast-grep-cli"]
 
+[project.optional-dependencies]
+vocabulary = ["nltk"]
+
 [project.scripts]
 mutation-gate = "mutation_gate.cli:main"
 
