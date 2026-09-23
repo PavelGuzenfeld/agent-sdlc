@@ -32,6 +32,13 @@ PASSED, FAILED, TIMED_OUT = "passed", "failed", "timed out"
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
+BASELINE_COLLECTION_FAILED = "failed to collect"
+
+_COLLECTION_FAILURE_EXIT_CODE = 2
+_COLLECTION_FAILURE_SUBSTRING = "error collecting"
+_COLLECTION_FAILURE_INTERRUPTED_RE = re.compile(
+    r"interrupted:\s*\d+\s+errors?\s+during\s+collection"
+)
 
 # Seconds a SIGTERMed test command gets to stop its container before SIGKILL.
 TERM_GRACE_SECONDS = 15.0
@@ -181,17 +188,63 @@ def _run_tests(
     return run_capped(repo, test_command.format(tests=" ".join(tests)), timeout)
 
 
+def _looks_like_collection_failure(returncode: int, output: bytes) -> bool:
+    """pytest exits 2 when it could not collect; the markers cover a wrapper
+    around pytest that does not pass its exit code through unchanged."""
+    if returncode == _COLLECTION_FAILURE_EXIT_CODE:
+        return True
+    text = output.decode(errors="ignore").lower()
+    return _COLLECTION_FAILURE_SUBSTRING in text or bool(
+        _COLLECTION_FAILURE_INTERRUPTED_RE.search(text)
+    )
+
+
+def _baseline_outcome(repo: Repo, command: str, timeout: float | None) -> str:
+    """As `run_capped`, but always captures output — a baseline is a single run,
+    so the pipe is affordable, and only here must a collection error be told
+    apart from an ordinary failure."""
+    cmd, container = _prepare_docker_run(command)
+    proc = subprocess.Popen(
+        cmd, shell=True, cwd=repo.root,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        start_new_session=True, env=_test_env(),
+    )
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _terminate(proc, container)
+        return TIMED_OUT
+    out = out or b""
+    if proc.returncode != 0:
+        if _looks_like_collection_failure(proc.returncode, out):
+            return BASELINE_COLLECTION_FAILED
+        return FAILED
+    pattern = repo.config.pass_pattern
+    if pattern and not re.search(pattern, out.decode(errors="ignore")):
+        return NO_PASS_MARKER
+    return PASSED
+
+
 def baseline_green(repo: Repo, tests: list[str], test_command: str) -> float:
     """Seconds the unmutated suite takes. Refuses rather than reporting, because
     a baseline that is not green makes every later verdict a fabrication."""
     start = time.monotonic()
-    verdict = _run_tests(repo, tests, test_command, repo.config.baseline_timeout)
+    command = test_command.format(tests=" ".join(tests))
+    verdict = _baseline_outcome(repo, command, repo.config.baseline_timeout)
     if verdict == NO_PASS_MARKER:
         raise GateError(
             f"baseline exited 0 but printed no pass_pattern "
             f"({repo.config.pass_pattern!r}). The suite did not report a pass, so "
             "every mutant would report SURVIVED. Check the test command, not the "
             "tests — a runner that cannot load the code still exits 0."
+        )
+    if verdict == BASELINE_COLLECTION_FAILED:
+        raise GateError(
+            "baseline suite failed to collect unmutated: pytest could not "
+            "import the tests, so every mutant would report KILLED for the "
+            "wrong reason. This is an environment problem, not a broken test "
+            "suite — rebuild the test image (e.g. `docker build -t <image> .`) "
+            "and re-run."
         )
     if verdict != PASSED:
         raise GateError(
