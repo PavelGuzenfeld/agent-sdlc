@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import tokenize
 from dataclasses import dataclass
@@ -349,6 +350,8 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
 
 
 def require_ast_grep() -> None:
+    if not shutil.which("ast-grep"):
+        raise GateError("ast-grep not found on PATH; the gate cannot generate mutants")
     proc = subprocess.run(["ast-grep", "--version"], capture_output=True, check=False)
     if proc.returncode != 0:
         raise GateError("ast-grep not found on PATH; the gate cannot generate mutants")
