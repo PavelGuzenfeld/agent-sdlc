@@ -67,6 +67,40 @@ check_rejected() {
     fi
 }
 
+editor_script=$(mktemp)
+cat > "$editor_script" <<'EOF'
+#!/bin/sh
+cp "$COMMIT_MSG_SRC" "$1"
+EOF
+chmod +x "$editor_script"
+
+check_editor_message() {
+    label=$1
+    content=$2
+    expect_code=$3
+    needle=$4
+    src=$(mktemp)
+    printf '%s' "$content" > "$src"
+    set +e
+    out=$(cd "$consumer" && COMMIT_MSG_SRC="$src" GIT_EDITOR="$editor_script" \
+        git -c user.email=sentinel -c user.name=sentinel commit --allow-empty -q -e -m placeholder 2>&1)
+    code=$?
+    set -e
+    rm -f "$src"
+    if [ "$code" -ne "$expect_code" ]; then
+        echo "FAIL: $label expected exit $expect_code, got $code" >&2
+        printf '%s\n' "$out" >&2
+        rm -rf "$consumer"
+        exit 1
+    fi
+    if [ -n "$needle" ] && ! printf '%s' "$out" | grep -qF "$needle"; then
+        echo "FAIL: $label did not report the expected reason" >&2
+        printf '%s\n' "$out" >&2
+        rm -rf "$consumer"
+        exit 1
+    fi
+}
+
 check_rejected "a banned word (leverage)" \
     "we should leverage this" \
     'banned word "leverage"'
@@ -83,5 +117,18 @@ if ! (cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit 
     exit 1
 fi
 
+git -C "$consumer" config core.commentChar ';'
+
+check_editor_message \
+    "a banned word only on a ';'-prefixed template line" \
+    "$(printf 'fix a plain thing\n\n; we should leverage this template hint\n')" \
+    0 ""
+
+check_editor_message \
+    "a banned word in the real message body under core.commentChar=';'" \
+    "$(printf 'we should leverage this\n\n; template hint line\n')" \
+    1 'banned word "leverage"'
+
+rm -f "$editor_script"
 rm -rf "$consumer"
 echo "all cases passed"
