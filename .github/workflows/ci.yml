@@ -69,6 +69,7 @@ jobs:
           mutation-gate commit-msg --range "$base..HEAD"
           mutation-gate diff-discipline --range "$base..HEAD" --branch "${{ github.head_ref || github.ref_name }}"
           mutation-gate no-new-docs --range "$base..HEAD"
+          mutation-gate no-leaks --range "$base..HEAD"
 
   rules-check-hook:
     runs-on: ubuntu-latest
@@ -83,6 +84,8 @@ jobs:
           sh tests/commit-msg-hook.sh
           sh tests/diff-discipline-hook.sh
           sh tests/no-new-docs-hook.sh
+          sh tests/no-leaks-hook.sh
+          sh tests/worktree-shim-hook.sh
 
   docs:
     runs-on: ubuntu-latest

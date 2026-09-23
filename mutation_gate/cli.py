@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_new_docs, rules, runner, token, vocabulary, vocabulary_wordnet, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_wordnet, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -153,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         return diff_discipline.main(argv[1:])
     if argv[:1] == ["no-new-docs"]:
         return no_new_docs.main(argv[1:])
+    if argv[:1] == ["no-leaks"]:
+        return no_leaks.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")
@@ -233,6 +235,20 @@ def _run(repo, args, staged: bool) -> int:
                 _emit(f"  {c.file}:{c.line}: {c.text}")
             _emit("")
             _emit(no_comments.suggest(repo, comments[0]))
+            return 1
+
+    if repo.config.vocabulary:
+        try:
+            names = vocabulary_check.check(repo, all_changed, wvs)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
+        if names:
+            _emit(f"BLOCKED: vocabulary — {len(names)} finding(s).")
+            for n in names:
+                _emit(f"  {vocabulary_check.describe(n)}")
+            _emit("")
+            _emit(vocabulary_check.suggest(repo, names[0]))
             return 1
 
     if repo.config.vocabulary:

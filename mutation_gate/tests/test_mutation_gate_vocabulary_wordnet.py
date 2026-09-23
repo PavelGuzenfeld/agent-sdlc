@@ -291,6 +291,7 @@ def test_check_never_loads_the_dictionary_when_nothing_was_added(tmp_path, monke
     def boom(*a, **k):
         raise AssertionError("vocabulary.load must not run when nothing was added")
 
+    monkeypatch.setattr(cli.vocabulary_check, "check", lambda *a, **k: [])
     monkeypatch.setattr(vocabulary_wordnet.vocabulary, "load", boom)
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {2}}, {DOMAIN: pre})
     err = capsys.readouterr().err
@@ -305,7 +306,7 @@ def test_collisions_for_skips_a_word_missing_from_the_dictionary_without_stoppin
     bar = _concept("bar", ("noun",))
     dictionary = vocabulary.Dictionary(
         concepts={"bar": bar, "real": real}, matches={}, collections=frozenset(),
-        distinct=frozenset(),
+        distinct=frozenset(), conventions=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("ghost", "real"),
                                                 changed=(), removed=())]
@@ -323,6 +324,7 @@ def test_collisions_for_continues_past_a_distinct_pair_to_check_the_next_word(mo
     dictionary = vocabulary.Dictionary(
         concepts={"cushion": cushion, "cask": cask, "buffer": buffer}, matches={},
         collections=frozenset(), distinct=frozenset({frozenset({"buffer", "cushion"})}),
+        conventions=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("buffer",),
                                                 changed=(), removed=())]
@@ -339,7 +341,7 @@ def test_collisions_for_records_one_collision_per_pair_across_two_shared_pos(mon
     cushion = _concept("cushion", ("noun", "verb"))
     dictionary = vocabulary.Dictionary(
         concepts={"cushion": cushion, "buffer": buffer}, matches={}, collections=frozenset(),
-        distinct=frozenset(),
+        distinct=frozenset(), conventions=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("buffer",),
                                                 changed=(), removed=())]

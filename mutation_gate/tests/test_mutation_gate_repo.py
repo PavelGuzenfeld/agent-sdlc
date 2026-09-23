@@ -11,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from mutation_gate.repo import OWN_NAMESPACES_ENV, Config, GateError, LanguageConfig, Repo
+from mutation_gate.repo import OWN_NAMESPACES_ENV, Config, GateError, LanguageConfig, Repo, git
+
+
+def test_git_missing_from_path_raises_gate_error_not_file_not_found(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(GateError, match="git not found on PATH"):
+        git("rev-parse", "--show-toplevel")
 
 
 def _write(tmp_path: Path, toml: str) -> Path:
