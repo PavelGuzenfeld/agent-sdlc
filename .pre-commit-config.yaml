@@ -43,3 +43,12 @@ repos:
           exec mutation-gate diff-discipline "$1"' _
         language: system
         stages: [commit-msg]
+      - id: no-new-docs
+        name: no new docs (newly added .md files must be allowlisted)
+        entry: >-
+          sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
+          echo "no-new-docs: skipped (not on PATH — see install.sh --deps)"; exit 0; };
+          exec mutation-gate no-new-docs'
+        language: system
+        always_run: true
+        pass_filenames: false
