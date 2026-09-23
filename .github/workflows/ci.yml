@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sh tests/no-leaks.sh
+      - run: sh tests/no-leaks-env.sh
       - run: sh scripts/no-leaks.sh
 
   agents-md-fresh:
