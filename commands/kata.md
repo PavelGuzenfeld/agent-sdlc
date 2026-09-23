@@ -24,26 +24,27 @@ One ticket, one branch, one PR — never batch tickets onto a shared branch.
 Same repo: sequential, unless the tickets touch disjoint paths, in which case
 run them in parallel. Different repos: always parallel.
 
-Spawn a fresh implementation agent per ticket, with the ticket's number and
-body, its `model:<name>` label as the agent's model override, and its own
-locked worktree. The agent:
+The orchestrator creates the ticket's worktree itself — `git worktree add
+--lock -b <N>-<slug> ../<repo>-<N>-<slug> origin/main` — and hands the agent
+that path. Never the Agent tool's `isolation: "worktree"`: it auto-names the
+branch `worktree-agent-<id>`, and the gate's adversary can't read a ticket
+off that.
 
-1. Renames its branch to `NN-slug` before touching any code. The worktree
-   tool's own branch carries no issue number, and mutation-gate's adversary
-   review reads the linked ticket off the branch name — a renamed branch is
-   the only thing standing between a gated commit and a silently skipped
-   review.
-2. Writes the ticket's slice test first and confirms it fails.
-3. Implements to green.
-4. Runs the gate. A waiver is fine only when it is an equivalence waiver proved
+Spawn a fresh implementation agent per ticket, with the ticket's number and
+body, its `model:<name>` label as the agent's model override, and the
+worktree's path. The agent:
+
+1. Writes the ticket's slice test first and confirms it fails.
+2. Implements to green.
+3. Runs the gate. A waiver is fine only when it is an equivalence waiver proved
    by rebuild-and-diff — any other waiver stops the agent, which reports back
    instead of pushing.
-5. Pushes, then waits for checks to go green on the pushed sha. No
+4. Pushes, then waits for checks to go green on the pushed sha. No
    `.github/workflows/` in the repo means no checks to wait for — skip
    straight to opening the PR.
-6. Opens a PR with `Closes #N` in the body, and a Human-testing section when
+5. Opens a PR with `Closes #N` in the body, and a Human-testing section when
    the change is user-observable.
-7. Exits, reporting the PR number, the ticket number, and any follow-up
+6. Exits, reporting the PR number, the ticket number, and any follow-up
    candidates noticed but not acted on.
 
 `/verify-generated-diff` still applies to this diff like any other.
@@ -56,9 +57,9 @@ Wait for a human `LGTM` on the PR. Anything else is feedback: respawn the same
 agent on the same branch with the comments — never open a second PR for the
 same ticket.
 
-Where this loop is allowed to merge, an `LGTM` squash-merges, deletes the
-branch, and removes the worktree. The merge closes the ticket through
-`Closes #N`.
+Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
+removes the worktree, then deletes the branch. The merge closes the ticket
+through `Closes #N`.
 
 Then file the agent's follow-up candidates, run `/done`'s tail without its
 handoff step, and move to the next ticket.
