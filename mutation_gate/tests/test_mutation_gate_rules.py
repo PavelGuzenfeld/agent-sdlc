@@ -1,0 +1,142 @@
+"""Intent: #73 (decisions 3, 5 and 8 of #71) — the rules live in each opted-in
+repo as .claude/rules/*.md, written from the installed package by
+`mutation-gate rules sync` and held byte-exact there by `rules check`.
+Only git root discovery is stubbed (the test image has no git); the config
+load, the packaged files and the CLI entry point are real."""
+
+from pathlib import Path
+
+import pytest
+
+from mutation_gate import cli, rules
+from mutation_gate.repo import Config, GateError, Repo
+
+SCOPED = "filters/"
+PACKAGED = sorted(p.name for p in rules.RULES_DIR.glob("*.md"))
+UNSCOPED = [name for name in PACKAGED if name != rules.SCOPED_RULE]
+
+
+def _fresh_repo(tmp_path: Path, monkeypatch, toml: str) -> Path:
+    (tmp_path / ".mutation-gate.toml").write_text(toml)
+    monkeypatch.setattr(
+        rules, "discover",
+        lambda cwd=None: Repo(root=tmp_path, origin="", remotes=(), config=Config.load(tmp_path)),
+    )
+    return tmp_path / ".claude" / "rules"
+
+
+def _named(capsys) -> str:
+    return capsys.readouterr().err
+
+
+def test_every_rule_at_the_repo_root_is_packaged():
+    at_root = sorted(p.name for p in (Path(__file__).parents[2] / "rules").glob("*.md"))
+    assert PACKAGED == at_root
+    assert rules.SCOPED_RULE in PACKAGED
+
+
+def test_sync_then_check_passes_with_model_paths_set(tmp_path, monkeypatch):
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
+    assert cli.main(["rules", "sync"]) == 0
+    assert sorted(p.name for p in synced.iterdir()) == PACKAGED
+    assert cli.main(["rules", "check"]) == 0
+
+
+def test_unscoped_rule_is_written_as_the_packaged_bytes(tmp_path, monkeypatch):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    cli.main(["rules", "sync"])
+    for name in UNSCOPED:
+        assert (synced / name).read_bytes() == (rules.RULES_DIR / name).read_bytes()
+
+
+def test_model_vv_leads_with_paths_frontmatter_built_from_model_paths(tmp_path, monkeypatch):
+    synced = _fresh_repo(
+        tmp_path, monkeypatch, 'model_paths = ["filters/", "gst/common/kalman_box.cpp"]\n'
+    )
+    cli.main(["rules", "sync"])
+    body = (rules.RULES_DIR / rules.SCOPED_RULE).read_bytes()
+    frontmatter = b'---\npaths:\n  - "filters/**"\n  - "gst/common/kalman_box.cpp"\n---\n'
+    assert (synced / rules.SCOPED_RULE).read_bytes() == frontmatter + body
+
+
+@pytest.mark.parametrize("name", [UNSCOPED[0], rules.SCOPED_RULE])
+def test_one_byte_body_edit_fails_check_naming_the_file(tmp_path, monkeypatch, capsys, name):
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
+    cli.main(["rules", "sync"])
+    path = synced / name
+    original = path.read_bytes()
+    path.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    err = _named(capsys)
+    assert f".claude/rules/{name}" in err
+    assert all(other not in err for other in PACKAGED if other != name)
+
+
+def test_changing_model_paths_without_resync_fails_check_naming_model_vv(tmp_path, monkeypatch, capsys):
+    root = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n').parents[1]
+    cli.main(["rules", "sync"])
+    (root / ".mutation-gate.toml").write_text('model_paths = ["other/"]\n')
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    err = _named(capsys)
+    assert f".claude/rules/{rules.SCOPED_RULE}" in err
+    assert all(other not in err for other in UNSCOPED)
+
+
+def test_repo_without_model_paths_gets_no_model_vv(tmp_path, monkeypatch):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    assert cli.main(["rules", "sync"]) == 0
+    assert sorted(p.name for p in synced.iterdir()) == UNSCOPED
+    assert cli.main(["rules", "check"]) == 0
+
+
+def test_emptying_model_paths_after_sync_fails_check_until_resync_removes_model_vv(
+    tmp_path, monkeypatch, capsys
+):
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
+    cli.main(["rules", "sync"])
+    (synced.parents[1] / ".mutation-gate.toml").write_text("")
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert f".claude/rules/{rules.SCOPED_RULE}" in _named(capsys)
+    assert cli.main(["rules", "sync"]) == 0
+    assert not (synced / rules.SCOPED_RULE).exists()
+    assert cli.main(["rules", "check"]) == 0
+
+
+def test_deleted_synced_rule_fails_check_naming_it(tmp_path, monkeypatch, capsys):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    cli.main(["rules", "sync"])
+    (synced / UNSCOPED[-1]).unlink()
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert f".claude/rules/{UNSCOPED[-1]}" in _named(capsys)
+
+
+def test_check_says_how_to_recover(tmp_path, monkeypatch, capsys):
+    _fresh_repo(tmp_path, monkeypatch, "")
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert "mutation-gate rules sync" in _named(capsys)
+
+
+def test_console_script_dispatches_rules_from_the_real_argv(tmp_path, monkeypatch):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+
+    def _no_gate_run(cwd=None):
+        raise GateError("the gate must not run for a rules command")
+
+    monkeypatch.setattr(cli, "discover", _no_gate_run)
+    monkeypatch.setattr(cli.sys, "argv", ["mutation-gate", "rules", "sync"])
+    assert cli.main() == 0
+    assert sorted(p.name for p in synced.iterdir()) == UNSCOPED
+
+
+def test_rules_outside_a_git_repo_are_refused(monkeypatch, capsys):
+    def _not_a_repo(cwd=None):
+        raise GateError("git rev-parse --show-toplevel: fatal: not a git repository")
+
+    monkeypatch.setattr(rules, "discover", _not_a_repo)
+    assert cli.main(["rules", "sync"]) == 2
+    assert "refused" in _named(capsys)
