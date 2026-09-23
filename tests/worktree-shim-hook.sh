@@ -60,6 +60,7 @@ check_hook mutation-gate --all-files
 check_hook no-new-docs --all-files
 check_hook commit-msg --hook-stage commit-msg --commit-msg-filename "$msgfile"
 check_hook diff-discipline --hook-stage commit-msg --commit-msg-filename "$msgfile"
+check_hook no-leaks --hook-stage commit-msg --commit-msg-filename "$msgfile"
 
 rm -f "$msgfile"
 git -C "$main" worktree remove -f "$wt" >/dev/null 2>&1 || true

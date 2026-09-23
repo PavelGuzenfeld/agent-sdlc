@@ -52,3 +52,11 @@ repos:
         language: system
         always_run: true
         pass_filenames: false
+      - id: no-leaks
+        name: no-leaks (identity/RFC1918/home-path scan plus optional banned_names_file)
+        entry: >-
+          sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
+          echo "no-leaks: skipped (not on PATH — see install.sh --deps)"; exit 0; };
+          exec bin/mutation-gate no-leaks "$1"' _
+        language: system
+        stages: [commit-msg]
