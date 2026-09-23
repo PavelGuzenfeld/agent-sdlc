@@ -43,7 +43,7 @@ def test_sync_then_check_passes_with_model_paths_set(tmp_path, monkeypatch):
 
 
 def test_unscoped_rule_is_written_as_the_packaged_bytes(tmp_path, monkeypatch):
-    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
     cli.main(["rules", "sync"])
     for name in UNSCOPED:
         assert (synced / name).read_bytes() == (rules.RULES_DIR / name).read_bytes()
@@ -59,18 +59,30 @@ def test_model_vv_leads_with_paths_frontmatter_built_from_model_paths(tmp_path, 
     assert (synced / rules.SCOPED_RULE).read_bytes() == frontmatter + body
 
 
-@pytest.mark.parametrize("name", [UNSCOPED[0], rules.SCOPED_RULE])
-def test_one_byte_body_edit_fails_check_naming_the_file(tmp_path, monkeypatch, capsys, name):
+def _flip_byte(path: Path, index: int) -> None:
+    original = path.read_bytes()
+    path.write_bytes(original[:index] + bytes([original[index] ^ 1]) + original[index + 1:])
+
+
+@pytest.mark.parametrize("name", PACKAGED)
+def test_one_byte_body_edit_fails_check_naming_only_that_file(tmp_path, monkeypatch, capsys, name):
     synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
     cli.main(["rules", "sync"])
-    path = synced / name
-    original = path.read_bytes()
-    path.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+    _flip_byte(synced / name, -1)
     capsys.readouterr()
     assert cli.main(["rules", "check"]) == 1
     err = _named(capsys)
     assert f".claude/rules/{name}" in err
     assert all(other not in err for other in PACKAGED if other != name)
+
+
+def test_hand_edited_frontmatter_fails_check_with_config_unchanged(tmp_path, monkeypatch, capsys):
+    synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
+    cli.main(["rules", "sync"])
+    _flip_byte(synced / rules.SCOPED_RULE, len(b"---\npaths:\n  - \"filters/"))
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert f".claude/rules/{rules.SCOPED_RULE}" in _named(capsys)
 
 
 def test_changing_model_paths_without_resync_fails_check_naming_model_vv(tmp_path, monkeypatch, capsys):
@@ -84,8 +96,9 @@ def test_changing_model_paths_without_resync_fails_check_naming_model_vv(tmp_pat
     assert all(other not in err for other in UNSCOPED)
 
 
-def test_repo_without_model_paths_gets_no_model_vv(tmp_path, monkeypatch):
-    synced = _fresh_repo(tmp_path, monkeypatch, "")
+@pytest.mark.parametrize("toml", ["", "model_paths = []\n"])
+def test_repo_without_model_paths_gets_no_model_vv(tmp_path, monkeypatch, toml):
+    synced = _fresh_repo(tmp_path, monkeypatch, toml)
     assert cli.main(["rules", "sync"]) == 0
     assert sorted(p.name for p in synced.iterdir()) == UNSCOPED
     assert cli.main(["rules", "check"]) == 0
