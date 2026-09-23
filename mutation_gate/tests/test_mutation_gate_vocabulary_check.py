@@ -341,3 +341,11 @@ def test_name_splits_on_case_and_underscore_with_digit_chunks_whole(name, expect
 def test_core_convention_list_is_loaded_from_the_packaged_core(tmp_path):
     dictionary = vocabulary.load(tmp_path, "")
     assert {"main", "self", "setUp", "monkeypatch"} <= dictionary.conventions
+
+
+def test_gated_files_drops_non_gated_languages_and_excluded_paths(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, 'exclude_paths = ["third_party/"]\n',
+                 {"pkg/a.py": "x = 1\n", "src/k.cpp": "int y = 1;\n"})
+    listing = "pkg/a.py\0src/k.cpp\0README.md\0third_party/v.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    assert vocabulary_check.gated_files(repo) == ["pkg/a.py", "src/k.cpp"]

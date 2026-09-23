@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import mutants, vocabulary, waivers
-from .repo import GateError, Repo
+from .repo import GateError, Repo, git
 
 CHECK = "vocabulary"
 SUFFIX = {"python": ".py", "cpp": ".cpp"}
 SYMBOL_KINDS = ("local", "parameter")
+UNKNOWN_DETAIL = "is not in the dictionary"
 
 _END = {"stopBy": "end"}
 _LEFT_OF_ASSIGNMENT = {"inside": {"kind": "assignment", "field": "left"}}
@@ -146,7 +147,7 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str) -> list[tuple
     for word in words(name):
         match = dictionary.resolve(word) or dictionary.resolve(word.lower())
         if match is None:
-            out.append((f"`{word}` is not in the dictionary", ""))
+            out.append((f"`{word}` {UNKNOWN_DETAIL}", ""))
         elif match.kind == "vague":
             out.append((f"`{word}` is vague — {match.detail}", ""))
         elif match.kind == "rejected":
@@ -189,3 +190,41 @@ def suggest(repo: Repo, f: Finding) -> str:
         f"line = {f.line}\n"
         'reason = "REPLACE ME — who outside this repo dictates this name"\n'
     )
+
+
+def gated_files(repo: Repo) -> list[str]:
+    """Tracked files of a gated language, minus exclude_paths (#111 decision 2)."""
+    tracked = git("ls-files", "-z", cwd=repo.root).split("\0")
+    return sorted(
+        rel for rel in tracked
+        if rel and mutants.language_of(rel) in SUFFIX
+        and not any(rel.startswith(p) for p in repo.config.exclude_paths)
+    )
+
+
+def audit(repo: Repo) -> list[Finding]:
+    """Every declaration in `gated_files`, judged with no waivers (#111)."""
+    changed = {
+        rel: set(range(1, len((repo.root / rel).read_text().splitlines()) + 1))
+        for rel in gated_files(repo)
+    }
+    return check(repo, changed, [])
+
+
+def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
+    """(file, line, old, new) rows for #111 `--leading-underscore`: every declared
+    name and path segment decisions 34/35 would reject a leading `_` on."""
+    dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    rows: list[tuple[str, int, str, str]] = []
+    for rel in gated_files(repo):
+        for line, _kind, name in declarations(repo.root / rel, mutants.language_of(rel)):
+            if name.startswith("_") and not _exempt(dictionary, name):
+                rows.append((rel, line, name, f"{name.strip('_')}_"))
+        segments = rel.split("/")
+        last = len(segments) - 1
+        for index, segment in enumerate(segments):
+            stem = segment if index != last else Path(segment).stem
+            suffix = "" if index != last else Path(segment).suffix
+            if stem.startswith("_") and not _exempt(dictionary, stem):
+                rows.append((rel, 0, segment, f"{stem.strip('_')}_{suffix}"))
+    return rows
