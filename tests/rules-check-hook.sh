@@ -29,10 +29,22 @@ if ! (cd "$consumer" && pre-commit run rules-check --all-files); then
 fi
 
 edited=$(find "$consumer/.claude/rules" -name '*.md' | sort | head -n 1)
+name=$(basename "$edited")
 printf 'x' >> "$edited"
 
-if (cd "$consumer" && pre-commit run rules-check --all-files); then
+set +e
+out=$(cd "$consumer" && pre-commit run rules-check --all-files 2>&1)
+code=$?
+set -e
+
+if [ "$code" -eq 0 ]; then
     echo "FAIL: rules-check should fail after editing a synced rule" >&2
+    rm -rf "$consumer"
+    exit 1
+fi
+if ! printf '%s' "$out" | grep -qF ".claude/rules/$name: differs from the packaged rule"; then
+    echo "FAIL: rules-check failure did not name the edited rule ($name)" >&2
+    printf '%s\n' "$out" >&2
     rm -rf "$consumer"
     exit 1
 fi

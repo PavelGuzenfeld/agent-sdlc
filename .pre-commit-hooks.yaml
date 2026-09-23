@@ -2,7 +2,7 @@
   name: rules check (.claude/rules drift)
   entry: mutation-gate rules check
   language: python
-  files: ^(\.claude/rules/|\.mutation-gate\.toml)
+  always_run: true
   pass_filenames: false
 - id: mutation-gate
   name: mutation gate (diff-scoped)
