@@ -77,6 +77,21 @@ def test_staged_skips_ast_grep_check_when_no_gated_file_changed(tmp_path, monkey
     assert "ast-grep" not in capsys.readouterr().err
 
 
+def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_file(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(
+        cli.mutants, "changed_lines", lambda root, staged: {"README.md": {1}, "foo.py": {1}}
+    )
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    _no_ast_grep_on_path(monkeypatch)
+    assert cli.main(["--staged"]) == 2
+    assert "ast-grep" in capsys.readouterr().err
+
+
 def test_worktree_reads_cwd_from_the_hook_stdin_json(tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(cli, "discover", _discover_spy(tmp_path, seen))
