@@ -84,6 +84,7 @@ jobs:
           sh tests/diff-discipline-hook.sh
           sh tests/no-new-docs-hook.sh
           sh tests/no-leaks-hook.sh
+          sh tests/worktree-shim-hook.sh
 
   docs:
     runs-on: ubuntu-latest
