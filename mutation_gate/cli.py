@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, coverage_map, model_vv, mutants, no_comments, runner, token, waivers
+from . import adversary, coverage_map, model_vv, mutants, no_comments, rules, runner, token, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -142,6 +142,9 @@ def _stop_hook_cwd() -> Path | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["rules"]:
+        return rules.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")
