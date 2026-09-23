@@ -4,12 +4,14 @@
   language: python
   always_run: true
   pass_filenames: false
+  stages: [pre-commit]
 - id: mutation-gate
   name: mutation gate (diff-scoped)
   entry: mutation-gate --staged
   language: python
   always_run: true
   pass_filenames: false
+  stages: [pre-commit]
 - id: commit-msg
   name: commit message check (voice.md banned words, attribution, sign-off)
   entry: mutation-gate commit-msg
@@ -26,6 +28,7 @@
   language: python
   always_run: true
   pass_filenames: false
+  stages: [pre-commit]
 - id: no-leaks
   name: no-leaks (identity/RFC1918/home-path scan plus optional banned_names_file)
   entry: mutation-gate no-leaks
