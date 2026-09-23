@@ -64,6 +64,17 @@ printf '%s' "$hook_out" | grep -qF 'use "bar"' || fail "the hook rejection did n
 printf '%s' "$hook_out" | grep -qF "foo" && fail "the hook rejection echoed the banned token" "$hook_out"
 cgit reset -q --hard main
 
+printf '%s\n' "$email_content" > "$consumer/identity.txt"
+cgit add identity.txt
+set +e
+present_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+present_code=$?
+set -e
+[ "$present_code" -ne 0 ] || fail "the hook should reject a staged email address with banned_names_file present"
+printf '%s' "$present_out" | grep -qF "identity.txt:1" || fail "the hook rejection did not name identity.txt:1" "$present_out"
+printf '%s' "$present_out" | grep -qF "$email_content" && fail "the hook rejection echoed the email address" "$present_out"
+cgit reset -q --hard main
+
 printf 'test_paths = ["tests"]\nbanned_names_file = "%s"\n' "$missing_file" > "$consumer/.mutation-gate.toml"
 cgit add .mutation-gate.toml
 cgit commit -q -m "point banned_names_file at a missing file"
