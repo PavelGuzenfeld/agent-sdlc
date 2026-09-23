@@ -9,12 +9,15 @@ Codex.
 ## Install
 
 `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
-the directories into `~/.claude` and `~/.codex`, renders `commands/` as Codex
-skills, merges the hooks from `settings.example.json` and, with `--deps`,
-installs the tooling (`--deps=say` adds the Kokoro TTS stack). A second run
-changes nothing. It installs `ast-grep-cli` via pipx, which puts an `sg`
-shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it shadows the
-system `sg` (execute as a different group).
+`skills/`, `commands/` and `bin/` into `~/.claude` and `~/.codex`, renders
+`commands/` as Codex skills, merges the hooks from `settings.example.json`
+and, with `--deps`, installs the tooling (`--deps=say` adds the Kokoro TTS
+stack). A second run changes nothing. It installs `ast-grep-cli` via pipx,
+which puts an `sg` shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it
+shadows the system `sg` (execute as a different group).
+
+Rules aren't installed globally: run `mutation-gate rules sync` inside a repo
+that opts in.
 
 The `mutation-gate` CLI alone can be installed with `pip install agent-sdlc`,
 or from a tagged [release](https://github.com/PavelGuzenfeld/agent-sdlc/releases)'s

@@ -102,9 +102,6 @@ install_claude() {
     for f in "$repo"/commands/*.md; do
         link "$f" "$HOME/.claude/commands/$(basename "$f")"
     done
-    for f in "$repo"/rules/*.md; do
-        link "$f" "$HOME/.claude/rules/$(basename "$f")"
-    done
     for f in "$repo"/bin/*; do
         link "$f" "$HOME/.claude/bin/$(basename "$f")"
     done
@@ -139,7 +136,6 @@ install_codex() {
     for f in "$repo"/commands/*.md; do
         render_codex_command "$f"
     done
-    link "$repo/AGENTS.md" "$HOME/.codex/AGENTS.md"
 }
 
 as_root() {
