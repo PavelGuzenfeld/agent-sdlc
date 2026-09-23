@@ -19,6 +19,14 @@ def _repo(tmp_path: Path) -> Repo:
     return Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
 
+def _no_ast_grep_on_path(monkeypatch) -> None:
+    monkeypatch.setattr(cli.mutants.shutil, "which", lambda name: None)
+
+
+def _not_a_git_repo(*args, **kwargs):
+    raise GateError("fatal: not a git repository")
+
+
 def _locked(repo):
     raise GateError(f"another mutation-gate is running in {repo.root.name}")
 
@@ -49,11 +57,39 @@ def test_staged_refuses_cleanly_when_ast_grep_is_missing_from_path(tmp_path, mon
     monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
     monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
     monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
-    monkeypatch.setenv("PATH", str(tmp_path))
-    assert cli.main(["--staged", "--dry-run"]) == 2
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    _no_ast_grep_on_path(monkeypatch)
+    assert cli.main(["--staged"]) == 2
     err = capsys.readouterr().err
     assert err.count("\n") == 1
     assert "ast-grep" in err
+
+
+def test_staged_skips_ast_grep_check_when_no_gated_file_changed(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"README.md": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    _no_ast_grep_on_path(monkeypatch)
+    assert cli.main(["--staged"]) == 0
+    assert "ast-grep" not in capsys.readouterr().err
+
+
+def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_file(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(
+        cli.mutants, "changed_lines", lambda root, staged: {"README.md": {1}, "foo.py": {1}}
+    )
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    _no_ast_grep_on_path(monkeypatch)
+    assert cli.main(["--staged"]) == 2
+    assert "ast-grep" in capsys.readouterr().err
 
 
 def test_worktree_reads_cwd_from_the_hook_stdin_json(tmp_path, monkeypatch):
