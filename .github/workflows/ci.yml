@@ -66,6 +66,7 @@ jobs:
           fi
           SKIP=mutation-gate pre-commit run --from-ref "$base" --to-ref HEAD
           mutation-gate commit-msg --range "$base..HEAD"
+          mutation-gate diff-discipline --range "$base..HEAD" --branch "${{ github.head_ref || github.ref_name }}"
 
   rules-check-hook:
     runs-on: ubuntu-latest
@@ -78,6 +79,7 @@ jobs:
           git config --global --add safe.directory "$PWD"
           sh tests/rules-check-hook.sh
           sh tests/commit-msg-hook.sh
+          sh tests/diff-discipline-hook.sh
 
   docs:
     runs-on: ubuntu-latest

@@ -20,7 +20,9 @@ this repo's own `mutation-gate` on PATH (see `install.sh --deps`), a commit
 touching `mutation_gate/` or `skills/sol-budget/scripts/` also runs the gate,
 and every commit message is checked against `rules/voice.md`'s banned words
 and against AI attribution and sign-off trailers — see `rules/testing.md` and
-`rules/voice.md`.
+`rules/voice.md`. A branch that adds more than 40 production lines against
+`main` needs a ticket reference: an `N-slug` branch name or `#N` in a commit
+message — see `rules/diff-discipline.md`.
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standard a PR is held to.
 

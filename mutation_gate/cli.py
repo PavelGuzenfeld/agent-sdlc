@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, model_vv, mutants, no_comments, rules, runner, token, vocabulary, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, rules, runner, token, vocabulary, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -149,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
         return commit_msg.main(argv[1:])
     if argv[:1] == ["vocabulary"]:
         return vocabulary.main(argv[1:])
+    if argv[:1] == ["diff-discipline"]:
+        return diff_discipline.main(argv[1:])
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")

@@ -35,3 +35,11 @@ repos:
           exec mutation-gate commit-msg "$1"' _
         language: system
         stages: [commit-msg]
+      - id: diff-discipline
+        name: diff discipline (branch line limit without a ticket reference)
+        entry: >-
+          sh -c 'command -v mutation-gate >/dev/null 2>&1 || {
+          echo "diff-discipline: skipped (not on PATH — see install.sh --deps)"; exit 0; };
+          exec mutation-gate diff-discipline "$1"' _
+        language: system
+        stages: [commit-msg]
