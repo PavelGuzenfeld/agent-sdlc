@@ -12,8 +12,8 @@ unclear: fix the code, then delete the comment.
 
 ## Hard limits
 
-- Comments: **zero.** No hand-written `#` or `//` comments in new code, in repos I
-  own. Carve-outs: pragmas (`# pyright: ignore`, `# noqa`, `NOLINT`), shebangs,
+- Comments: **zero.** No hand-written `#` or `//` comments in new code, in this
+  repo. Carve-outs: pragmas (`# pyright: ignore`, `# noqa`, `NOLINT`), shebangs,
   license/SPDX headers, and vendored or generated files — their comments are
   upstream's; check with a diff against the skeleton before assuming a config is
   yours.
@@ -93,7 +93,7 @@ magnitude work runs in a container, never in-head. Commit the script.
   The file path is not an option.
 - Absent → draft the skeleton from the code as the body of a new tracking issue, tag every
   line `(reconstructed)` or `(needs intent)`, **stop**. A spec derived from the implementation
-  can only agree with it. The intent lines are Pavel's.
+  can only agree with it. The intent lines are the maintainer's.
 - Every test under this file cites its spec line in its one-line docstring: `"""MS-7: Q stays
   PSD across the dt envelope."""`. No traceable line means the spec is incomplete (propose the
   line) or the test is unrequested (drop it).
@@ -107,12 +107,12 @@ magnitude work runs in a container, never in-head. Commit the script.
   intent, neglected effects and envelope, diffed against the spec. Divergence means the intent
   is not in the code. This file authorises the subagent; it reports, never blocks. It is not
   testing.md's adversary — opposite blindfold. Run both.
-- A CAS calculates. It never adjudicates sufficiency; Pavel does.
+- A CAS calculates. It never adjudicates sufficiency; the maintainer does.
 
 ## Layer 1 — Before editing
 - Assumption inventory for the touched code, one line each: frame, units, time base, noise
   model, linearisation, discretisation. Read out of the code, never out of the request.
-  Conflict with what Pavel said → stop and flag.
+  Conflict with the request → stop and flag.
 - Derive every numeric tolerance (float precision, dt order) and state the derivation. Never
   tune one until it goes green.
 
@@ -175,7 +175,7 @@ magnitude work runs in a container, never in-head. Commit the script.
 - Runtime asserts (Cholesky success, P symmetry, trace monotonicity): hard in debug, counter
   plus periodic report in release. Never add allocation, locking or logging to the real-time
   path. Existing real-time carve-outs still apply.
-- The mutation gate enforces Layer 0 mechanically (dotfiles#56): spec present (the pinned
+- The mutation gate enforces Layer 0 mechanically: spec present (the pinned
   issue resolves) when a `model_paths` file changes, a diff-touched model test cites an
   `MS-n` that exists and is
   untagged, and a keyword probe blocks once on model code not declared in `model_paths`. A
@@ -212,8 +212,6 @@ the mutation is not a reason.
 
 A slice test counts as a covering test for the diff, same standing as any unit
 test — the gate does not care which kind killed the mutant.
-
-Spec and all 29 decisions: `PavelGuzenfeld/dotfiles#9`.
 
 ## Writing tests the gate will not embarrass
 
@@ -281,7 +279,7 @@ a gate config — or it is README, LICENSE, or CONTRIBUTING. Never write a desig
 doc, an RFC, or a decision log as a file in the repo; open a ticket and point to
 it instead.
 
-This binds repos I own. An upstream tree keeps its own doc conventions.
+This binds this repo. An upstream tree keeps its own doc conventions.
 
 ## Model spec
 
@@ -294,11 +292,8 @@ file.
 
 An approved ticket is the plan, and satisfies diff-discipline's stop on its own
 — no ticket, no change past the line-count limit; open one first. A ticket maps
-to exactly one branch and one PR, and the PR body carries `Closes #N`. Every
-repo I own defaults to squash-only merges with delete-branch-on-merge.
-
-At work the same ticket-and-slice discipline applies; nothing here changes for
-that context.
+to exactly one branch and one PR, and the PR body carries `Closes #N`. This
+repo defaults to squash-only merges with delete-branch-on-merge.
 
 ## voice
 
