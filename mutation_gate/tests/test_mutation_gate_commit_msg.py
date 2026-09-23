@@ -172,6 +172,61 @@ def test_a_ticket_reference_before_the_scissors_line_survives_the_strip():
     assert not any("leverage" in r for r in reasons)
 
 
+def test_strip_editor_cruft_strips_the_given_comment_char_not_hash():
+    message = (
+        "fix a plain thing\n"
+        "\n"
+        "; Please enter the commit message for your changes. Lines starting\n"
+        "; with ';' will be ignored.\n"
+        "#not a comment under a semicolon char, stays as body\n"
+    )
+    stripped = commit_msg._strip_editor_cruft(message, ";")
+    assert "Please enter the commit message" not in stripped
+    assert "#not a comment under a semicolon char, stays as body" in stripped
+
+
+def test_strip_editor_cruft_is_a_no_op_when_comment_char_is_none():
+    message = "fix a thing\n\n# nothing was resolved so nothing is stripped\n"
+    assert commit_msg._strip_editor_cruft(message, None) == message
+
+
+def test_resolve_comment_char_returns_the_literal_configured_value(monkeypatch):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    assert commit_msg._resolve_comment_char("anything") == ";"
+
+
+def test_resolve_comment_char_defaults_to_hash_when_core_commentchar_is_unset(monkeypatch):
+    def boom(*a, cwd=None):
+        raise GateError("key not set")
+
+    monkeypatch.setattr(commit_msg, "git", boom)
+    assert commit_msg._resolve_comment_char("anything") == "#"
+
+
+def test_resolve_comment_char_defaults_to_hash_when_git_binary_is_missing(monkeypatch):
+    def boom(*a, cwd=None):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(commit_msg, "git", boom)
+    assert commit_msg._resolve_comment_char("anything") == "#"
+
+
+def test_resolve_comment_char_auto_reads_the_char_git_actually_used(monkeypatch):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    message = (
+        "fix a thing\n"
+        "\n"
+        "@ Please enter the commit message for your changes. Lines starting\n"
+        "@ with '@' will be ignored, and an empty message aborts the commit.\n"
+    )
+    assert commit_msg._resolve_comment_char(message) == "@"
+
+
+def test_resolve_comment_char_auto_strips_nothing_without_a_hint_line(monkeypatch):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    assert commit_msg._resolve_comment_char("fix a thing\n\nbody text\n") is None
+
+
 def _msgfile(tmp_path: Path, text: str) -> str:
     path = tmp_path / "MSG"
     path.write_text(text)
@@ -193,6 +248,32 @@ def test_cli_rejects_a_signed_off_by_trailer(tmp_path, capsys):
     msgfile = _msgfile(tmp_path, f"fix a thing\n\nSigned-off-by: Pavel <{_at('pavel', 'example.com')}>")
     assert cli.main(["commit-msg", msgfile]) == 1
     assert "Signed-off-by trailer is not allowed" in capsys.readouterr().err
+
+
+def test_cli_under_semicolon_comment_char_trips_on_the_body_word_not_the_template_line(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    message = (
+        "we should leverage this\n"
+        "\n"
+        "fix a plain thing\n"
+        "; we should leverage this too\n"
+    )
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 1
+    err = capsys.readouterr().err
+    assert "line 1:" in err
+    assert "line 4:" not in err
+
+
+def test_cli_under_semicolon_comment_char_accepts_a_banned_word_confined_to_the_template_line(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    message = "fix a plain thing\n\n; we should leverage this template hint\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 0
 
 
 def test_cli_refuses_with_no_msgfile_and_no_range():

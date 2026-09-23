@@ -39,8 +39,7 @@ _GENERATED_WITH_RE = re.compile(r"^\W*generated with\b", re.IGNORECASE)
 _CO_AUTHORED_BY_RE = re.compile(r"^co-authored-by:\s*(.+)$", re.IGNORECASE)
 _NEVER_USE_RE = re.compile(r"Never use:(.*?)(?:\n[ \t]*\n|\Z)", re.DOTALL)
 _ITEM_RE = re.compile(r'"([^"]*)"|([^,]+)')
-_COMMENT_LINE_RE = re.compile(r"^#.*$", re.MULTILINE)
-_SCISSORS_RE = re.compile(r"^# -+ >8 -+ *$.*\Z", re.MULTILINE | re.DOTALL)
+_AUTO_COMMENT_HINT_RE = re.compile(r"^(\S) with '\1' will be ignored,", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -86,12 +85,42 @@ def _ai_marker(trailer_value: str) -> str | None:
     return None
 
 
-def _strip_editor_cruft(message: str) -> str:
-    """A raw commit-msg hook file still carries the `#`-commented status lines
-    and, under `commit -v`, the scissors-delimited diff below them — git strips
-    both only after the hook runs, so a diff line must not read as the message."""
-    message = _SCISSORS_RE.sub("", message)
-    return _COMMENT_LINE_RE.sub("", message)
+@lru_cache(maxsize=None)
+def _comment_patterns(comment_char: str) -> tuple[re.Pattern, re.Pattern]:
+    escaped = re.escape(comment_char)
+    scissors = re.compile(rf"^{escaped} -+ >8 -+ *$.*\Z", re.MULTILINE | re.DOTALL)
+    line = re.compile(rf"^{escaped}.*$", re.MULTILINE)
+    return scissors, line
+
+
+def _strip_editor_cruft(message: str, comment_char: str | None = "#") -> str:
+    """A raw commit-msg hook file still carries the comment-char-prefixed status
+    lines and, under `commit -v`, the scissors-delimited diff below them — git
+    strips both only after the hook runs, so a diff line must not read as the message."""
+    if comment_char is None:
+        return message
+    scissors_re, comment_line_re = _comment_patterns(comment_char)
+    message = scissors_re.sub("", message)
+    return comment_line_re.sub("", message)
+
+
+def _configured_comment_char(cwd: Path | None = None) -> str:
+    try:
+        value = git("config", "--get", "core.commentChar", cwd=cwd).strip()
+    except (GateError, OSError):
+        return "#"
+    return value or "#"
+
+
+def _resolve_comment_char(message: str, cwd: Path | None = None) -> str | None:
+    """`auto` is resolved by git only when it writes the status/help block; with
+    no block (`commit.status=false`, `-m`), git's cleanup strips nothing, so an
+    unmatched hint means "do not strip" rather than the default `#`."""
+    configured = _configured_comment_char(cwd)
+    if configured != "auto":
+        return configured
+    match = _AUTO_COMMENT_HINT_RE.search(message)
+    return match.group(1) if match else None
 
 
 def check_message(message: str, words: list[str]) -> list[Finding]:
@@ -170,7 +199,8 @@ def main(argv: list[str]) -> int:
         _emit(f"mutation-gate commit-msg refused: {exc}")
         return 2
 
-    findings = check_message(_strip_editor_cruft(message), words)
+    comment_char = _resolve_comment_char(message)
+    findings = check_message(_strip_editor_cruft(message, comment_char), words)
     if findings:
         _emit(f"commit-msg: {args.msgfile}")
         _report(findings)
