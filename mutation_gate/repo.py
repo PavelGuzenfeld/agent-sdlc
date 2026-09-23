@@ -120,6 +120,7 @@ class Config:
     # Block on a comment line the diff added (#100, decision 5 of #93). Opt-in:
     # work repos and forks keep their comments (decision 29).
     no_comments: bool = False
+    vocabulary: str = ""
     own_namespaces: list[str] = field(default_factory=list)
 
     def for_language(self, language: str) -> LanguageConfig:
