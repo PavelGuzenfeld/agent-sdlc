@@ -21,7 +21,10 @@ Only on an explicit `/done`. Kata's post-merge tail — `/done`'s tail run witho
 handoff step — skips this too: that tail follows one ticket's own merge, not a session
 interrupt, and must never reach into another lane's live agents.
 
-`ListAgents`. Nothing live: skip to survey.
+`ListAgents`, the Subagents section only — a peer or remote session, listed
+elsewhere in ListAgents, is foreign, same as another terminal's work, and is
+never checkpointed, at most named "not touched" in the report. Nothing live:
+skip to survey.
 
 Send each live agent a checkpoint request: stop at a clean point, commit WIP on its own
 branch, never push, and report back its branch, worktree, SHA, next step, and any
