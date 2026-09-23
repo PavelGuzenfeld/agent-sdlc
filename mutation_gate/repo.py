@@ -131,7 +131,6 @@ class Config:
     no_comments: bool = False
     vocabulary: str = ""
     own_namespaces: list[str] = field(default_factory=list)
-    # A newly added .md file outside the built-in allowlist (#71 decision 10).
     doc_allow: list[DocAllow] = field(default_factory=list)
 
     def for_language(self, language: str) -> LanguageConfig:
