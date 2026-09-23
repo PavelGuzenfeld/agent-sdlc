@@ -29,9 +29,12 @@ class GateError(RuntimeError):
 def git(*args: str, cwd: Path | None = None) -> str:
     # Inherits git's environment on purpose: under a hook GIT_INDEX_FILE is the
     # index being committed, which --staged must read. Test commands scrub it.
-    out = subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
-    )
+    try:
+        out = subprocess.run(
+            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+        )
+    except FileNotFoundError as exc:
+        raise GateError(f"git not found on PATH: {exc}") from exc
     if out.returncode != 0:
         raise GateError(f"git {' '.join(args)}: {out.stderr.strip()}")
     return out.stdout

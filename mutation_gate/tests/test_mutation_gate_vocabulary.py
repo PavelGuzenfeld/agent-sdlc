@@ -153,6 +153,14 @@ def test_missing_domain_file_refuses(tmp_path, monkeypatch, capsys):
     assert str(tmp_path / DOMAIN) in err
 
 
+def test_lookup_falls_back_to_core_when_git_is_absent_from_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    code, out, _ = _lookup("position", capsys)
+    assert code == 0
+    assert out.startswith("position: noun\n")
+
+
 def _domain(tmp_path: Path, text: str) -> vocabulary.Dictionary:
     (tmp_path / DOMAIN).write_text(text)
     return vocabulary.load(tmp_path, DOMAIN)
