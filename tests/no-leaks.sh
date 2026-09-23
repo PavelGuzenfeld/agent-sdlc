@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 set -eu
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 script="$dir/scripts/no-leaks.sh"
