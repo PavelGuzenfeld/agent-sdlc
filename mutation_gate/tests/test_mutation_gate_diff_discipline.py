@@ -39,11 +39,12 @@ def _stub_git(monkeypatch, *, branch: str = "feature", numstat: str = "", log: s
                 return "f" * 40 + "\n"
             raise GateError("git rev-parse: fatal")
         if args[:2] == ("rev-parse", "--git-path"):
-            return "MERGE_HEAD\n"
+            return "gitdir/MERGE_HEAD\n"
         if args[0] == "merge-base":
             if merge_base is None:
                 raise GateError("git merge-base: fatal: Not a valid object name HEAD")
-            return merge_base + "\n"
+            suffix = "-with-heads" if len(args) > 3 else ""
+            return merge_base + suffix + "\n"
         if args[0] == "log":
             return log
         if args[0] == "diff":
@@ -68,6 +69,12 @@ def _local(monkeypatch, tmp_path: Path, message: str = "plain change", config: C
 def _range(monkeypatch, tmp_path: Path, *extra: str, config: Config | None = None) -> int:
     monkeypatch.setattr(diff_discipline, "discover", lambda cwd=None: _repo(tmp_path, config))
     return cli.main(["diff-discipline", "--range", "base0..HEAD", *extra])
+
+
+def _write_merge_head(tmp_path: Path, *heads: str) -> None:
+    merge_head = tmp_path / "gitdir" / "MERGE_HEAD"
+    merge_head.parent.mkdir(parents=True, exist_ok=True)
+    merge_head.write_text("\n".join(heads) + "\n")
 
 
 def test_limit_is_forty():
@@ -240,26 +247,29 @@ def test_a_merge_in_progress_counts_the_index_against_the_merge_base_with_the_in
     monkeypatch, tmp_path
 ):
     incoming = "c" * 40
-    (tmp_path / "MERGE_HEAD").write_text(incoming + "\n")
+    _write_merge_head(tmp_path, incoming)
     calls = _stub_git(monkeypatch, merge_base="merged0")
-    _local(monkeypatch, tmp_path)
+    assert _local(monkeypatch, tmp_path) == 0
+    assert ("rev-parse", "--git-path", "MERGE_HEAD") in calls
     assert ("merge-base", ORIGIN_MAIN, "HEAD", incoming) in calls
-    assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "merged0") in calls
-    assert ("log", "--format=%B", "merged0..HEAD") in calls
+    assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "merged0-with-heads") in calls
+    assert ("log", "--format=%B", "merged0-with-heads..HEAD") in calls
 
 
 def test_an_octopus_merge_passes_every_incoming_head_without_crashing(monkeypatch, tmp_path):
     heads = ["c" * 40, "d" * 40]
-    (tmp_path / "MERGE_HEAD").write_text("\n".join(heads) + "\n")
+    _write_merge_head(tmp_path, *heads)
     calls = _stub_git(monkeypatch, merge_base="merged0", numstat=_numstat({"src/a.py": 20}))
     assert _local(monkeypatch, tmp_path) == 0
     assert ("merge-base", ORIGIN_MAIN, "HEAD", *heads) in calls
+    assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "merged0-with-heads") in calls
 
 
 def test_no_merge_head_file_omits_it_from_the_merge_base_call(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch, merge_base="base0")
-    _local(monkeypatch, tmp_path)
+    assert _local(monkeypatch, tmp_path) == 0
     assert ("merge-base", ORIGIN_MAIN, "HEAD") in calls
+    assert ("diff", "--numstat", "-z", "--no-renames", "--cached", "base0") in calls
 
 
 def test_local_form_prefers_origin_head_as_the_default_branch(monkeypatch, tmp_path):
@@ -338,6 +348,14 @@ def test_range_form_diffs_and_logs_the_given_range(monkeypatch, tmp_path):
     assert ("diff", "--numstat", "-z", "--no-renames", "base0..HEAD") in calls
     assert ("log", "--format=%B", "base0..HEAD") in calls
     assert not any(c[0] in ("merge-base", "symbolic-ref") for c in calls)
+
+
+def test_range_form_ignores_a_merge_head_file(monkeypatch, tmp_path):
+    _write_merge_head(tmp_path, "c" * 40)
+    calls = _stub_git(monkeypatch, numstat=_numstat({"src/a.py": 41}))
+    assert _range(monkeypatch, tmp_path) == 1
+    assert not any(c[:2] == ("rev-parse", "--git-path") for c in calls)
+    assert not any(c[0] == "merge-base" for c in calls)
 
 
 def test_range_form_takes_the_branch_name_from_the_flag_when_head_is_detached(monkeypatch, tmp_path):
