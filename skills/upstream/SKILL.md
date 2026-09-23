@@ -22,7 +22,7 @@ Report only. One verdict, the evidence behind it, one ledger line.
 ## Discriminators — all four, every run
 
 **generality** — does the patch need one of our concepts to make sense.
-`ours`: an internal-project concept appears in the patch itself — see the banned-name list in `~/.claude/rules/public-surface.md`.
+`ours`: an internal-project concept appears in the patch itself — see the banned-name list at the `banned_names_file` named in `.mutation-gate.toml`.
 `general`: it stands alone for any user of the dependency.
 
 **latency** — `blocks` if a delivery date depends on the merge, else `free`.
@@ -85,8 +85,8 @@ carried by a shim, with no upstream attempt left open, is `local-permanent`.
 
 - origin repo of the feature
 - internal names to replace, and what to replace them with: the banned-name list
-  in `~/.claude/rules/public-surface.md`, which is the only copy. Do not restate
-  it here or anywhere else that gets committed.
+  at the `banned_names_file` named in `.mutation-gate.toml`, which is the only
+  copy. Do not restate it here or anywhere else that gets committed.
 - identity to commit under: never the work address, never a `Signed-off-by`
 - the grep to run before pushing: build the alternation from that same list and
   run it over the patch
