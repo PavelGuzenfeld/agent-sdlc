@@ -133,6 +133,7 @@ class Config:
     # work repos and forks keep their comments (decision 29).
     no_comments: bool = False
     vocabulary: str = ""
+    vocabulary_synonyms: str = "block"
     own_namespaces: list[str] = field(default_factory=list)
     doc_allow: list[DocAllow] = field(default_factory=list)
     banned_names_file: str = ""
