@@ -102,15 +102,16 @@ cgit checkout -q merge-sync
 merge_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel merge --no-edit main 2>&1) \
     || fail "merging main's 41 new lines into ticketless branch merge-sync (20 of its own) should pass" "$merge_out"
 
-cgit checkout -q -b merge-blocked main
+cgit checkout -q -b 12-merge-blocked main
 add_lines src/i.py 41
-cgit commit -q -m "too many lines of its own"
+cgit commit -q -m "too many lines of its own" || fail "41 lines should pass while still named 12-merge-blocked"
 
 cgit checkout -q main
 add_lines src/on-main-2.py 41
 cgit commit -q -m "main grows again (#77)" || fail "41 lines landing on main itself should pass with #77 in the message"
 
-cgit checkout -q merge-blocked
+cgit checkout -q 12-merge-blocked
+cgit branch -m merge-blocked
 set +e
 merge_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel merge --no-edit main 2>&1)
 merge_code=$?
