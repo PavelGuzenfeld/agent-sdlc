@@ -85,21 +85,31 @@ def test_domain_making_position_canonical_a_second_time_fails_naming_both_files(
 
 
 def test_lookup_answers_from_the_core_alone_when_the_key_is_unset(tmp_path, monkeypatch, capsys):
-    _repo(tmp_path, monkeypatch)
+    _repo(tmp_path, monkeypatch, "", '[reject]\nloc = "position"\n')
     code, out, _ = _lookup("position", capsys)
     assert code == 0
     assert out.startswith("position: noun\n")
+    assert _lookup("loc", capsys)[0] == 1
+
+
+def test_core_concept_reject_list_resolves_to_its_concept(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("num", capsys)
+    assert code == 0
+    assert out == "count: noun, verb\n  num is a rejected synonym of count\n"
 
 
 def test_canonical_lookup_lists_the_derived_forms(tmp_path, monkeypatch, capsys):
     _repo(tmp_path, monkeypatch, OPTED_IN, PARSE + 'forms = ["-s", "-ed", "-ing", "-er"]\n')
-    _, out, _ = _lookup("parse", capsys)
+    code, out, _ = _lookup("parse", capsys)
+    assert code == 0
     assert out == "parse: verb\n  forms: parses, parsed, parsing, parser\n"
 
 
 def test_two_part_of_speech_concept_prints_both(tmp_path, monkeypatch, capsys):
     _repo(tmp_path, monkeypatch)
-    _, out, _ = _lookup("count", capsys)
+    code, out, _ = _lookup("count", capsys)
+    assert code == 0
     assert out.startswith("count: noun, verb\n")
 
 
@@ -114,7 +124,7 @@ def test_vague_word_lookup_prints_its_hint(tmp_path, monkeypatch, capsys):
     _repo(tmp_path, monkeypatch)
     code, out, _ = _lookup("manager", capsys)
     assert code == 0
-    assert out.startswith("manager: vague\n  ")
+    assert out == "manager: vague\n  name what it does: scheduler, registry, pool, cache\n"
 
 
 def test_preposition_lookup_names_its_function_word_kind(tmp_path, monkeypatch, capsys):
@@ -126,7 +136,8 @@ def test_and_is_a_rejected_function_word_with_a_hint(tmp_path, monkeypatch, caps
     _repo(tmp_path, monkeypatch)
     code, out, _ = _lookup("and", capsys)
     assert code == 0
-    assert out.startswith("and: rejected\n  ")
+    assert out == ("and: rejected\n"
+                   "  one action per name: split the function, or name the combined step\n")
 
 
 def test_irregular_plural_listed_on_the_entry_overrides_the_rule(tmp_path, monkeypatch, capsys):
@@ -213,12 +224,13 @@ def test_derived_form_colliding_with_another_concept_is_refused(tmp_path):
 
 def test_same_concept_may_spell_a_form_like_its_own_word(tmp_path):
     text = CONCEPT + 'meaning = "x"\nforms = ["-ed"]\nirregular = { "-ed" = "frob" }\n'
-    assert _domain(tmp_path, text).resolve("frob").kind == "canonical"
+    match = _domain(tmp_path, text).resolve("frob")
+    assert (match.word, match.kind, match.detail) == ("frob", "canonical", "forms: frob")
 
 
 def test_distinct_pair_naming_a_non_canonical_word_is_refused(tmp_path):
-    text = '[[distinct]]\npair = ["frame", "framing"]\n'
-    assert "[[distinct]] ['frame', 'framing'] names a word that is not canonical" in _refusal(
+    text = '[[distinct]]\npair = ["frame", "pos"]\n'
+    assert "[[distinct]] ['frame', 'pos'] names a word that is not canonical" in _refusal(
         tmp_path, text
     )
 
@@ -252,9 +264,10 @@ def test_domain_collection_types_join_the_core_ones(tmp_path):
 
 
 def test_head_and_returns_are_carried_on_the_concept(tmp_path):
-    loaded = _domain(tmp_path, CONCEPT + 'meaning = "x"\nreturns = "none"\n')
+    loaded = _domain(tmp_path, CONCEPT + 'meaning = "x"\nreturns = "none"\nhead = true\n')
     assert loaded.concepts["count"].head is True
     assert loaded.concepts["frame"].head is False
+    assert loaded.concepts["frob"].head is True
     assert loaded.concepts["frob"].returns == "none"
     assert loaded.concepts["count"].returns == ""
 
