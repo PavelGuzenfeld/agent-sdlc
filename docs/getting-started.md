@@ -8,11 +8,12 @@ cd agent-sdlc
 ./install.sh --target claude
 ```
 
-`--target` takes `claude`, `codex`, or `all`. It symlinks `skills/` and
-`rules/*.md` into the agent's config directory, `commands/*.md` into
-`~/.claude/commands` (or renders each as `~/.codex/skills/<name>/SKILL.md`),
-and merges the hook lines from `settings.example.json` into
-`~/.claude/settings.json`. Rerunning it is a no-op.
+`--target` takes `claude`, `codex`, or `all`. It symlinks `skills/` into the
+agent's config directory, `commands/*.md` into `~/.claude/commands` (or
+renders each as `~/.codex/skills/<name>/SKILL.md`), and merges the hook lines
+from `settings.example.json` into `~/.claude/settings.json`. Rerunning it is
+a no-op. Rules aren't installed globally; run `mutation-gate rules sync`
+inside a repo that opts in.
 
 Add `--deps` to install the tools the pack expects on `PATH`:
 `git gh jq docker python3 ast-grep pytest`, plus `mutation-gate` itself.

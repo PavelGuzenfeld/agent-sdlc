@@ -19,7 +19,7 @@ assert_tree() {
     expect "[$label] claude skill is a symlink" test -L "$home/.claude/skills/diagnose"
     expect "[$label] codex skill is a symlink" test -L "$home/.codex/skills/diagnose"
     expect "[$label] claude command is a symlink" test -L "$home/.claude/commands/done.md"
-    expect "[$label] claude rule is a symlink" test -L "$home/.claude/rules/testing.md"
+    expect "[$label] no global claude rules dir" test ! -e "$home/.claude/rules"
     expect "[$label] claude bin script is a symlink" test -L "$home/.claude/bin/git-guardrail.sh"
     expect "[$label] claude bin script is executable" test -x "$home/.claude/bin/git-guardrail.sh"
     expect "[$label] claude bin subdirectory reachable" test -f "$home/.claude/bin/say-tones/arm.raw"
@@ -28,8 +28,7 @@ assert_tree() {
     expect "[$label] codex command skill names itself" grep -qx 'name: done' "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill carries a description" grep -q '^description: Finalize the smallest coherent' "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill keeps the body" grep -qx '# Done' "$home/.codex/skills/done/SKILL.md"
-    expect "[$label] codex AGENTS.md is non-empty" test -s "$home/.codex/AGENTS.md"
-    expect "[$label] codex AGENTS.md carries the rules" grep -q '^## testing' "$home/.codex/AGENTS.md"
+    expect "[$label] no global codex AGENTS.md" test ! -e "$home/.codex/AGENTS.md"
     expect "[$label] CLAUDE.md copied" test -f "$home/.claude/CLAUDE.md"
     expect "[$label] settings.json has the guardrail hook" \
         jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$home/.claude/settings.json"

@@ -86,6 +86,7 @@ jobs:
           sh tests/no-new-docs-hook.sh
           sh tests/no-leaks-hook.sh
           sh tests/worktree-shim-hook.sh
+          sh tests/hook-stages.sh
 
   docs:
     runs-on: ubuntu-latest
