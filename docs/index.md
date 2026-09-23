@@ -17,13 +17,14 @@ cd agent-sdlc
 
 `--target claude|codex|all` picks the agent home. `install.sh` symlinks
 `skills/` into `~/.claude/skills` and `~/.codex/skills`, `commands/*.md` into
-`~/.claude/commands` and as `~/.codex/skills/<name>/SKILL.md`, `rules/*.md`
-into `~/.claude/rules`, `bin/*` into `~/.claude/bin`, links
-`~/.codex/AGENTS.md` to the repo's own (kept fresh by `mutation-gate rules
-sync`), and merges the hook lines from
-`settings.example.json` into `~/.claude/settings.json`. The `mutation-gate`
-Stop hook is added only when the binary is on `PATH`. A second run changes
-nothing.
+`~/.claude/commands` and as `~/.codex/skills/<name>/SKILL.md`, `bin/*` into
+`~/.claude/bin`, and merges the hook lines from `settings.example.json` into
+`~/.claude/settings.json`. The `mutation-gate` Stop hook is added only when
+the binary is on `PATH`. A second run changes nothing.
+
+Rules load per repo, not globally: run `mutation-gate rules sync` inside a
+repo that opts in, which writes `.claude/rules/*.md` and the `AGENTS.md`
+block there.
 
 `--deps` installs `git gh jq docker python3 ast-grep pytest` and the gate;
 `--deps=say` adds the Kokoro voice stack.
