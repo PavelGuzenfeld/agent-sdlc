@@ -268,7 +268,10 @@ def _print_audit(findings) -> None:
 
 
 def _print_toml_stubs(findings) -> None:
-    for word, _count, _sample in _unknown_words(findings):
+    from . import vocabulary_check
+
+    for word, count, sample in _unknown_words(findings):
+        print(f"# review ({count}): {vocabulary_check.describe(sample)}")
         print(f'[[concept]]\nword = "{word}"\nmeaning = ""\npos = ["noun"]\n')
 
 

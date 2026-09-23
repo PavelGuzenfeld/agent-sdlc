@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from mutation_gate import cli, vocabulary, vocabulary_check
+from mutation_gate import cli, mutants, vocabulary, vocabulary_check
 from mutation_gate.repo import Config, GateError, Repo
 
 DOMAIN = ".vocabulary.toml"
@@ -369,15 +369,15 @@ MIXED_UNKNOWN_FILES = {
     "pkg/a.py": (
         "class FrameManager:\n"
         "    pass\n"
-        "loc = 1\n"
+        "frob = 1\n"
         "def read(loc):\n"
         "    return loc\n"
-        "frob = 1\n"
+        "loc = 1\n"
     ),
 }
 
 
-def test_audit_ranks_unknown_words_by_frequency_past_a_non_unknown_finding(
+def test_audit_ranks_unknown_words_by_frequency_not_by_first_appearance(
     tmp_path, monkeypatch, capsys
 ):
     _audit_repo(tmp_path, monkeypatch, MIXED_UNKNOWN_FILES)
@@ -385,8 +385,8 @@ def test_audit_ranks_unknown_words_by_frequency_past_a_non_unknown_finding(
     assert code == 0
     assert out == (
         "unknown words:\n"
-        "  loc (2) — pkg/a.py:3: variable `loc` — `loc` is not in the dictionary\n"
-        "  frob (1) — pkg/a.py:6: variable `frob` — `frob` is not in the dictionary\n"
+        "  loc (2) — pkg/a.py:4: parameter `loc` — `loc` is not in the dictionary\n"
+        "  frob (1) — pkg/a.py:3: variable `frob` — `frob` is not in the dictionary\n"
         "per-rule counts:\n"
         "  parameter: 1\n"
         "  type: 1\n"
@@ -394,19 +394,51 @@ def test_audit_ranks_unknown_words_by_frequency_past_a_non_unknown_finding(
     )
 
 
-def test_audit_domain_reject_of_loc_removes_it_from_unknown_words(tmp_path, monkeypatch, capsys):
+def test_audit_unknown_word_counts_aggregate_across_files(tmp_path, monkeypatch, capsys):
+    files = {"pkg/a.py": "loc = 1\n", "pkg/b.py": "loc = 1\nloc = 2\n"}
+    _audit_repo(tmp_path, monkeypatch, files)
+    code, out, _ = _audit([], capsys)
+    assert code == 0
+    assert out == (
+        "unknown words:\n"
+        "  loc (3) — pkg/a.py:1: variable `loc` — `loc` is not in the dictionary\n"
+        "per-rule counts:\n"
+        "  variable: 3\n"
+    )
+
+
+def test_audit_ignores_the_diff_and_scans_every_declaration(tmp_path, monkeypatch, capsys):
+    _audit_repo(tmp_path, monkeypatch, LOC_FRAME_FILES)
+    monkeypatch.setattr(mutants, "changed_lines",
+                         lambda *a, **k: pytest.fail("audit must not consult the diff"))
+    code, out, _ = _audit([], capsys)
+    assert code == 0
+    assert "  loc (3) —" in out
+
+
+def test_audit_domain_reject_of_loc_still_counts_the_declarations_by_rule(
+    tmp_path, monkeypatch, capsys
+):
     _audit_repo(tmp_path, monkeypatch, LOC_FRAME_FILES, OPTED_IN, '[reject]\nloc = "position"\n')
     code, out, _ = _audit([], capsys)
     assert code == 0
-    assert "loc (" not in out
-    assert out.count("per-rule counts:\n") == 1
+    assert out == (
+        "unknown words:\n"
+        "per-rule counts:\n"
+        "  field: 1\n"
+        "  parameter: 1\n"
+        "  variable: 1\n"
+    )
 
 
 def test_audit_format_toml_stub_is_accepted_once_meaning_is_filled(tmp_path, monkeypatch, capsys):
     _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "loc = 1\n"})
     code, out, _ = _audit(["--format", "toml"], capsys)
     assert code == 0
-    assert out == '[[concept]]\nword = "loc"\nmeaning = ""\npos = ["noun"]\n\n'
+    assert out == (
+        "# review (1): pkg/a.py:1: variable `loc` — `loc` is not in the dictionary\n"
+        '[[concept]]\nword = "loc"\nmeaning = ""\npos = ["noun"]\n\n'
+    )
     filled = out.replace('meaning = ""', 'meaning = "where a thing is"')
     (tmp_path / DOMAIN).write_text(filled)
     match = vocabulary.load(tmp_path, DOMAIN).resolve("loc")
@@ -422,6 +454,20 @@ def test_audit_format_toml_stub_with_blank_meaning_is_refused_by_the_loader(
     (tmp_path / DOMAIN).write_text(out)
     with pytest.raises(GateError, match="needs a non-empty `meaning`"):
         vocabulary.load(tmp_path, DOMAIN)
+
+
+def test_audit_format_toml_emits_one_stub_per_unknown_word_ranked_by_frequency(
+    tmp_path, monkeypatch, capsys
+):
+    _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "loc = 1\nloc = 2\nfrob = 1\n"})
+    code, out, _ = _audit(["--format", "toml"], capsys)
+    assert code == 0
+    assert out == (
+        "# review (2): pkg/a.py:1: variable `loc` — `loc` is not in the dictionary\n"
+        '[[concept]]\nword = "loc"\nmeaning = ""\npos = ["noun"]\n\n'
+        "# review (1): pkg/a.py:3: variable `frob` — `frob` is not in the dictionary\n"
+        '[[concept]]\nword = "frob"\nmeaning = ""\npos = ["noun"]\n\n'
+    )
 
 
 LEADING_UNDERSCORE_FILES = {
@@ -442,6 +488,14 @@ def test_leading_underscore_lists_exactly_the_function_and_the_module_path(
         "pkg/a.py:1 _parse_frame parse_frame_\n"
         "src/_impl.py:0 _impl.py impl_.py\n"
     )
+
+
+def test_leading_underscore_flags_a_private_directory_segment(tmp_path, monkeypatch, capsys):
+    _audit_repo(tmp_path, monkeypatch, {"_private/x.py": "y = 1\n"})
+    code = cli.main(["vocabulary", "audit", "--leading-underscore"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == "_private/x.py:0 _private private_\n"
 
 
 def test_audit_refuses_when_not_a_git_repository(tmp_path, monkeypatch, capsys):
