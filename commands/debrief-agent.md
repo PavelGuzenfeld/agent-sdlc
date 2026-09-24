@@ -37,7 +37,8 @@ says nothing — do not manufacture a finding to fill a slot.
 3. **Standards** — every violation of a written rule or convention found
    elsewhere in this session, classified one of two ways: mechanical (fits a
    gate, pre-commit check, or hook — propose the check) or judgement (needs a
-   human call each time — propose one line for `~/.claude/rules/`, no more).
+   human call each time — propose one line for the pack's `rules/<name>.md`,
+   or the consuming repo's own rules, no more).
 4. **Steering-file size** — a rule or `CLAUDE.md` line so long, or repeated so
    often, that it would work as well or better as an automated check or a
    short pointer to where the real content lives. This includes the
