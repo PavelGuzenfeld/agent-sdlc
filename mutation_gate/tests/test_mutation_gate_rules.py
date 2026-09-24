@@ -232,6 +232,12 @@ def test_kata_narrows_pins_and_routes_the_222_leftover_decisions():
     assert "its step 5 files the agent's candidates" in normalized
     assert "Then file the agent's follow-up candidates" not in normalized
 
+    done_content = (Path(__file__).parents[2] / "commands" / "done.md").read_text()
+    done_normalized = " ".join(done_content.split())
+    assert "saw fail or deferred out loud this session" in done_normalized
+    assert '"None" the normal answer' in done_normalized
+    assert "noticed but not acted on" not in done_normalized
+
 
 def test_kata_batches_confirmed_tiny_tickets_onto_one_batch_branch():
     content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
