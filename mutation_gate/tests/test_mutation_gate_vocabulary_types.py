@@ -62,17 +62,19 @@ def _gate(monkeypatch, tmp_path: Path, files: dict[str, str], domain: str = WORD
     return cli.main(["--staged", "--no-adversary"])
 
 
-def test_staged_is_ready_typed_int_blocks_naming_bool(tmp_path, monkeypatch, capsys):
-    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "is_ready: int = 1\n"})
+@pytest.mark.parametrize("name, prefix", [("is_ready", "is"), ("has_frames", "has"), ("can_read", "can")])
+def test_staged_predicate_typed_int_blocks_naming_bool(tmp_path, monkeypatch, capsys, name, prefix):
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"{name}: int = 1\n"})
     err = capsys.readouterr().err
     assert code == 1
     assert "BLOCKED: vocabulary — 1 finding(s)." in err
-    assert "pkg/a.py:1: variable `is_ready` — `is_` asks yes or no; its type is `int`, not `bool`" in err
+    assert (f"pkg/a.py:1: variable `{name}` — `{prefix}_` asks yes or no; "
+            "its type is `int`, not `bool`") in err
 
 
-def test_staged_plural_list_tail_and_unannotated_local_pass(tmp_path, monkeypatch):
-    text = ("frames: list[Frame] = []\nframes_per_second: float = 1.0\n"
-            "def read_frame():\n    x = compute()\n    return x\n")
+def test_staged_plural_list_tail_bool_and_unannotated_names_pass(tmp_path, monkeypatch):
+    text = ("frames: list[Frame] = []\nframes_per_second: float = 1.0\nis_ready: bool = True\n"
+            "frame = []\nis_empty = 1\ndef read_frame():\n    x = compute()\n    return x\n")
     assert _gate(monkeypatch, tmp_path, {"pkg/a.py": text}) == 0
 
 
@@ -96,9 +98,12 @@ def test_staged_singular_frame_typed_declared_frame_list_blocks(tmp_path, monkey
     assert "pkg/a.py:1: variable `frame` — `frame` is singular; `FrameList` is a collection" in err
 
 
-def test_staged_plural_frames_typed_declared_frame_list_passes(tmp_path, monkeypatch):
+@pytest.mark.parametrize("domain", [WORDS, FRAME_LIST])
+def test_staged_plural_frames_typed_frame_list_passes_before_and_after_declaring_it(
+    tmp_path, monkeypatch, domain
+):
     assert _gate(monkeypatch, tmp_path, {"pkg/a.py": "frames: FrameList = FrameList()\n"},
-                 FRAME_LIST) == 0
+                 domain) == 0
 
 
 @pytest.mark.parametrize("alias", [FRAMES_ALIAS, "typedef std::vector<Frame> Frames;\n"])
@@ -159,7 +164,8 @@ def test_staged_cpp_reset_flagged_none_returning_void_passes_and_int_blocks(
     err = capsys.readouterr().err
     assert code == 1
     assert "BLOCKED: vocabulary — 1 finding(s)." in err
-    assert "src/k.hpp:2: function `reset_frames`" in err
+    assert ("src/k.hpp:2: function `reset_frames` — `reset` is flagged `returns = \"none\"`; "
+            "it is declared to return `int`") in err
 
 
 def test_staged_from_bytes_returning_bytes_blocks_naming_the_class(tmp_path, monkeypatch, capsys):
@@ -225,6 +231,31 @@ def _findings(tmp_path, rel: str, text: str, domain: str = WORDS) -> list[str]:
 def test_enum_member_typed_as_a_collection_is_not_a_t2_finding(tmp_path):
     text = "class Frame(Enum):\n    frame: list[int] = [1]\n"
     assert _findings(tmp_path, "pkg/a.py", text) == []
+
+
+def test_class_body_field_typed_as_a_collection_is_a_t2_finding(tmp_path):
+    text = "class Frame:\n    frame: list[int] = [1]\n"
+    assert [f.split(":")[:4] for f in _findings(tmp_path, "pkg/a.py", text)] == [
+        ["2", "field", "frame", "type_collection"]
+    ]
+
+
+def test_function_is_ready_returning_int_is_a_t1_finding(tmp_path):
+    found = _findings(tmp_path, "pkg/a.py", "def is_ready() -> int:\n    pass\n")
+    assert [f.split(":")[:4] for f in found] == [["1", "function", "is_ready", "type_bool"]]
+
+
+def test_cpp_from_bytes_returning_another_type_blocks_naming_the_class(tmp_path):
+    text = "class Frame {\n  static int from_bytes(int count);\n};\n"
+    assert _findings(tmp_path, "src/k.hpp", text) == [
+        "2:method:from_bytes:type_return:`from_` returns the enclosing type `Frame`; "
+        "it is declared to return `int`:"
+    ]
+
+
+def test_cpp_alias_in_another_file_is_not_resolved(tmp_path):
+    repo = _repo(tmp_path, {"src/a.hpp": FRAMES_ALIAS, "src/k.hpp": "Frames frame;\n"})
+    assert vocabulary_check.check(repo, {"src/a.hpp": {1}, "src/k.hpp": {1}}, []) == []
 
 
 def test_singular_self_attribute_typed_list_is_a_field_finding(tmp_path):
