@@ -146,6 +146,21 @@ def test_a_quoted_post_image_header_still_attributes_the_line(monkeypatch, tmp_p
     assert mutants.changed_lines(tmp_path, staged=True) == {"café.py": {1}}
 
 
+def test_generate_reaches_a_real_file_named_from_a_quoted_diff_header(monkeypatch, tmp_path):
+    (tmp_path / "café.py").write_text("def f(x):\n    return x <= 1\n")
+    diff = (
+        'diff --git "a/caf\\303\\251.py" "b/caf\\303\\251.py"\n'
+        '--- "a/caf\\303\\251.py"\n'
+        '+++ "b/caf\\303\\251.py"\n'
+        "@@ -0,0 +2,1 @@\n"
+        "+    return x <= 1\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    changed = mutants.changed_lines(tmp_path, staged=True)
+    generated = mutants.generate(tmp_path, changed, "python")
+    assert ("x <= 1", "x < 1") in [(m.old, m.new) for m in generated]
+
+
 def test_an_unparseable_noprefix_post_image_header_refuses(monkeypatch, tmp_path):
     diff = (
         "diff --git a/fixture.py b/fixture.py\n"
