@@ -5,9 +5,9 @@ match the built-in allowlist, a `.md` under `test_paths`, or a repo's own
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import sys
-from collections.abc import Iterable
-from pathlib import Path
+from collections.abc import Iterable, Sequence
 
 from .repo import GateError, Repo, discover, git
 from .rules import AGENTS_PATH, TARGET as SYNCED_RULES
@@ -32,15 +32,24 @@ def added_md_files(repo: Repo, *diff_args: str) -> list[str]:
     return sorted(p for p in out.split("\0") if p.endswith(".md"))
 
 
-def _glob_files(root: Path, patterns: Iterable[str]) -> set[str]:
-    """Path.glob, never fnmatch — same reasoning as Repo._expand: a bare `*`
-    must not cross directories the way fnmatch's does."""
-    return {
-        str(p.relative_to(root))
-        for pat in patterns
-        for p in root.glob(pat)
-        if p.is_file()
-    }
+def _matches_parts(parts: tuple[str, ...], pattern: tuple[str, ...]) -> bool:
+    if not pattern:
+        return not parts
+    head, rest = pattern[0], pattern[1:]
+    if head == "**":
+        return any(_matches_parts(parts[i:], rest) for i in range(len(parts)))
+    return bool(parts) and fnmatch.fnmatchcase(parts[0], head) and _matches_parts(parts[1:], rest)
+
+
+def _matches(rel: str, pattern: str) -> bool:
+    """fnmatch per path segment, never fnmatch's whole-string form — same
+    reasoning as Repo._expand. A trailing bare `**` matches only directories,
+    so it never matches a file, matching Path.glob + is_file()."""
+    return _matches_parts(tuple(rel.split("/")), tuple(pattern.split("/")))
+
+
+def _allowed(added: Iterable[str], patterns: Sequence[str]) -> set[str]:
+    return {rel for rel in added if any(_matches(rel, pat) for pat in patterns)}
 
 
 def _emit(line: str) -> None:
@@ -60,7 +69,7 @@ def _check(repo: Repo, *diff_args: str) -> int:
     if not added:
         return 0
     patterns = list(DEFAULT_ALLOW) + [a.glob for a in repo.config.doc_allow]
-    allowed = _glob_files(repo.root, patterns)
+    allowed = _allowed(added, patterns)
     blocked = [rel for rel in added if rel not in allowed and not repo.is_test(rel)]
     if not blocked:
         return 0

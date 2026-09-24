@@ -8,6 +8,7 @@ the helper no-leaks shares. `git` is stubbed; the test image carries no git
 binary."""
 
 import contextlib
+import subprocess
 
 import pytest
 
@@ -182,3 +183,19 @@ def test_staged_refuses_cleanly_through_the_cli_when_the_header_is_unparseable(
     _stub_git(monkeypatch, diff)
     assert cli.main(["--staged"]) == 2
     assert "post-image header did not parse" in capsys.readouterr().err
+
+
+def test_kind_hits_raises_gate_error_on_a_crashed_ast_grep_scan(monkeypatch, tmp_path):
+    """#186: a return code outside run's own 0 (match) / 1 (no match) is a
+    crash, not an empty result, even when stdout is not empty."""
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 8, stdout="[]", stderr="Error: crashed parser\nHelp: retry"
+        )
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    with pytest.raises(GateError, match="crashed parser"):
+        mutants.kind_hits(fixture, "python", "comment")
