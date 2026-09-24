@@ -190,7 +190,27 @@ def test_tickets_rule_names_the_follow_up_convention():
     content = (Path(__file__).parents[2] / "rules" / "tickets.md").read_text()
     for token in ("correctness", "clarity", "security", "performance", "scope", "size:tiny"):
         assert f"`{token}`" in content
-    assert "never born with `ready` or `model:<name>`" in content
+    assert "never born with a `model:<name>` label" in content
+
+
+def test_no_rule_command_or_doc_names_the_ready_label():
+    root = Path(__file__).parents[2]
+    pattern = re.compile(r"\bready\b", re.IGNORECASE)
+    offenders = [
+        str(path.relative_to(root))
+        for base in ("rules", "commands", "docs")
+        for path in sorted((root / base).rglob("*.md"))
+        if pattern.search(path.read_text())
+    ]
+    assert offenders == []
+
+
+def test_kata_names_the_model_labels_as_the_queue():
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "`model:haiku`, `model:sonnet`, `model:opus` or `model:fable`" in normalized
+    assert "asks which model before dispatching" in normalized
+    assert "dispatches only the first, on haiku" in normalized
 
 
 @pytest.mark.parametrize("path", ["commands/done.md", "commands/kata.md", "commands/debrief-agent.md"])
