@@ -4,11 +4,12 @@ repo as .claude/rules/*.md, written from the installed package by
 Only git root discovery is stubbed (the test image has no git); the config
 load, the packaged files and the CLI entry point are real."""
 
+import re
 from pathlib import Path
 
 import pytest
 
-from mutation_gate import cli, rules
+from mutation_gate import cli, rules, vocabulary
 from mutation_gate.repo import Config, GateError, Repo
 
 SCOPED = "filters/"
@@ -161,6 +162,30 @@ def test_deleted_synced_rule_fails_check_naming_it(tmp_path, monkeypatch, capsys
     capsys.readouterr()
     assert cli.main(["rules", "check"]) == 1
     assert f".claude/rules/{UNSCOPED[-1]}" in _named(capsys)
+
+
+def test_naming_rule_syncs_appears_in_agents_md_and_drift_fails_check(
+    tmp_path, monkeypatch, capsys
+):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    root = synced.parents[1]
+    assert cli.main(["rules", "sync"]) == 0
+    body = (rules.RULES_DIR / "naming.md").read_bytes()
+    assert (synced / "naming.md").read_bytes() == body
+    assert b"## naming\n\n" + body in (root / "AGENTS.md").read_bytes()
+    assert cli.main(["rules", "check"]) == 0
+    _flip_byte(synced / "naming.md", -1)
+    capsys.readouterr()
+    assert cli.main(["rules", "check"]) == 1
+    assert ".claude/rules/naming.md" in _named(capsys)
+
+
+def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
+    core_words = set(vocabulary.load(Path("."), "").concepts)
+    content = (rules.RULES_DIR / "naming.md").read_text()
+    for line in content.splitlines():
+        found = {w for w in re.findall(r"[a-z]+", line.lower()) if w in core_words}
+        assert len(found) < 3, f"{line!r} restates the dictionary: {found}"
 
 
 def test_check_says_how_to_recover(tmp_path, monkeypatch, capsys):
