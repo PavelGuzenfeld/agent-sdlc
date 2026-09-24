@@ -85,8 +85,9 @@ def test_staged_vague_word_declaration_shows_its_hint_as_the_suggestion(
     code = _gate(monkeypatch, tmp_path, repo, {"pkg/a.py": {1}})
     err = capsys.readouterr().err
     assert code == 1
-    assert "pkg/a.py:1: variable `manager`" in err
-    assert "try `name what it does: scheduler, registry, pool, cache`" in err
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert ("  pkg/a.py:1: variable `manager` — `manager` is vague — try "
+            "`name what it does: scheduler, registry, pool, cache`") in err.splitlines()
 
 
 def test_staged_use_of_an_existing_loc_passes(tmp_path, monkeypatch):
@@ -218,18 +219,16 @@ def test_rejected_function_word_blocks_with_its_hint_and_no_rename(tmp_path):
                      "or name the combined step:"]
 
 
-@pytest.mark.parametrize("text, expected", [
-    ("frob = 1\n", "1:variable:frob:`frob` is not in the dictionary:"),
-    ("def read_and_parse():\n    pass\n",
-     "1:function:read_and_parse:`and`: one action per name: split the function, "
-     "or name the combined step:"),
-    ("def read_or_parse():\n    pass\n",
-     "1:function:read_or_parse:`or`: name the outcome, not the alternatives:"),
-    ("def read_not_parse():\n    pass\n",
-     "1:function:read_not_parse:`not`: name the positive predicate and negate at the call site:"),
+@pytest.mark.parametrize("text, rule", [
+    ("frob = 1\n", vocabulary_check.RULE_UNKNOWN_WORD),
+    ("def read_and_parse():\n    pass\n", vocabulary_check.RULE_FUNCTION_WORD),
+    ("def read_or_parse():\n    pass\n", vocabulary_check.RULE_FUNCTION_WORD),
+    ("def read_not_parse():\n    pass\n", vocabulary_check.RULE_FUNCTION_WORD),
 ])
-def test_unknown_and_function_word_findings_carry_no_suggestion_by_design(tmp_path, text, expected):
-    assert _findings(tmp_path, "pkg/a.py", text, {1}) == [expected]
+def test_unknown_and_function_word_findings_carry_no_suggestion_by_design(tmp_path, text, rule):
+    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": text})
+    found = vocabulary_check.check(repo, {"pkg/a.py": {1}}, [])
+    assert [(f.rule, f.suggestion) for f in found] == [(rule, "")]
 
 
 @pytest.mark.parametrize("name, word, suggestion", [
