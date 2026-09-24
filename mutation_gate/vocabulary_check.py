@@ -29,6 +29,25 @@ def _emit(line: str) -> None:
     print(line, file=sys.stderr)
 
 
+def _gdscript_ready(repo_root: Path) -> Path | None:
+    """The custom-language parser loads only when a repo commits its own
+    `sgconfig.yml` pointing at an installed library; probe rather than trust
+    the file's mere existence, since the library it names can still be missing."""
+    config = repo_root / GDSCRIPT_CONFIG
+    if not config.exists():
+        return None
+    probe = json.dumps({"id": "probe", "language": "gdscript", "rule": {"kind": "name"}})
+    with tempfile.TemporaryDirectory(prefix="mutation-gate-vocabulary-") as tmp:
+        source = Path(tmp, "probe.gd")
+        source.write_text("")
+        proc = subprocess.run(
+            ["ast-grep", "scan", f"--config={config}", f"--inline-rules={probe}",
+             "--json=compact", source.name],
+            cwd=tmp, capture_output=True, text=True, check=False,
+        )
+    return config if proc.returncode == 0 else None
+
+
 def _decorated(regex: str) -> dict:
     return {"inside": {"kind": "decorated_definition",
                        "has": {"kind": "decorator", "regex": regex}}}
@@ -282,8 +301,7 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
 def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
     catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds)
-    gdscript_config = repo.root / GDSCRIPT_CONFIG
-    gdscript_ready = gdscript_config.exists()
+    gdscript_config = _gdscript_ready(repo.root)
     warned = False
     out: list[Finding] = []
     for rel, lines in sorted(changed.items()):
@@ -291,7 +309,7 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         excluded = any(rel.startswith(p) for p in repo.config.exclude_paths)
         if lang not in SUFFIX or excluded or not (repo.root / rel).exists():
             continue
-        if lang == "gdscript" and not gdscript_ready:
+        if lang == "gdscript" and gdscript_config is None:
             if not warned:
                 _emit(GDSCRIPT_MISSING)
                 warned = True
@@ -353,12 +371,15 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
     """(file, line, old, new) rows for #111 `--leading-underscore`: every declared
     name and path segment decisions 34/35 would reject a leading `_` on."""
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
-    gdscript_config = repo.root / GDSCRIPT_CONFIG
-    gdscript_ready = gdscript_config.exists()
+    gdscript_config = _gdscript_ready(repo.root)
+    warned = False
     rows: list[tuple[str, int, str, str]] = []
     for rel in gated_files(repo):
         lang = mutants.language_of(rel)
-        if lang == "gdscript" and not gdscript_ready:
+        if lang == "gdscript" and gdscript_config is None:
+            if not warned:
+                _emit(GDSCRIPT_MISSING)
+                warned = True
             continue
         config = gdscript_config if lang == "gdscript" else None
         for line, _kind, name in declarations(repo.root / rel, lang, config):

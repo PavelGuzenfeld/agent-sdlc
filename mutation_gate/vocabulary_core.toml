@@ -151,6 +151,12 @@ meaning = "draw a visual representation"
 pos = ["verb"]
 forms = ["-s", "-ed", "-ing", "-er"]
 
+[[concept]]
+word = "use"
+meaning = "employ or apply"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+
 [[symbol]]
 word = "i"
 meaning = "loop index"
