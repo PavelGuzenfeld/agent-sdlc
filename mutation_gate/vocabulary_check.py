@@ -342,6 +342,17 @@ RULE_TYPE_BOOL = "type_bool"
 RULE_TYPE_COLLECTION = "type_collection"
 RULE_TYPE_RETURN = "type_return"
 
+SYMBOL_SCOPE_HINT = "spell out what the symbol stands for, or make it a local/parameter"
+_ARTICLES = ("a", "an", "the")
+
+
+def _symbol_scope_suggestion(dictionary: vocabulary.Dictionary, detail: str) -> str:
+    terms = [t for t in detail.partition(";")[0].split() if t.lower() not in _ARTICLES]
+    matches = [dictionary.resolve(t) or dictionary.resolve(t.lower()) for t in terms]
+    if terms and all(m and "noun" in m.pos for m in matches):
+        return "_".join(t.lower() for t in terms)
+    return SYMBOL_SCOPE_HINT
+
 
 def private_trailing(dictionary: vocabulary.Dictionary, name: str) -> list[tuple[str, str, str]]:
     """Decision 34 for TS `private`/`#` members: the marker is syntax, not the
@@ -378,7 +389,8 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
             faults.append((rule, f"`{word}`: {match.detail}",
                            renamed if match.word != word.lower() else ""))
         elif match.kind == "symbol" and kind not in SYMBOL_KINDS:
-            faults.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}", ""))
+            faults.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}",
+                           _symbol_scope_suggestion(dictionary, match.detail)))
     if not faults and parts:
         misfit = vocabulary_molds.fit(dictionary, catalogue, kind, name, parts)
         if misfit:

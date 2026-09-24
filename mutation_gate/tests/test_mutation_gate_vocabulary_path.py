@@ -137,6 +137,25 @@ def test_vague_word_file_segment_suggests_the_hint_with_no_suffix(tmp_path, monk
     ]
 
 
+def test_symbol_scope_file_segment_suggests_the_hint_with_no_suffix(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"src/x.py": "pass\n"}, existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.rule, f.suggestion) for f in found if f.rule == "symbol_scope"] == [
+        ("symbol_scope", "spell out what the symbol stands for, or make it a local/parameter")
+    ]
+
+
+def test_symbol_scope_spelled_out_name_keeps_the_file_suffix(tmp_path, monkeypatch):
+    domain = '[[symbol]]\nword = "q"\nmeaning = "process state"\n'
+    repo = _repo(tmp_path, domain)
+    _added(monkeypatch, repo, {"src/q.py": "pass\n"}, existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.rule, f.suggestion) for f in found if f.rule == "symbol_scope"] == [
+        ("symbol_scope", "process_state.py")
+    ]
+
+
 def test_init_cmakelists_and_readme_pass(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     _added(monkeypatch, repo, {"__init__.py": "", "CMakeLists.txt": "", "README.md": ""})
