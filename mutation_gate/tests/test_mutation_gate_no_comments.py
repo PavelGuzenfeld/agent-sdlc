@@ -18,6 +18,16 @@ from mutation_gate.waivers import Waiver, finding_waived
 
 OPTED_IN = "no_comments = true\n"
 FILE = "tests/test_a.py"
+GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
+GDSCRIPT_SGCONFIG = (
+    "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
+    "\n    extensions: [gd]\n    expandoChar: _\n"
+)
+
+
+def _require_gdscript_parser() -> None:
+    if not GDSCRIPT_LIB.exists():
+        pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -45,10 +55,15 @@ def _stub_git(monkeypatch, pre: dict[str, str]) -> None:
     monkeypatch.setattr(no_comments, "git", fake_git)
 
 
+def _not_a_git_repo(*args, **kwargs):
+    raise GateError("fatal: not a git repository")
+
+
 def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
           pre: dict[str, str]) -> int:
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: added)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     _stub_git(monkeypatch, pre)
     for mod in (cli, runner, token):
         monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
@@ -217,3 +232,99 @@ def test_waiver_on_another_line_does_not_cover_this_one(tmp_path, monkeypatch):
 def test_line_scoped_waiver_does_not_cover_a_finding_that_carries_no_line():
     waiver = Waiver(check="no-citation", file="tests/test_imm.py", line=1, reason="fixture")
     assert finding_waived([waiver], "no-citation", "tests/test_imm.py") is None
+
+
+def test_gdscript_comment_added_blocks_when_parser_is_ready(tmp_path, monkeypatch, capsys):
+    """#218: no_comments.LANGUAGES excluded gdscript; the comment ban now
+    reaches a .gd file through the same sgconfig scan #201 wired for mutants."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\tpass  # one\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    code = _gate(monkeypatch, tmp_path, repo, {"game/a.gd": {2}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "game/a.gd:2" in err
+    assert "# one" in err
+
+
+def test_gdscript_without_parser_skips_with_a_visible_reason_instead_of_blocking(
+    tmp_path, monkeypatch, capsys
+):
+    """--dry-run stays clear of coverage_map.blob_hashes and runner.baseline_green,
+    the two seams past this point that need real git — the same reason #201's own
+    gdscript cli.main slice tests use --dry-run rather than --no-adversary."""
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "func _ready():\n\tpass  # one\n"})
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: {"game/a.gd": {2}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    _stub_git(monkeypatch, {})
+    for mod in (cli, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+    code = cli.main(["--staged", "--dry-run"])
+    err = capsys.readouterr().err
+    assert code == 0
+    assert no_comments.GDSCRIPT_MISSING in err
+
+
+def test_gdscript_missing_names_the_installer():
+    assert "bin/install-gdscript-parser" in no_comments.GDSCRIPT_MISSING
+
+
+def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
+    tmp_path, monkeypatch
+):
+    """Mirrors #201's mutants.py wiring test: a mocked probe proves a .gd file's
+    scan (comment kind, then the pre-image copy's) always carries `--config=`,
+    and a .py file in the same diff never sees it or the unsupported `-l gdscript`."""
+    config = tmp_path / "sgconfig.yml"
+    monkeypatch.setattr(mutants, "_gdscript_config", lambda root: config)
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "pass  # one\n", "pkg/a.py": "y = 1  # two\n"})
+    _stub_git(monkeypatch, {"game/a.gd": "pass  # zero\n"})
+    no_comments.check(repo, {"game/a.gd": {1}, "pkg/a.py": {1}}, [], staged=True)
+    gd_calls = [cmd for cmd in seen if any(a.endswith("a.gd") for a in cmd)]
+    py_calls = [cmd for cmd in seen if any(a.endswith("a.py") for a in cmd)]
+    assert gd_calls and all(
+        cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in gd_calls
+    )
+    assert py_calls and all(
+        cmd[:2] == ["ast-grep", "run"] and not any("config" in a for a in cmd) for cmd in py_calls
+    )
+
+
+def test_gdscript_pragma_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\tpass  # noqa\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == []
+
+
+def test_gdscript_prose_comment_blocks_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\tpass  # one\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+def test_gdscript_missing_parser_skip_still_reaches_a_later_file(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\tpass  # one\n", "pkg/a.py": "y = 1  # two\n"})
+    _stub_git(monkeypatch, {})
+    found = no_comments.check(repo, {"game/a.gd": {2}, "pkg/a.py": {1}}, [], staged=True)
+    assert [(f.file, f.line) for f in found] == [("pkg/a.py", 1)]
+
+
+def test_gdscript_missing_parser_message_prints_once_for_two_files(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "pass  # one\n", "game/b.gd": "pass  # two\n"})
+    _stub_git(monkeypatch, {})
+    no_comments.check(repo, {"game/a.gd": {1}, "game/b.gd": {1}}, [], staged=True)
+    assert capsys.readouterr().err.count(no_comments.GDSCRIPT_MISSING) == 1
