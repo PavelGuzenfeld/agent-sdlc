@@ -272,7 +272,7 @@ def test_python_parameter_and_local_are_declarations(tmp_path):
 
 
 def test_cpp_parameter_takes_a_symbol(tmp_path):
-    assert _findings(tmp_path, "src/k.cpp", "void read(double Q);\n", {1}, Q_SYMBOL) == []
+    assert _findings(tmp_path, "src/k.cpp", "void run(double Q);\n", {1}, Q_SYMBOL) == []
 
 
 def test_lower_case_symbol_spelling_matches_the_symbol_table(tmp_path):

@@ -290,7 +290,7 @@ def test_tags_carry_every_part_of_speech_a_spelling_allows(tmp_path, word, expec
 def _kinds(tmp_path, rel: str, text: str) -> list[tuple[int, str, str]]:
     _write(tmp_path, rel, text)
     lang = mutants.language_of(rel)
-    return vocabulary_check.declarations(tmp_path / rel, lang)
+    return [d[:3] for d in vocabulary_check.declarations(tmp_path / rel, lang)]
 
 
 def test_python_property_is_its_own_kind_and_its_setter_is_not_declared(tmp_path):

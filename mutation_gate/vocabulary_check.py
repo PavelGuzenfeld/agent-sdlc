@@ -12,6 +12,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from . import mutants, vocabulary, vocabulary_molds, waivers
 from .repo import GateError, Repo, git
@@ -193,8 +194,58 @@ RULES["gdscript"] = {
         "kind": "variable_statement", "field": "name", "not": {"has": _GD_GETTER}}},
 }
 
+_TYPED = {"has": {"field": "type", "pattern": "$TYPE"}}
+_NAMED = {"has": {"field": "name", "pattern": "$CLASS"}}
+CAPTURES: dict[str, dict[str, dict]] = {
+    "python": {
+        "written": {"kind": "identifier", "any": [
+            {"inside": {"kind": "function_definition", "field": "name",
+                        "has": {"field": "return_type", "pattern": "$TYPE"}}},
+            {"inside": {"kind": "assignment", "field": "left", **_TYPED}},
+            {"inside": {"kind": "attribute", "field": "attribute",
+                        "inside": {"kind": "assignment", "field": "left", **_TYPED}}},
+            {"inside": {"kind": "typed_parameter", **_TYPED}},
+            {"inside": {"kind": "typed_default_parameter", "field": "name", **_TYPED}},
+        ]},
+        "enclosing": {"kind": "identifier", "inside": {
+            "kind": "function_definition", "field": "name",
+            "inside": {"kind": "block", "stopBy": {"not": {"kind": "decorated_definition"}},
+                       "inside": {"kind": "class_definition", **_NAMED}}}},
+    },
+    "cpp": {
+        "written": {"any": [{"kind": "identifier"}, {"kind": "field_identifier"}], "inside": {
+            "any": [{"kind": "declaration"}, {"kind": "field_declaration"},
+                    {"kind": "function_definition"}, {"kind": "parameter_declaration"},
+                    {"kind": "optional_parameter_declaration"}],
+            "stopBy": {"not": {"any": [{"kind": "init_declarator"}, {"kind": "function_declarator"},
+                                       {"kind": "reference_declarator"}]}}, **_TYPED}},
+        "alias": {"kind": "type_identifier", "any": [
+            {"inside": {"kind": "alias_declaration", "field": "name", **_TYPED}},
+            {"inside": {"kind": "type_definition", "field": "declarator", **_TYPED}},
+        ]},
+        "enclosing": {"kind": "field_identifier", "inside": {
+            "kind": "field_declaration_list", **_END, "inside": _NAMED}},
+    },
+    "typescript": {},
+    "tsx": {},
+    "gdscript": {},
+}
+
 _CASE_CHUNKS = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
 _DIGIT = re.compile(r"\d")
+_OUTER_TYPE = re.compile(r"[^\[<]*")
+UNWRITTEN = ("", "auto")
+VOID = ("None", "void")
+NOUN_KINDS = ("variable", "field", "constant", "local", "parameter", "property")
+VERB_KINDS = ("function", "method")
+
+
+class Declared(NamedTuple):
+    line: int
+    kind: str
+    name: str
+    written: str = ""
+    enclosing: str = ""
 
 
 @dataclass(frozen=True)
@@ -211,15 +262,33 @@ class Finding:
 def _inline_rules(lang: str) -> str:
     return "\n---\n".join(
         json.dumps({"id": kind, "language": lang, "rule": rule})
-        for kind, rule in RULES[lang].items()
+        for kind, rule in (RULES[lang] | CAPTURES[lang]).items()
     )
 
 
-def declarations(
-    path: Path, lang: str, config: Path | None = None
-) -> list[tuple[int, str, str]]:
-    """(line, declaration kind, name), 1-based, scanned from a copy carrying the
-    language's own suffix: ast-grep reads `.h` as C and would find nothing.
+def _captured(hit: dict) -> dict[str, str]:
+    return {key: value["text"] for key, value in hit["metaVariables"]["single"].items()}
+
+
+def _declared(hits: list[dict], lang: str) -> list[Declared]:
+    aliases = {h["text"]: _captured(h)["TYPE"] for h in hits if h["ruleId"] == "alias"}
+    captured: dict[int, dict[str, str]] = {}
+    for h in hits:
+        if h["ruleId"] in CAPTURES[lang]:
+            captured.setdefault(h["range"]["byteOffset"]["start"], {}).update(_captured(h))
+    out: list[Declared] = []
+    for h in hits:
+        if h["ruleId"] in RULES[lang]:
+            meta = captured.get(h["range"]["byteOffset"]["start"], {})
+            written = meta.get("TYPE", "")
+            out.append(Declared(h["range"]["start"]["line"] + 1, h["ruleId"], h["text"],
+                                aliases.get(written, written), meta.get("CLASS", "")))
+    return sorted(out)
+
+
+def declarations(path: Path, lang: str, config: Path | None = None) -> list[Declared]:
+    """1-based lines, scanned from a copy carrying the language's own suffix: ast-grep
+    reads `.h` as C and would find nothing. A same-file alias resolves one level.
     `config` points a custom language (GDScript) at its parser library."""
     with tempfile.TemporaryDirectory(prefix="mutation-gate-vocabulary-") as tmp:
         copy = Path(tmp, "source" + SUFFIX[lang])
@@ -232,7 +301,7 @@ def declarations(
     if proc.returncode != 0:
         raise GateError(f"ast-grep scan failed on {path}: {proc.stderr.strip()}")
     hits = json.loads(proc.stdout) if proc.stdout.strip() else []
-    return sorted((h["range"]["start"]["line"] + 1, h["ruleId"], h["text"]) for h in hits)
+    return _declared(hits, lang)
 
 
 def words(name: str) -> list[str]:
@@ -262,6 +331,9 @@ RULE_FUNCTION_WORD = "function_word"
 RULE_SYMBOL_SCOPE = "symbol_scope"
 RULE_MOLD = "mold"
 RULE_PRIVATE_TRAILING = "private_trailing_underscore"
+RULE_TYPE_BOOL = "type_bool"
+RULE_TYPE_COLLECTION = "type_collection"
+RULE_TYPE_RETURN = "type_return"
 
 
 def private_trailing(dictionary: vocabulary.Dictionary, name: str) -> list[tuple[str, str, str]]:
@@ -308,6 +380,69 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
     return out + faults
 
 
+def _plural_of(dictionary: vocabulary.Dictionary, name: str, word: str,
+               match: vocabulary.Match) -> str:
+    plural = vocabulary.derive_forms(dictionary.concepts[match.word]).get("plural", "")
+    return name[: -len(word)] + _spelled_like(word, plural) if plural else ""
+
+
+def _judge_noun(dictionary: vocabulary.Dictionary, name: str, parts: list[str],
+                written: str) -> list[tuple[str, str, str]]:
+    if _OUTER_TYPE.match(written).group().strip() not in dictionary.collections:
+        return []
+    if any("p" in vocabulary_molds.tags(dictionary, word) for word in parts):
+        return []
+    last = parts[-1]
+    match = dictionary.resolve(last) or dictionary.resolve(last.lower())
+    if match is None or match.form == "plural":
+        return []
+    singular = (match.kind == "canonical" and "noun" in match.pos) or match.form == "-er"
+    if not singular:
+        return []
+    return [(RULE_TYPE_COLLECTION, f"`{name}` is singular; `{written}` is a collection type",
+             _plural_of(dictionary, name, last, match))]
+
+
+def _judge_verb(dictionary: vocabulary.Dictionary, kind: str, first: str, written: str,
+                enclosing: str) -> list[tuple[str, str, str]]:
+    declared = f"it is declared to return `{written}`"
+    if first in vocabulary_molds.MOLDS["conversion"].prefix:
+        if kind != "method":
+            return []
+        if first == "from" and enclosing and written.strip("\"'") not in (enclosing, "Self"):
+            return [(RULE_TYPE_RETURN,
+                     f"`from_` returns the enclosing type `{enclosing}`; {declared}", "")]
+        if first != "from" and written in VOID:
+            return [(RULE_TYPE_RETURN, f"`{first}_` returns a value; {declared}", "")]
+        return []
+    match = dictionary.resolve(first)
+    concept = dictionary.concepts.get(match.word) if match else None
+    if concept is None or not concept.returns:
+        return []
+    if (concept.returns == "none") != (written in VOID):
+        return [(RULE_TYPE_RETURN,
+                 f"`{first}` is flagged `returns = \"{concept.returns}\"`; {declared}", "")]
+    return []
+
+
+def judge_type(dictionary: vocabulary.Dictionary,
+               declared: Declared) -> list[tuple[str, str, str]]:
+    """T1 to T3 of decision 9 on the written type alone; an unwritten one is skipped."""
+    if declared.written in UNWRITTEN or _exempt(dictionary, declared.name):
+        return []
+    parts = words(declared.name)
+    first = parts[0].lower()
+    out: list[tuple[str, str, str]] = []
+    if first in vocabulary_molds.MOLDS["predicate"].prefix and declared.written != "bool":
+        out.append((RULE_TYPE_BOOL,
+                    f"`{first}_` asks yes or no; its type is `{declared.written}`, not `bool`", ""))
+    if declared.kind in NOUN_KINDS:
+        out += _judge_noun(dictionary, declared.name, parts, declared.written)
+    if declared.kind in VERB_KINDS:
+        out += _judge_verb(dictionary, declared.kind, first, declared.written, declared.enclosing)
+    return out
+
+
 def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
     catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds)
@@ -326,14 +461,15 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
             continue
         mutants.require_ast_grep()
         config = gdscript_config if lang == "gdscript" else None
-        for line, kind, name in declarations(repo.root / rel, lang, config):
+        for declared in declarations(repo.root / rel, lang, config):
+            line, kind, name = declared[:3]
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
             if kind in (RULE_FIELD_PRIVATE, RULE_METHOD_PRIVATE):
                 faults = private_trailing(dictionary, name)
                 reported_kind = "field" if kind == RULE_FIELD_PRIVATE else "method"
             else:
-                faults = judge(dictionary, kind, name, catalogue)
+                faults = judge(dictionary, kind, name, catalogue) + judge_type(dictionary, declared)
                 reported_kind = kind
             for rule, detail, suggestion in faults:
                 out.append(Finding(rel, line, reported_kind, name, rule, detail, suggestion))
@@ -392,7 +528,7 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
                 warned = True
             continue
         config = gdscript_config if lang == "gdscript" else None
-        for line, _kind, name in declarations(repo.root / rel, lang, config):
+        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config):
             if name.startswith("_") and not _exempt(dictionary, name):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
         segments = rel.split("/")
