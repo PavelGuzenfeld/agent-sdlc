@@ -66,6 +66,19 @@ def _warn_stale_waivers(repo, rel: str, wvs) -> None:
               f"— stale after an edit above it? ({w.old!r} => {w.new!r})")
 
 
+def _warn_stale_report(repo, staged: bool) -> None:
+    """#212: nobody should read an old adversary review as current when the
+    gate skipped it this run."""
+    path = CACHE_ROOT / repo.key / "reports" / "adversary.md"
+    try:
+        saved = path.read_text().partition("\n")[0]
+    except OSError:
+        return
+    now = _report_header(repo, staged).partition("\n")[0]
+    if saved.rpartition(" at ")[0] != now.rpartition(" at ")[0]:
+        _emit(f"mutation-gate: saved adversary report is from an earlier change — {saved}")
+
+
 def _gate_file(
     repo, rel: str, lines: set[int], wvs, on_demand: bool = False
 ) -> tuple[bool, list, list]:
@@ -388,6 +401,7 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
             changed[f] = lines
     if not changed:
         _emit("mutation-gate: no gated source files in this change — no mutants, so no adversary review")
+        _warn_stale_report(repo, staged)
         return 0
 
     try:
@@ -443,9 +457,11 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
         _emit("")
         _emit(f"── adversary (isolated; reports only, never blocks; saved to {path}) ──")
         _emit(findings)
-    elif not args.no_adversary:
-        _emit("mutation-gate: no covering tests for any gated file — "
-              "no mutants to review, so no adversary review")
+    else:
+        if not args.no_adversary:
+            _emit("mutation-gate: no covering tests for any gated file — "
+                  "no mutants to review, so no adversary review")
+        _warn_stale_report(repo, staged)
     if not args.no_adversary and model_vv.model_changed(repo, all_changed):
         findings = model_vv.blind_pass(repo)
         path = _write_report(repo, "blind-pass", findings, staged)

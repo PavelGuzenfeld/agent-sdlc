@@ -148,6 +148,128 @@ def test_staged_omits_the_no_covering_tests_line_when_the_adversary_does_run(
     assert "no covering tests for any gated file" not in err
 
 
+def _write_stale_report(cache: Path, key: str, header: str) -> Path:
+    path = cache / key / "reports" / "adversary.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(header + "old findings\n")
+    return path
+
+
+def _git_write_tree(tree: str):
+    def _git(*args, **kwargs):
+        if args == ("write-tree",):
+            return tree + "\n"
+        raise AssertionError(f"unexpected git call: {args}")
+    return _git
+
+
+def test_staged_warns_the_saved_report_predates_a_test_only_change(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"tests/foo_test.sh": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    _write_stale_report(cache, repo.key, "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z\n")
+    monkeypatch.setattr(cli, "git", _git_write_tree("newhash"), raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    assert cli.main(["--staged"]) == 0
+    err = capsys.readouterr().err.splitlines()
+    assert ("mutation-gate: saved adversary report is from an earlier change — "
+            "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z") in err
+    assert ("mutation-gate: no gated source files in this change — "
+            "no mutants, so no adversary review") in err
+
+
+def test_staged_warns_the_saved_report_predates_a_change_with_no_covering_tests(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], []))
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    _write_stale_report(cache, repo.key, "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z\n")
+    monkeypatch.setattr(cli, "git", _git_write_tree("newhash"), raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError("adversary must not run when no gated file has covering tests")
+
+    monkeypatch.setattr(cli.adversary, "run", _must_not_run)
+    assert cli.main(["--staged"]) == 0
+    err = capsys.readouterr().err.splitlines()
+    assert ("mutation-gate: saved adversary report is from an earlier change — "
+            "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z") in err
+
+
+def test_staged_warns_the_saved_report_predates_a_no_adversary_run(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], [Path("tests/x.py")]))
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    _write_stale_report(cache, repo.key, "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z\n")
+    monkeypatch.setattr(cli, "git", _git_write_tree("newhash"), raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError("adversary must not run under --no-adversary")
+
+    monkeypatch.setattr(cli.adversary, "run", _must_not_run)
+    assert cli.main(["--staged", "--no-adversary"]) == 0
+    err = capsys.readouterr().err.splitlines()
+    assert ("mutation-gate: saved adversary report is from an earlier change — "
+            "reviewed: staged tree oldhash at 2026-09-24T06:00:00Z") in err
+
+
+def test_staged_omits_the_stale_warning_when_the_saved_report_names_the_same_tree(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"tests/foo_test.sh": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    _write_stale_report(cache, repo.key, "reviewed: staged tree samehash at 2026-09-24T06:00:00Z\n")
+    monkeypatch.setattr(cli, "git", _git_write_tree("samehash"), raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    assert cli.main(["--staged"]) == 0
+    assert "saved adversary report is from an earlier change" not in capsys.readouterr().err
+
+
+def test_staged_omits_the_stale_warning_when_no_report_is_saved(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"tests/foo_test.sh": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "CACHE_ROOT", tmp_path / "cache")
+
+    def _boom(*args, **kwargs):
+        raise AssertionError(f"must not call git when no report is saved: {args}")
+
+    monkeypatch.setattr(cli, "git", _boom, raising=False)
+    assert cli.main(["--staged"]) == 0
+    assert "saved adversary report is from an earlier change" not in capsys.readouterr().err
+
+
 def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_file(
     tmp_path, monkeypatch, capsys
 ):
