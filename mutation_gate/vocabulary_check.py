@@ -364,7 +364,7 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
         if match is None:
             faults.append((RULE_UNKNOWN_WORD, f"`{word}` {UNKNOWN_DETAIL}", ""))
         elif match.kind == "vague":
-            faults.append((RULE_VAGUE_WORD, f"`{word}` is vague — {match.detail}", match.detail))
+            faults.append((RULE_VAGUE_WORD, f"`{word}` is vague", match.detail))
         elif match.kind == "rejected":
             rule = RULE_FUNCTION_WORD if match.pos == ("rejected",) else RULE_REJECTED_SYNONYM
             renamed = name.replace(word, _spelled_like(word, match.word))
