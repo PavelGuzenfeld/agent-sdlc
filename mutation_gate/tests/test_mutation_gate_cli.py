@@ -108,6 +108,27 @@ def test_staged_says_the_adversary_did_not_run_on_a_test_only_change(tmp_path, m
             "no mutants, so no adversary review") in err.splitlines()
 
 
+def test_staged_says_the_adversary_did_not_run_when_every_gated_file_is_waived_as_uncovered(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], []))
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError("adversary must not run when no gated file has covering tests")
+
+    monkeypatch.setattr(cli.adversary, "run", _must_not_run)
+    assert cli.main(["--staged"]) == 0
+    err = capsys.readouterr().err
+    assert ("mutation-gate: no covering tests for any gated file — "
+            "no mutants to review, so no adversary review") in err.splitlines()
+
+
 def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_file(
     tmp_path, monkeypatch, capsys
 ):
