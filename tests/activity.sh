@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+unset ACTIVITY_OUT ACTIVITY_TZ
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 doc="$dir/commands/activity.md"
@@ -51,6 +52,16 @@ check_not_contains() {
     esac
 }
 
+check_equals() {
+    name="$1"; actual="$2"; expected="$3"
+    [ "$actual" = "$expected" ] ||
+        { echo "FAIL: $name (expected: $expected, got: $actual)" >&2; failures=$((failures + 1)); }
+}
+
+report_path() {
+    printf '%s\n' "$1" | awk '/^###REPORT###$/{getline; print; exit}'
+}
+
 fake_home="$work/home-default"
 mkdir -p "$fake_home/.claude/projects" "$fake_home/workspace" "$fake_home/personalspace"
 HOME="$fake_home" git config --global user.name "Test User"
@@ -82,6 +93,9 @@ repos_block=$(printf '%s\n' "$out" | awk '/###REPOS###/{p=1;next}/###COMMITS###/
 check_contains "repos block finds a touch on home-repo tagged personal" "$repos_block" "personal${tab}home-repo"
 check_contains "repos block finds a touch on work-repo tagged work" "$repos_block" "work${tab}work-repo"
 
+check_equals "default: ACTIVITY_OUT defaults to the current directory" \
+    "$(report_path "$out")" "$work/2026-03-activity.md"
+
 fake_home2="$work/home-override"
 mkdir -p "$fake_home2/.claude/projects" "$fake_home2/workspace" "$fake_home2/mind"
 HOME="$fake_home2" git config --global user.name "Nobody Special"
@@ -96,6 +110,24 @@ check_contains "ACTIVITY_PERSONAL_DIRS/ACTIVITY_AUTHOR override picks up a custo
     "$out2" "personal${tab}side-repo"
 check_contains "ACTIVITY_AUTHOR override finds the commit despite a different git identity" \
     "$out2" "write a diary entry"
+
+out3=$(cd "$work" && HOME="$fake_home" ACTIVITY_OUT="$work/reports" "$work/activity.sh" 2026-03)
+check_equals "ACTIVITY_OUT override changes the write target" \
+    "$(report_path "$out3")" "$work/reports/2026-03-activity.md"
+
+fake_home3="$work/home-tz"
+mkdir -p "$fake_home3/.claude/projects" "$fake_home3/workspace"
+add_session "$fake_home3" "$fake_home3/workspace/tz-repo" "2026-03-10T23:30:00.000Z"
+
+out_tz_default=$(cd "$work" && HOME="$fake_home3" TZ="AAA5" "$work/activity.sh" 2026-03)
+sessions_tz_default=$(printf '%s\n' "$out_tz_default" | awk '/###SESSIONS###/{p=1;next}/###REPOS###/{p=0}p')
+check_contains "default timezone follows the caller's TZ, not a hardcoded zone" \
+    "$sessions_tz_default" "2026-03-10${tab}work${tab}18:30"
+
+out_tz_override=$(cd "$work" && HOME="$fake_home3" TZ="AAA5" ACTIVITY_TZ="BBB-9" "$work/activity.sh" 2026-03)
+sessions_tz_override=$(printf '%s\n' "$out_tz_override" | awk '/###SESSIONS###/{p=1;next}/###REPOS###/{p=0}p')
+check_contains "ACTIVITY_TZ overrides the caller's TZ" \
+    "$sessions_tz_override" "2026-03-11${tab}work${tab}08:30"
 
 if [ "$failures" -ne 0 ]; then
     echo "activity.sh: $failures failure(s)" >&2
