@@ -5,11 +5,10 @@ match the built-in allowlist, a `.md` under `test_paths`, or a repo's own
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import sys
 from collections.abc import Iterable, Sequence
 
-from .repo import GateError, Repo, discover, git
+from .repo import GateError, Repo, _matches, discover, git
 from .rules import AGENTS_PATH, TARGET as SYNCED_RULES
 
 DEFAULT_ALLOW = (
@@ -30,22 +29,6 @@ def added_md_files(repo: Repo, *diff_args: str) -> list[str]:
     out = git("diff", "--name-only", "-z", "--no-renames", "--diff-filter=A",
               *diff_args, cwd=repo.root)
     return sorted(p for p in out.split("\0") if p.endswith(".md"))
-
-
-def _matches_parts(parts: tuple[str, ...], pattern: tuple[str, ...]) -> bool:
-    if not pattern:
-        return not parts
-    head, rest = pattern[0], pattern[1:]
-    if head == "**":
-        return any(_matches_parts(parts[i:], rest) for i in range(len(parts)))
-    return bool(parts) and fnmatch.fnmatchcase(parts[0], head) and _matches_parts(parts[1:], rest)
-
-
-def _matches(rel: str, pattern: str) -> bool:
-    """fnmatch per path segment, never fnmatch's whole-string form — same
-    reasoning as Repo._expand. A trailing bare `**` matches only directories,
-    so it never matches a file, matching Path.glob + is_file()."""
-    return _matches_parts(tuple(rel.split("/")), tuple(pattern.split("/")))
 
 
 def _allowed(added: Iterable[str], patterns: Sequence[str]) -> set[str]:
