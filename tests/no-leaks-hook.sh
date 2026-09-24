@@ -75,6 +75,13 @@ printf '%s' "$present_out" | grep -qF "identity.txt:1" || fail "the hook rejecti
 printf '%s' "$present_out" | grep -qF "$email_content" && fail "the hook rejection echoed the email address" "$present_out"
 cgit reset -q --hard main
 
+mkdir -p "$consumer/tests/fixtures"
+printf '%s\n' "$email_content" > "$consumer/tests/fixtures/x.txt"
+cgit add tests/fixtures/x.txt
+(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add fixture") \
+    || fail "the hook should not block an email address staged under tests/fixtures/**"
+cgit reset -q --hard main
+
 printf 'test_paths = ["tests"]\nbanned_names_file = "%s"\n' "$missing_file" > "$consumer/.mutation-gate.toml"
 cgit add .mutation-gate.toml
 cgit commit -q -m "point banned_names_file at a missing file"
