@@ -250,6 +250,9 @@ def kind_hits(path: Path, lang: str, kind: str) -> list[dict]:
         ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)],
         capture_output=True, text=True, check=False,
     )
+    if proc.returncode not in (0, 1):
+        detail = proc.stderr.strip().partition("\n")[0]
+        raise GateError(f"ast-grep run failed on {path}: {detail or f'exit {proc.returncode}'}")
     if not proc.stdout.strip():
         return []
     try:
