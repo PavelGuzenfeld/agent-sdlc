@@ -67,6 +67,7 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs, staged: bool) -> list[F
         lang = mutants.language_of(rel)
         if lang not in LANGUAGES or _excluded(repo, rel) or not (repo.root / rel).exists():
             continue
+        mutants.require_ast_grep()
         touched: list[tuple[int, str]] = []
         untouched: list[str] = []
         for first, last, text in comments(repo.root / rel, lang):
