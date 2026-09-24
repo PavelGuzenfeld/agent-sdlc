@@ -19,9 +19,10 @@ from .repo import Repo, git
 
 BRANCH_ISSUE_RE = re.compile(r"(?:^|/)(\d+)(?:-|$)")
 
-PROMPT = """You are reviewing a test suite in isolation. You have the stated intent
-and the tests. You deliberately do NOT have the implementation — do not ask for it
-and do not speculate about it.
+PROMPT = """Read INTENT.md and every file under tests/ in your current working
+directory — that is the stated intent and the test suite you are reviewing.
+You deliberately do NOT have the implementation — do not ask for it and do
+not speculate about it.
 
 One question: do these tests pin the behaviour the intent requires?
 
