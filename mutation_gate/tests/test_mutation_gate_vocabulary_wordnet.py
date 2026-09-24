@@ -65,6 +65,7 @@ def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
           pre: dict[str, str], synsets=None) -> int:
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: added)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
     _stub_git(monkeypatch, pre)
     if synsets is not None:
         monkeypatch.setattr(vocabulary_wordnet, "synset_names", synsets)

@@ -217,3 +217,22 @@ and = "one action per name: split the function, or name the combined step"
 or = "name the outcome, not the alternatives"
 not = "name the positive predicate and negate at the call site"
 no = "name the positive predicate and negate at the call site"
+
+[path]
+tool_dictated_files = ["__init__.py", "__main__.py", "_version.py"]
+tool_dictated_globs = ["_*.so"]
+exempt_files = [
+  "CMakeLists.txt", "Dockerfile", "README.md", "CLAUDE.md", "CHANGELOG.md",
+  "CONTRIBUTING.md", "LICENSE", "Makefile", "Doxyfile", "package.xml",
+  "pyproject.toml", "setup.py", "setup.cfg", "Cargo.toml", "Cargo.lock",
+]
+exempt_patterns = [
+  '^requirements.*\.txt$',
+  '^\.',
+  '^__init__\.py$',
+  '^__main__\.py$',
+  '^__pycache__$',
+  '^py\.typed$',
+  '^[A-Z][A-Z_-]*\.md$',
+]
+exempt_path_patterns = ['^\.']

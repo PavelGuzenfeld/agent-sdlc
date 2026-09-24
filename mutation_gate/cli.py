@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_wordnet, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_path, vocabulary_wordnet, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
 
 
@@ -249,6 +249,20 @@ def _run(repo, args, staged: bool) -> int:
                 _emit(f"  {vocabulary_check.describe(n)}")
             _emit("")
             _emit(vocabulary_check.suggest(repo, names[0]))
+            return 1
+
+    if repo.config.vocabulary:
+        try:
+            paths = vocabulary_path.check(repo, staged, wvs)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
+        if paths:
+            _emit(f"BLOCKED: vocabulary-path — {len(paths)} finding(s).")
+            for p in paths:
+                _emit(f"  {vocabulary_path.describe(p)}")
+            _emit("")
+            _emit(vocabulary_path.suggest(repo, paths[0]))
             return 1
 
     if repo.config.vocabulary:
