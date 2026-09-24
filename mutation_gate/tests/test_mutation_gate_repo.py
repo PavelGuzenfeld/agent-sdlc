@@ -7,6 +7,7 @@ without ungating those sources. dotfiles#66.
 Also: the namespaces a checkout may gate under come from the environment, then
 the repo's config, and an unconfigured checkout gates its own origin. agent-sdlc#8."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -132,6 +133,76 @@ def test_a_helper_under_a_test_path_is_still_a_test(tmp_path):
 
 def test_a_glob_matching_nothing_on_disk_gates_the_path(tmp_path):
     repo = _colocated(tmp_path, ["webapp/lib/*.spec.ts"])
+    assert not repo.is_test("webapp/lib/decimate.test.ts")
+
+
+def test_a_path_matching_only_the_second_of_two_globs_is_still_a_test(tmp_path):
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(test_globs=["webapp/lib/*.spec.ts", "webapp/lib/*.test.ts"]),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+
+
+def test_is_test_never_walks_the_filesystem(tmp_path, monkeypatch):
+    def _boom(*args, **kwargs):
+        raise AssertionError("is_test must not touch the filesystem")
+
+    monkeypatch.setattr(Path, "glob", _boom)
+    monkeypatch.setattr(Path, "iterdir", _boom)
+    monkeypatch.setattr(os, "scandir", _boom)
+    monkeypatch.setattr(os, "listdir", _boom)
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(test_globs=["webapp/lib/*.test.ts"]),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+    assert not repo.is_test("webapp/lib/decimate.ts")
+
+
+def test_is_test_never_walks_the_filesystem_for_a_language_scoped_glob(tmp_path, monkeypatch):
+    def _boom(*args, **kwargs):
+        raise AssertionError("is_test must not touch the filesystem")
+
+    monkeypatch.setattr(Path, "glob", _boom)
+    monkeypatch.setattr(Path, "iterdir", _boom)
+    monkeypatch.setattr(os, "scandir", _boom)
+    monkeypatch.setattr(os, "listdir", _boom)
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(languages={"typescript": LanguageConfig(test_globs=["webapp/lib/*.test.ts"])}),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+    assert not repo.is_test("webapp/lib/decimate.ts")
+
+
+def test_a_trailing_bare_double_star_matches_a_test_directory_not_a_file(tmp_path):
+    repo = Repo(
+        root=tmp_path, origin="", remotes=(), config=Config(test_globs=["webapp/tests/**"])
+    )
+    assert not repo.is_test("webapp/tests/decimate.test.ts")
+
+
+def test_a_double_star_glob_reaches_a_zero_depth_colocated_test(tmp_path):
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(test_globs=["webapp/lib/**/*.test.ts"]),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+
+
+def test_a_glob_is_case_sensitive_like_path_glob(tmp_path):
+    repo = Repo(
+        root=tmp_path, origin="", remotes=(), config=Config(test_globs=["webapp/LIB/*.test.ts"])
+    )
     assert not repo.is_test("webapp/lib/decimate.test.ts")
 
 
