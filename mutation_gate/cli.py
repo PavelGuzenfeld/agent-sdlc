@@ -92,6 +92,8 @@ def _gate_file(
         return False, [], cands
 
     cover = coverage_map.covering_tests(repo, rel, cands, fp)
+    if not cover and rel.endswith(".py"):
+        _emit(f"  {rel}: coverage came back empty — every mutant runs against all candidate tests")
     all_tests = [str(p.relative_to(repo.root)) for p in cands]
 
     baseline = runner.baseline_green(repo, all_tests, lang_cfg.test_command)
@@ -210,7 +212,11 @@ def _run(repo, args, staged: bool) -> int:
         target = (repo.root / args.file)
         all_changed = {args.file: set(range(1, len(target.read_text().splitlines()) + 1))}
     else:
-        all_changed = mutants.changed_lines(repo.root, staged)
+        try:
+            all_changed = mutants.changed_lines(repo.root, staged)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
 
     # Before mutants: nothing here runs tests, so a missing spec fails in
     # milliseconds instead of after a baseline run (#56 decision 10).
