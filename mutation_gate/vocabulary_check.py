@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import mutants, vocabulary, vocabulary_molds, waivers
-from .repo import GateError, Repo
+from .repo import GateError, Repo, git
 
 CHECK = "vocabulary"
 SUFFIX = {"python": ".py", "cpp": ".cpp"}
 SYMBOL_KINDS = ("local", "parameter")
+UNKNOWN_DETAIL = "is not in the dictionary"
 
 
 def _decorated(regex: str) -> dict:
@@ -114,6 +115,7 @@ class Finding:
     line: int
     kind: str
     name: str
+    rule: str
     detail: str
     suggestion: str
 
@@ -160,36 +162,48 @@ def _exempt(dictionary: vocabulary.Dictionary, name: str) -> bool:
     return name == "_" or dunder or name in dictionary.conventions
 
 
+RULE_LEADING_UNDERSCORE = "leading_underscore"
+RULE_UNKNOWN_WORD = "unknown_word"
+RULE_VAGUE_WORD = "vague_word"
+RULE_REJECTED_SYNONYM = "rejected_synonym"
+RULE_FUNCTION_WORD = "function_word"
+RULE_SYMBOL_SCOPE = "symbol_scope"
+RULE_MOLD = "mold"
+
+
 def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
-          catalogue: dict[str, tuple[str, ...]] = vocabulary_molds.KINDS) -> list[tuple[str, str]]:
-    """(detail, suggested name or "") per fault in one declared name; the mold is
-    judged only once every word resolved."""
+          catalogue: dict[str, tuple[str, ...]] = vocabulary_molds.KINDS) -> list[tuple[str, str, str]]:
+    """(rule, detail, suggested name or "") per fault in one declared name; the
+    mold is judged only once every word resolved."""
     if _exempt(dictionary, name):
         return []
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
     if name.startswith("_"):
-        out.append(("a leading `_` is not the private mark; private is a trailing `_`",
+        out.append((RULE_LEADING_UNDERSCORE,
+                    "a leading `_` is not the private mark; private is a trailing `_`",
                     f"{name.strip('_')}_"))
     parts = words(name)
-    faults: list[tuple[str, str]] = []
+    faults: list[tuple[str, str, str]] = []
     for position, word in enumerate(parts):
         if position == 0 and word.lower() in vocabulary_molds.PREFIXES:
             continue
         match = dictionary.resolve(word) or dictionary.resolve(word.lower())
         if match is None:
-            faults.append((f"`{word}` is not in the dictionary", ""))
+            faults.append((RULE_UNKNOWN_WORD, f"`{word}` {UNKNOWN_DETAIL}", ""))
         elif match.kind == "vague":
-            faults.append((f"`{word}` is vague — {match.detail}", ""))
+            faults.append((RULE_VAGUE_WORD, f"`{word}` is vague — {match.detail}", ""))
         elif match.kind == "rejected":
+            rule = RULE_FUNCTION_WORD if match.pos == ("rejected",) else RULE_REJECTED_SYNONYM
             renamed = name.replace(word, _spelled_like(word, match.word))
-            faults.append((f"`{word}`: {match.detail}",
+            faults.append((rule, f"`{word}`: {match.detail}",
                            renamed if match.word != word.lower() else ""))
         elif match.kind == "symbol" and kind not in SYMBOL_KINDS:
-            faults.append((f"`{word}`: {match.detail}", ""))
+            faults.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}", ""))
     if not faults and parts:
         misfit = vocabulary_molds.fit(dictionary, catalogue, kind, name, parts)
         if misfit:
-            faults.append(misfit)
+            detail, suggestion = misfit
+            faults.append((RULE_MOLD, detail, suggestion))
     return out + faults
 
 
@@ -206,8 +220,8 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         for line, kind, name in declarations(repo.root / rel, lang):
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
-            for detail, suggestion in judge(dictionary, kind, name, catalogue):
-                out.append(Finding(rel, line, kind, name, detail, suggestion))
+            for rule, detail, suggestion in judge(dictionary, kind, name, catalogue):
+                out.append(Finding(rel, line, kind, name, rule, detail, suggestion))
     return out
 
 
@@ -227,3 +241,41 @@ def suggest(repo: Repo, f: Finding) -> str:
         f"line = {f.line}\n"
         'reason = "REPLACE ME — who outside this repo dictates this name"\n'
     )
+
+
+def gated_files(repo: Repo) -> list[str]:
+    """Tracked files of a gated language, minus exclude_paths (#111 decision 2)."""
+    tracked = git("ls-files", "-z", cwd=repo.root).split("\0")
+    return sorted(
+        rel for rel in tracked
+        if rel and mutants.language_of(rel) in SUFFIX
+        and not any(rel.startswith(p) for p in repo.config.exclude_paths)
+    )
+
+
+def audit(repo: Repo) -> list[Finding]:
+    """Every declaration in `gated_files`, judged with no waivers (#111)."""
+    changed = {
+        rel: set(range(1, len((repo.root / rel).read_text().splitlines()) + 1))
+        for rel in gated_files(repo)
+    }
+    return check(repo, changed, [])
+
+
+def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
+    """(file, line, old, new) rows for #111 `--leading-underscore`: every declared
+    name and path segment decisions 34/35 would reject a leading `_` on."""
+    dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    rows: list[tuple[str, int, str, str]] = []
+    for rel in gated_files(repo):
+        for line, _kind, name in declarations(repo.root / rel, mutants.language_of(rel)):
+            if name.startswith("_") and not _exempt(dictionary, name):
+                rows.append((rel, line, name, f"{name.strip('_')}_"))
+        segments = rel.split("/")
+        last = len(segments) - 1
+        for index, segment in enumerate(segments):
+            stem = segment if index != last else Path(segment).stem
+            suffix = "" if index != last else Path(segment).suffix
+            if stem.startswith("_") and not _exempt(dictionary, stem):
+                rows.append((rel, 0, segment, f"{stem.strip('_')}_{suffix}"))
+    return rows
