@@ -7,6 +7,7 @@ Driven through cli.main. The test image carries no git, so the two seams that
 read it — discover and the diff / pre-image — are stubbed; the config load, the
 ast-grep parse, the waiver match and the exit code are real."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,18 @@ def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
     return cli.main(["--staged", "--no-adversary"])
 
 
+def _stub_comment_scan(monkeypatch, returncode: int, stderr: str = "", stdout: str = "") -> None:
+    """Only the comment-kind scan is faked; `ast-grep --version` stays real."""
+    real_run = mutants.subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if cmd[:2] == ["ast-grep", "run"] and cmd[cmd.index("--kind") + 1] == "comment":
+            return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+
+
 def test_added_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
     repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1  # one\n"})
     code = _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {})
@@ -61,6 +74,23 @@ def test_added_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, cap
     assert code == 1
     assert f"{FILE}:1" in err
     assert "# one" in err
+
+
+def test_crashed_ast_grep_scan_refuses_instead_of_passing_silently(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1\n"})
+    _stub_comment_scan(monkeypatch, returncode=8, stderr="Error: crashed parser\nHelp: retry",
+                       stdout="[]")
+    code = _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 2
+    assert err.count("\n") == 1
+    assert "crashed parser" in err
+
+
+def test_genuine_no_match_from_ast_grep_still_passes(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1\n"})
+    _stub_comment_scan(monkeypatch, returncode=1, stderr="")
+    assert _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {}) == 0
 
 
 def test_pragma_comment_is_not_flagged(tmp_path, monkeypatch):
