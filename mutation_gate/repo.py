@@ -40,6 +40,23 @@ def git(*args: str, cwd: Path | None = None) -> str:
     return out.stdout
 
 
+# Forces `git diff`'s post-image header back to `b/<path>` regardless of
+# diff.noprefix or diff.mnemonicPrefix, so every `+++ ` line parser in this
+# package can assume one shape (#151, #159).
+DIFF_PREFIX_PIN_ARGS = ("--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+
+
+def post_image_path(field: str) -> str | None:
+    field = field.removesuffix("\t")
+    if field.startswith('"') and field.endswith('"'):
+        field = field[1:-1]
+    if field == "/dev/null":
+        return None
+    if not field.startswith("b/"):
+        raise GateError("a diff post-image header did not parse")
+    return field[2:]
+
+
 @dataclass
 class LanguageConfig:
     """The five fields a second language in the same repo cannot share with the
