@@ -90,7 +90,7 @@ whichever lens carries the proposed change, not once per lens it touches.
 ## Filing
 
 Offer to file each finding as an issue on this repo, through the same gate
-`/done` step 4 uses: one prompt, private-remote rows pre-selected, unticked
+`/done` step 5 uses: one prompt, private-remote rows pre-selected, unticked
 rows dropped, five-candidate cap, the labels `rules/tickets.md`'s Follow-ups
 section requires, the banned-name scan from the `banned_names_file` named in
 `.mutation-gate.toml` run over every draft before it's filed. Title is the
