@@ -19,6 +19,9 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
   Batching only happens in whole-queue `/kata`. Naming a ticket in plain
   English is the same authorisation as the label.
 
+A run works the queue as it stood when it started. A ticket filed while it
+runs waits for the next `/kata`.
+
 Read each ticket's `model:<name>` label before dispatch. Triage adding it is
 the approval, so kata never creates or adds a `model:*` label at dispatch —
 it only creates repo config and labels on demand the way the labels
@@ -63,8 +66,10 @@ needs. The agent:
    repo means no checks to wait for — skip straight to exit. Red: fix, push,
    and watch again.
 6. Exits only once CI is green on the pushed sha, never before, reporting the
-   PR number, every ticket number still in it, and any follow-up candidates
-   noticed but not acted on.
+   PR number, every ticket number still in it, and any follow-up candidates —
+   only what it saw fail or deferred out loud this session, never a
+   same-class-elsewhere guess or anything it would itself call speculative.
+   "None" is the normal answer.
 
 A ticket the agent finds not tiny mid-batch: it reverts that ticket's changes
 off the branch, drops its `Closes #N` line, strips its size:tiny label with a
@@ -89,11 +94,10 @@ removes the worktree, then deletes the branch with `git branch -D`, which the
 guardrail allows once the branch's tip is that merged PR's head. The merge
 closes every ticket still in it through its own `Closes #N` line.
 
-Then file the agent's follow-up candidates — `rules/tickets.md`'s Follow-ups
-section requires the labels — run `/done`'s tail without its handoff step or its
-agent-checkpoint step, and move to the next ticket or batch. That tail
-follows one PR's own merge, not a session interrupt, and must never reach into
-another lane's live agents.
+Run `/done`'s tail without its handoff step or its agent-checkpoint step —
+its step 5 files the agent's candidates — and move to the next ticket or
+batch. That tail follows one PR's own merge, not a session interrupt, and
+must never reach into another lane's live agents.
 
 ## Acceptance
 
