@@ -164,6 +164,48 @@ def test_is_test_never_walks_the_filesystem(tmp_path, monkeypatch):
     assert not repo.is_test("webapp/lib/decimate.ts")
 
 
+def test_is_test_never_walks_the_filesystem_for_a_language_scoped_glob(tmp_path, monkeypatch):
+    def _boom(*args, **kwargs):
+        raise AssertionError("is_test must not touch the filesystem")
+
+    monkeypatch.setattr(Path, "glob", _boom)
+    monkeypatch.setattr(Path, "iterdir", _boom)
+    monkeypatch.setattr(os, "scandir", _boom)
+    monkeypatch.setattr(os, "listdir", _boom)
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(languages={"typescript": LanguageConfig(test_globs=["webapp/lib/*.test.ts"])}),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+    assert not repo.is_test("webapp/lib/decimate.ts")
+
+
+def test_a_trailing_bare_double_star_matches_a_test_directory_not_a_file(tmp_path):
+    repo = Repo(
+        root=tmp_path, origin="", remotes=(), config=Config(test_globs=["webapp/tests/**"])
+    )
+    assert not repo.is_test("webapp/tests/decimate.test.ts")
+
+
+def test_a_double_star_glob_reaches_a_zero_depth_colocated_test(tmp_path):
+    repo = Repo(
+        root=tmp_path,
+        origin="",
+        remotes=(),
+        config=Config(test_globs=["webapp/lib/**/*.test.ts"]),
+    )
+    assert repo.is_test("webapp/lib/decimate.test.ts")
+
+
+def test_a_glob_is_case_sensitive_like_path_glob(tmp_path):
+    repo = Repo(
+        root=tmp_path, origin="", remotes=(), config=Config(test_globs=["webapp/LIB/*.test.ts"])
+    )
+    assert not repo.is_test("webapp/lib/decimate.test.ts")
+
+
 def _repo(tmp_path: Path, origin: str, remotes: tuple[str, ...] = ("origin",)) -> Repo:
     return Repo(root=tmp_path, origin=origin, remotes=remotes, config=Config.load(tmp_path))
 
