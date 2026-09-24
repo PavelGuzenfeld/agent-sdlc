@@ -861,3 +861,58 @@ def test_gdscript_constructor_itself_passes_with_a_known_parameter(tmp_path):
     text = "func _init(health):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_ordinary_function_parameter_with_unknown_word_blocks(tmp_path):
+    _require_gdscript_parser()
+    text = "func move(frob):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in {
+        (f.kind, f.rule, f.name) for f in found
+    }
+
+
+def test_gdscript_engine_virtual_function_parameter_is_exempt(tmp_path):
+    _require_gdscript_parser()
+    text = "func _process(delta):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_engine_virtual_parameter_exemption_is_read_from_the_dictionary_not_hardcoded(
+    tmp_path, monkeypatch
+):
+    _require_gdscript_parser()
+    _without_gdscript_conventions(monkeypatch, keep_ready=False)
+    text = "func _ready(delta):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "delta") in {
+        (f.kind, f.rule, f.name) for f in found
+    }
+
+
+def test_gdscript_signal_parameter_with_unknown_word_blocks(tmp_path):
+    _require_gdscript_parser()
+    text = "signal ticked(frob)\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in {
+        (f.kind, f.rule, f.name) for f in found
+    }
+
+
+def test_gdscript_signal_parameter_with_known_word_passes(tmp_path):
+    _require_gdscript_parser()
+    text = "signal health_changed(health)\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_default_parameter_value_reference_is_not_scanned_as_a_parameter(tmp_path):
+    _require_gdscript_parser()
+    text = "func f(count = MAX_SPEED):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert "MAX_SPEED" not in {f.name for f in found}
