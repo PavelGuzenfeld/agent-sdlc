@@ -299,7 +299,7 @@ def declarations(path: Path, lang: str, config: Path | None = None) -> list[Decl
         cmd += [f"--inline-rules={_inline_rules(lang)}", "--json=compact", copy.name]
         proc = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
-        raise GateError(f"ast-grep scan failed on {path}: {proc.stderr.strip()}")
+        raise GateError(f"ast-grep scan failed on {path}: {mutants.render_error_line(proc)}")
     hits = json.loads(proc.stdout) if proc.stdout.strip() else []
     return _declared(hits, lang)
 

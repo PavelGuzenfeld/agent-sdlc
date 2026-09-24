@@ -185,7 +185,7 @@ def test_extents(path: Path, language: str) -> list[TestExtent]:
         capture_output=True, text=True, check=False,
     )
     if proc.returncode not in (0, 1):
-        raise GateError(f"ast-grep failed on {path}: {proc.stderr.strip()[:200]}")
+        raise GateError(f"ast-grep failed on {path}: {mutants.render_error_line(proc)}")
     if not proc.stdout.strip():
         return []
     out = []
