@@ -126,8 +126,10 @@ def test_staged_requires_ast_grep_for_no_comments_when_only_a_test_file_changed(
     _no_ast_grep_on_path(monkeypatch)
     assert cli.main(["--staged"]) == 2
     err = capsys.readouterr().err
-    assert err.count("\n") == 1
-    assert "ast-grep" in err
+    assert err == (
+        "mutation-gate refused: ast-grep not found on PATH "
+        "(./install.sh --deps, or pip install ast-grep-cli)\n"
+    )
 
 
 def test_staged_skips_ast_grep_check_for_no_comments_when_no_gated_file_changed(

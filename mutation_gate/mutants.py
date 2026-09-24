@@ -250,6 +250,9 @@ def kind_hits(path: Path, lang: str, kind: str) -> list[dict]:
         ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)],
         capture_output=True, text=True, check=False,
     )
+    if proc.returncode not in (0, 1):
+        detail = proc.stderr.strip().partition("\n")[0]
+        raise GateError(f"ast-grep run failed on {path}: {detail or f'exit {proc.returncode}'}")
     if not proc.stdout.strip():
         return []
     try:
@@ -355,7 +358,7 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
 
 def require_ast_grep() -> None:
     if not shutil.which("ast-grep"):
-        raise GateError("ast-grep not found on PATH; the gate cannot generate mutants")
+        raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
     proc = subprocess.run(["ast-grep", "--version"], capture_output=True, check=False)
     if proc.returncode != 0:
-        raise GateError("ast-grep not found on PATH; the gate cannot generate mutants")
+        raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
