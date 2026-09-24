@@ -448,14 +448,6 @@ reason = "how often the sweep wakes to check whether the next sample time has ar
 
 [[waiver]]
 file = "skills/sol-budget/scripts/thermal_watch.py"
-line = 121
-column = 43
-old = """0"""
-new = """1"""
-reason = "the fallback when a thermal zone is unreadable, divided by 1000 for the table: 0 and 1 milli-degrees both render as 0.0C, so no output can distinguish them"
-
-[[waiver]]
-file = "skills/sol-budget/scripts/thermal_watch.py"
 line = 186
 column = 55
 old = """os.cpu_count() or 1"""
@@ -472,14 +464,6 @@ reason = "same fallback thread count; a policy choice on an unknowable machine"
 
 [[waiver]]
 file = "skills/sol-budget/scripts/thermal_watch.py"
-line = 208
-column = 36
-old = """4"""
-new = """5"""
-reason = "column width in the progress line printed to stderr while the sweep runs; operator feedback, not the artefact, and the table that is the artefact is asserted"
-
-[[waiver]]
-file = "skills/sol-budget/scripts/thermal_watch.py"
 line = 209
 column = 26
 old = """(last['milli_c'] or 0) / 1000"""
@@ -493,14 +477,6 @@ column = 27
 old = """last['milli_c'] or 0"""
 new = """last['milli_c'] and 0"""
 reason = "same stderr progress line"
-
-[[waiver]]
-file = "skills/sol-budget/scripts/thermal_watch.py"
-line = 209
-column = 46
-old = """0"""
-new = """1"""
-reason = "same stderr progress line, and both render identically at one decimal place"
 
 [[waiver]]
 file = "skills/sol-budget/scripts/thermal_watch.py"
@@ -525,14 +501,6 @@ column = 18
 old = """time.perf_counter() - started < mark"""
 new = """time.perf_counter() - started <= mark"""
 reason = "the sweep sleeps in half-second steps until the next sample time; a float elapsed landing exactly on an integer mark does not occur, so both comparisons leave the wait on the same iteration and the sample is taken at the same instant"
-
-[[waiver]]
-file = "skills/sol-budget/scripts/thermal_watch.py"
-line = 91
-column = 36
-old = """1000"""
-new = """1001"""
-reason = "milli-degrees to degrees in the warm-start note, rendered at one decimal place: 2000/1000 and 2000/1001 both print 2.0C, so the note is identical either way"
 
 # --- the stale-waiver guard's short-circuit, from dotfiles#88 --------------------------
 # The guard only decides whether to skip an extra generator pass. Every variant

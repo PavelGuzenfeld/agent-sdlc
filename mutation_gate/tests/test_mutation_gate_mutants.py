@@ -900,3 +900,31 @@ def test_staged_dry_run_probes_gdscript_readiness_once_when_the_parser_is_ready(
     assert err.count("1 + 2 => 1 - 2") == 2
     assert len(probe_calls) == 1
     assert vocabulary_check._gdscript_ready.cache_info().misses == 1
+
+
+def test_staged_dry_run_masks_a_literal_inside_an_fstring_expression_on_every_python(
+    tmp_path, monkeypatch, capsys
+):
+    """Slice (#257): PEP 701 tokenizes an f-string's expression apart from
+    3.12 on; the literal catalogue must stay the one 3.11 already produces,
+    while the operator mutant inside the same expression still fires."""
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    (tmp_path / "a.py").write_text('label = f"{x + 1}"\n')
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert "x + 1 => x - 1" in err
+    assert "1 => 2" not in err
+
+
+def test_masked_spans_covers_a_literal_inside_an_fstring_expression_on_every_python(tmp_path):
+    """#257: a whole f-string is one STRING token on 3.11 and a
+    FSTRING_START..FSTRING_END run on 3.12; both interpreters must mask the
+    identical byte span."""
+    path = tmp_path / "a.py"
+    path.write_bytes(b'label = f"{x + 1}"\n')
+    assert mutants.masked_spans(path, "python") == [(8, 18)]
