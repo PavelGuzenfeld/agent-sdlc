@@ -10,7 +10,9 @@ Also: a src-layout repo whose PYTHONPATH comes from pytest.ini rather than a
 test file's own sys.path.insert needs `import_roots` in .mutation-gate.toml
 to resolve the same bare import. PavelGuzenfeld/debris-scatter#48."""
 
+import shlex
 import sqlite3
+import sys
 
 from mutation_gate import coverage_map
 from mutation_gate.repo import Config, LanguageConfig, Repo
@@ -33,8 +35,7 @@ def _write_coverage_db(path, file_path, context_lines):
         ).fetchone()[0]
         numbits = bytearray((max(lines) // 8) + 1) if lines else bytearray()
         for line in lines:
-            idx = line - 1
-            numbits[idx // 8] |= 1 << (idx % 8)
+            numbits[line // 8] |= 1 << (line % 8)
         con.execute(
             "INSERT INTO line_bits (file_id, context_id, numbits) VALUES (?, ?, ?)",
             (file_id, context_id, bytes(numbits)),
@@ -176,3 +177,52 @@ def test_read_contexts_returns_empty_when_data_file_is_missing(tmp_path):
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
     assert coverage_map._read_contexts(repo, "geo_frame.py", ".coverage") == {}
+
+
+def test_covering_tests_scopes_cov_to_the_targets_directory_not_the_file(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    pass\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    seen = {}
+    monkeypatch.setattr(
+        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: seen.setdefault("cmd", cmd)
+    )
+
+    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    assert "--cov=pkg " in seen["cmd"]
+    assert "--cov=pkg/mod.py" not in seen["cmd"]
+
+
+def test_covering_tests_collects_a_real_per_test_context_for_the_target(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    return 1\n")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    test_file = tests_dir / "test_mod.py"
+    test_file.write_text("from pkg.mod import f\n\n\ndef test_f():\n    assert f() == 1\n")
+    (tmp_path / ".git").mkdir()
+    config = Config(
+        coverage_command=(
+            f"{shlex.quote(sys.executable)} -m pytest -q -p no:cacheprovider --cov={{file}} "
+            "--cov-context=test --cov-report= {tests}"
+        )
+    )
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=config)
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+
+    mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    assert mapping == {2: ["tests/test_mod.py::test_f|run"]}
+
+
+def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
+    assert coverage_map._numbits_to_lines(b"\x02\x04") == [1, 10]
