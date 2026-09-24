@@ -228,7 +228,7 @@ def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
     assert coverage_map._numbits_to_lines(b"\x02\x04") == [1, 10]
 
 
-def test_covering_tests_ignores_a_stale_version_cache_entry(tmp_path, monkeypatch):
+def test_covering_tests_recomputes_after_the_cache_version_bumps(tmp_path, monkeypatch):
     (tmp_path / "pkg").mkdir()
     target = tmp_path / "pkg" / "mod.py"
     target.write_text("def f():\n    pass\n")
@@ -238,23 +238,27 @@ def test_covering_tests_ignores_a_stale_version_cache_entry(tmp_path, monkeypatc
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
-    stale = tmp_path / "cache" / repo.key / "coverage" / "pkg__mod.py.fp.json"
-    stale.parent.mkdir(parents=True)
-    stale.write_text('{"1": ["stale::test"]}')
+    monkeypatch.setattr(coverage_map, "_CACHE_VERSION", "1")
     monkeypatch.setattr(
         coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.PASSED
     )
     monkeypatch.setattr(
         coverage_map, "_read_contexts",
-        lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
+        lambda repo, target, data_file: {1: ["tests/test_mod.py::test_old"]},
     )
+    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
+    monkeypatch.setattr(coverage_map, "_CACHE_VERSION", "2")
+    monkeypatch.setattr(
+        coverage_map, "_read_contexts",
+        lambda repo, target, data_file: {2: ["tests/test_mod.py::test_new"]},
+    )
     mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
-    assert mapping == {2: ["tests/test_mod.py::test_f"]}
+    assert mapping == {2: ["tests/test_mod.py::test_new"]}
 
 
-def test_covering_tests_does_not_persist_an_empty_mapping(tmp_path, monkeypatch):
+def test_covering_tests_retries_a_run_that_came_back_empty(tmp_path, monkeypatch):
     (tmp_path / "pkg").mkdir()
     target = tmp_path / "pkg" / "mod.py"
     target.write_text("def f():\n    pass\n")
@@ -264,19 +268,24 @@ def test_covering_tests_does_not_persist_an_empty_mapping(tmp_path, monkeypatch)
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    calls = []
     monkeypatch.setattr(
-        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.PASSED
+        coverage_map.runner,
+        "run_capped",
+        lambda repo, cmd, timeout: calls.append(1) or coverage_map.runner.PASSED,
     )
     monkeypatch.setattr(coverage_map, "_read_contexts", lambda repo, target, data_file: {})
 
-    mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    first = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    second = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
-    assert mapping == {}
+    assert first == second == {}
+    assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())
 
 
-def test_covering_tests_does_not_persist_a_timed_out_run(tmp_path, monkeypatch):
+def test_covering_tests_retries_a_run_that_timed_out(tmp_path, monkeypatch):
     (tmp_path / "pkg").mkdir()
     target = tmp_path / "pkg" / "mod.py"
     target.write_text("def f():\n    pass\n")
@@ -286,8 +295,11 @@ def test_covering_tests_does_not_persist_a_timed_out_run(tmp_path, monkeypatch):
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    calls = []
     monkeypatch.setattr(
-        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.TIMED_OUT
+        coverage_map.runner,
+        "run_capped",
+        lambda repo, cmd, timeout: calls.append(1) or coverage_map.runner.TIMED_OUT,
     )
     monkeypatch.setattr(
         coverage_map, "_read_contexts",
@@ -295,7 +307,9 @@ def test_covering_tests_does_not_persist_a_timed_out_run(tmp_path, monkeypatch):
     )
 
     coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
+    assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())
 
