@@ -450,7 +450,7 @@ def test_worktree_uses_the_transcripts_last_user_prompt_as_intent_on_a_non_ticke
 def test_worktree_still_prefers_the_branchs_ticket_over_the_transcripts_prompt(
     tmp_path, monkeypatch
 ):
-    transcript = _write_transcript(tmp_path, "unrelated chat text")
+    transcript = _write_transcript(tmp_path, "unrelated chat text about some other topic")
     monkeypatch.setattr(cli.adversary, "_issue_body", lambda _r, n: f"body of {n}")
     intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "153-the-deferred-fix", transcript)
     assert intent is not None
@@ -461,7 +461,7 @@ def test_worktree_still_prefers_the_branchs_ticket_over_the_transcripts_prompt(
 def test_worktree_user_prompt_flag_wins_over_ticket_and_session_prompt(tmp_path, monkeypatch):
     seen = {}
     repo = _repo(tmp_path)
-    transcript = _write_transcript(tmp_path, "unrelated chat text")
+    transcript = _write_transcript(tmp_path, "unrelated chat text about some other topic")
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
     monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
@@ -498,7 +498,9 @@ def test_worktree_skips_the_adversary_cleanly_with_no_transcript_and_no_ticket(
     assert "adversary skipped" in capsys.readouterr().err
 
 
-def _write_terse_latest_transcript(tmp_path: Path) -> Path:
+def test_worktree_uses_the_earlier_substantive_turn_when_the_latest_one_is_terse(
+    tmp_path, monkeypatch
+):
     path = tmp_path / "transcript.jsonl"
     path.write_text("\n".join(json.dumps(e) for e in [
         {"type": "user", "message": {"role": "user",
@@ -507,14 +509,7 @@ def _write_terse_latest_transcript(tmp_path: Path) -> Path:
                                            "content": [{"type": "text", "text": "fixed it"}]}},
         {"type": "user", "message": {"role": "user", "content": "LGTM"}},
     ]) + "\n")
-    return path
-
-
-def test_worktree_uses_the_earlier_substantive_turn_when_the_latest_one_is_terse(
-    tmp_path, monkeypatch
-):
-    transcript = _write_terse_latest_transcript(tmp_path)
-    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "fix/utf-8-decode", transcript)
+    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "fix/utf-8-decode", path)
     assert intent is not None
     assert intent.source == "session prompt"
     assert intent.text == "why is the decode failing at the boundary"
