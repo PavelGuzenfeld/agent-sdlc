@@ -267,8 +267,9 @@ def test_gdscript_without_parser_skips_with_a_visible_reason_instead_of_blocking
     assert no_comments.GDSCRIPT_MISSING in err
 
 
-def test_gdscript_missing_names_the_installer():
-    assert "bin/install-gdscript-parser" in no_comments.GDSCRIPT_MISSING
+def test_gdscript_comments_skip_gives_the_same_reason_as_the_mutation_skip():
+    assert (no_comments.GDSCRIPT_MISSING.partition(": ")[2]
+            == mutants.GDSCRIPT_MUTATION_SKIPPED.partition(": ")[2])
 
 
 def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
