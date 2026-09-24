@@ -365,6 +365,10 @@ def _exempt(dictionary: vocabulary.Dictionary, name: str, lang: str = "") -> boo
     return name == "_" or dunder or name in convention.names or prefixed
 
 
+def _gdscript_unused_parameter(kind: str, lang: str) -> bool:
+    return lang == "gdscript" and kind == "parameter"
+
+
 RULE_LEADING_UNDERSCORE = "leading_underscore"
 RULE_UNKNOWN_WORD = "unknown_word"
 RULE_VAGUE_WORD = "vague_word"
@@ -406,7 +410,7 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
     if _exempt(dictionary, name, lang):
         return []
     out: list[tuple[str, str, str]] = []
-    if name.startswith("_"):
+    if name.startswith("_") and not _gdscript_unused_parameter(kind, lang):
         out.append((RULE_LEADING_UNDERSCORE,
                     "a leading `_` is not the private mark; private is a trailing `_`",
                     f"{name.strip('_')}_"))
@@ -592,7 +596,9 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
         if lang == "gdscript" and config is None:
             continue
         conventions = dictionary.convention_for(lang).names
-        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config, conventions):
+        for line, kind, name, *_ in declarations(repo.root / rel, lang, config, conventions):
+            if _gdscript_unused_parameter(kind, lang):
+                continue
             if name.startswith("_") and not _exempt(dictionary, name, lang):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
         segments = rel.split("/")
