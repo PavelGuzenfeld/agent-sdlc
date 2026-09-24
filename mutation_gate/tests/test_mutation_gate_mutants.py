@@ -37,10 +37,24 @@ def _diff(path: str, *lines: str, start: int = 1) -> str:
     )
 
 
-def test_the_diff_invocation_is_pinned_against_diff_prefix_config(monkeypatch, tmp_path):
+def test_the_pinned_args_are_the_literal_flags_that_defeat_diff_prefix_config():
+    assert DIFF_PREFIX_PIN_ARGS == ("--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+
+
+def test_the_staged_diff_invocation_is_pinned_and_is_the_only_git_call(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch, diff="")
     mutants.changed_lines(tmp_path, staged=True)
-    assert ("diff", "-U0", "--no-color", *DIFF_PREFIX_PIN_ARGS, "--cached") in calls
+    assert calls == [
+        ("diff", "-U0", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", "--cached")
+    ]
+
+
+def test_the_worktree_diff_invocation_is_pinned_and_is_the_only_git_call(monkeypatch, tmp_path):
+    calls = _stub_git(monkeypatch, diff="")
+    mutants.changed_lines(tmp_path, staged=False)
+    assert calls == [
+        ("diff", "-U0", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+    ]
 
 
 def test_a_multi_line_hunk_attributes_every_added_line(monkeypatch, tmp_path):
@@ -100,10 +114,22 @@ def test_an_added_line_shaped_like_a_post_image_header_inside_a_hunk_is_not_mist
 
 def test_a_staged_change_still_yields_the_right_changed_lines_once_pinned(monkeypatch, tmp_path):
     _stub_git(monkeypatch, diff=_diff("fixture.py", "x = 1"))
-    assert mutants.changed_lines(tmp_path, staged=False) == {"fixture.py": {1}}
+    assert mutants.changed_lines(tmp_path, staged=True) == {"fixture.py": {1}}
 
 
-def test_an_unparseable_post_image_header_refuses(monkeypatch, tmp_path):
+def test_a_quoted_post_image_header_still_attributes_the_line(monkeypatch, tmp_path):
+    diff = (
+        'diff --git "a/caf\\303\\251.py" "b/caf\\303\\251.py"\n'
+        '--- "a/caf\\303\\251.py"\n'
+        '+++ "b/caf\\303\\251.py"\n'
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    assert mutants.changed_lines(tmp_path, staged=True) == {"caf\\303\\251.py": {1}}
+
+
+def test_an_unparseable_noprefix_post_image_header_refuses(monkeypatch, tmp_path):
     diff = (
         "diff --git a/fixture.py b/fixture.py\n"
         "--- fixture.py\n"
@@ -112,6 +138,29 @@ def test_an_unparseable_post_image_header_refuses(monkeypatch, tmp_path):
         "+x = 1\n"
     )
     _stub_git(monkeypatch, diff=diff)
+    with pytest.raises(GateError):
+        mutants.changed_lines(tmp_path, staged=True)
+
+
+def test_an_unparseable_mnemonic_prefixed_post_image_header_refuses(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/fixture.py i/fixture.py\n"
+        "--- w/fixture.py\n"
+        "+++ i/fixture.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+x = 1\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    with pytest.raises(GateError):
+        mutants.changed_lines(tmp_path, staged=True)
+
+
+def test_changed_lines_refuses_through_the_shared_post_image_parser(monkeypatch, tmp_path):
+    def _always_refuses(field: str) -> str | None:
+        raise GateError("stub")
+
+    monkeypatch.setattr(mutants, "post_image_path", _always_refuses)
+    _stub_git(monkeypatch, diff=_diff("fixture.py", "x = 1"))
     with pytest.raises(GateError):
         mutants.changed_lines(tmp_path, staged=True)
 
@@ -132,4 +181,4 @@ def test_staged_refuses_cleanly_through_the_cli_when_the_header_is_unparseable(
     )
     _stub_git(monkeypatch, diff)
     assert cli.main(["--staged"]) == 2
-    assert "refused" in capsys.readouterr().err
+    assert "post-image header did not parse" in capsys.readouterr().err
