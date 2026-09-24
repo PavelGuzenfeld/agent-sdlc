@@ -24,12 +24,20 @@ check_delete_branch_head() {
         tip=$(git rev-parse --verify --quiet "refs/heads/$b" 2>/dev/null) || tip=""
         [ -n "$tip" ] || { printf 'no local branch %s' "$b"; exit 1; }
         gh_status=0
-        json=$(gh pr list --head "$b" --state merged --json headRefOid 2>/dev/null) || gh_status=$?
+        json=$(gh pr list --head "$b" --state merged --json number,headRefOid 2>/dev/null) || gh_status=$?
         [ "$gh_status" -eq 0 ] || { printf 'gh failed listing merged PRs for %s' "$b"; exit 1; }
         count=$(printf '%s' "$json" | jq 'length' 2>/dev/null) || count=""
         [ "$count" != "0" ] && [ -n "$count" ] || { printf 'no merged PR found for %s' "$b"; exit 1; }
-        printf '%s' "$json" | jq -e --arg t "$tip" 'any(.[]; .headRefOid == $t)' >/dev/null 2>&1 \
-            || { printf '%s tip does not match its merged PR head' "$b"; exit 1; }
+        for pr in $(printf '%s' "$json" | jq -r '.[] | "\(.number):\(.headRefOid)"'); do
+            pr_head=${pr#*:}
+            pr_number=${pr%%:*}
+            git cat-file -e "${pr_head}^{commit}" 2>/dev/null \
+                || git fetch --quiet origin "pull/$pr_number/head" 2>/dev/null \
+                || { printf 'could not fetch pull/%s/head for %s' "$pr_number" "$b"; exit 1; }
+            git merge-base --is-ancestor "$tip" "$pr_head" 2>/dev/null && exit 0
+        done
+        printf '%s tip is not an ancestor of its merged PR head' "$b"
+        exit 1
     )
 }
 
@@ -41,10 +49,20 @@ parse_delete_targets() {
     seen_branch=0
     dashdash=0
     skip_path=0
+    skip_redirect_target=0
     for tok in "$@"; do
         if [ "$skip_path" -eq 1 ]; then
             D_PATH=$tok
             skip_path=0
+            continue
+        fi
+        if [ "$skip_redirect_target" -eq 1 ]; then
+            skip_redirect_target=0
+            continue
+        fi
+        redirect_rest=$(printf '%s' "$tok" | sed -E 's/^[0-9]*(>>|>|<<|<)//')
+        if [ "$redirect_rest" != "$tok" ]; then
+            [ -n "$redirect_rest" ] || skip_redirect_target=1
             continue
         fi
         case "$tok" in

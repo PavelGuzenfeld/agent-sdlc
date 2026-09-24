@@ -81,18 +81,52 @@ run_case_table "$repo_script" "repo"
 run_delete_branch_head_cases() {
     label="repo-delete-head"
     tmp=$(mktemp -d)
+    origin_dir=$(mktemp -d)/origin.git
+    clone_dir=$(mktemp -d)/clone
     (
         unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
         cd "$tmp"
         git init -q -b main
         git -c user.name=t -c user.email=nobody commit -q --allow-empty -m base
+        git rev-parse HEAD >base-sha
+        git -c user.name=t -c user.email=nobody branch behind-local HEAD
+        git -c user.name=t -c user.email=nobody branch behind-fetch HEAD
+        git -c user.name=t -c user.email=nobody branch unfetchable HEAD
+        git -c user.name=t -c user.email=nobody branch two-pr HEAD
         git -c user.name=t -c user.email=nobody commit -q --allow-empty -m pr-head
         git rev-parse HEAD >pr-head-sha
         git -c user.name=t -c user.email=nobody branch merged-ok HEAD
         git -c user.name=t -c user.email=nobody commit -q --allow-empty -m local-extra
         git -c user.name=t -c user.email=nobody branch one-past HEAD
+        git -c user.name=t -c user.email=nobody checkout -q -b diverged "$(cat base-sha)"
+        git -c user.name=t -c user.email=nobody commit -q --allow-empty -m diverged-commit
+        git -c user.name=t -c user.email=nobody checkout -q main
+        git init -q --bare "$origin_dir"
+        git remote add origin "$origin_dir"
+    ) >/dev/null 2>&1
+    (
+        unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+        git clone -q "$tmp" "$clone_dir"
+        cd "$clone_dir"
+        git remote add upstream "$origin_dir"
+        git -c user.name=t -c user.email=nobody checkout -q "$(cat "$tmp/base-sha")"
+        git -c user.name=t -c user.email=nobody commit -q --allow-empty -m fetch-only-head
+        git rev-parse HEAD >fetch-head-sha
+        git push -q upstream "HEAD:refs/pull/7/head"
     ) >/dev/null 2>&1
     pr_head_sha=$(cat "$tmp/pr-head-sha")
+    fetch_head_sha=$(cat "$clone_dir/fetch-head-sha")
+    unreachable_head_sha=0123456789abcdef0123456789abcdef01234567
+
+    prs_dir=$(mktemp -d)
+    printf '[{"number":1,"headRefOid":"%s"}]' "$pr_head_sha" >"$prs_dir/merged-ok"
+    printf '[{"number":1,"headRefOid":"%s"}]' "$pr_head_sha" >"$prs_dir/one-past"
+    printf '[{"number":98,"headRefOid":"%s"}]' "$pr_head_sha" >"$prs_dir/behind-local"
+    printf '[{"number":7,"headRefOid":"%s"}]' "$fetch_head_sha" >"$prs_dir/behind-fetch"
+    printf '[{"number":99,"headRefOid":"%s"}]' "$unreachable_head_sha" >"$prs_dir/unfetchable"
+    printf '[{"number":1,"headRefOid":"%s"}]' "$pr_head_sha" >"$prs_dir/diverged"
+    printf '[{"number":1,"headRefOid":"%s"},{"number":99,"headRefOid":"%s"}]' \
+        "$pr_head_sha" "$unreachable_head_sha" >"$prs_dir/two-pr"
 
     stub_dir=$(mktemp -d)
     cat >"$stub_dir/gh" <<STUB
@@ -106,7 +140,7 @@ for a in "\$@"; do
     prev=\$a
 done
 if [ "\$state_ok" -eq 1 ] && [ -n "\$head_branch" ]; then
-    printf '[{"headRefOid":"%s"}]' "$pr_head_sha"
+    cat "$prs_dir/\$head_branch" 2>/dev/null || printf '[]'
 else
     printf '[]'
 fi
@@ -136,6 +170,19 @@ STUB
     export PATH="$stub_dir:$orig_path"
     expect_allow "$repo_script" "$label" "tip equals merged PR head"       "git -C $tmp branch -D merged-ok"
     expect_block "$repo_script" "$label" "tip one commit past merged head" "git -C $tmp branch -D one-past"
+    expect_allow "$repo_script" "$label" "tip is ancestor of merged PR head, head present locally" \
+        "git -C $tmp branch -D behind-local"
+    expect_allow "$repo_script" "$label" "tip is ancestor of merged PR head, head must be fetched" \
+        "git -C $tmp branch -D behind-fetch"
+    expect_block_reason "$repo_script" "$label" "merged PR head cannot be fetched" "could not fetch" \
+        "git -C $tmp branch -D unfetchable"
+    expect_block_reason "$repo_script" "$label" "tip diverged from merged PR head" "not an ancestor" \
+        "git -C $tmp branch -D diverged"
+    expect_allow "$repo_script" "$label" \
+        "ancestor check short-circuits before an unrelated later PR entry" \
+        "git -C $tmp branch -D two-pr"
+    expect_allow "$repo_script" "$label" "trailing redirect and pipe are not branch names" \
+        "git -C $tmp branch -D merged-ok 2>&1 | tail -3"
 
     export PATH="$minimal_bin"
     expect_block_reason "$repo_script" "$label" "no gh on PATH" "no gh on PATH" \
