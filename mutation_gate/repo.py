@@ -43,7 +43,7 @@ def git(*args: str, cwd: Path | None = None) -> str:
 # Forces `git diff`'s post-image header back to `b/<path>` regardless of
 # diff.noprefix or diff.mnemonicPrefix, so every `+++ ` line parser in this
 # package can assume one shape (#151, #159).
-DIFF_PREFIX_PIN_ARGS = ("--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+DIFF_PREFIX_PIN_ARGS = ("--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
 
 
 def post_image_path(field: str) -> str | None:
