@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .commit_msg import _strip_editor_cruft, _word_pattern
-from .repo import DIFF_PREFIX_PIN_ARGS, GateError, Repo, discover, git, post_image_path
+from .repo import DIFF_PREFIX_PIN_ARGS, GateError, Repo, discover, git, git_bytes, post_image_path
 
 _OCTET = r"[0-9]{1,3}"
 _IDENTITY_RE = re.compile(
@@ -33,6 +33,8 @@ _BULLET_RE = re.compile(r"^\s*-\s*")
 _ARROW = "→"
 
 _FIXTURE_EXCLUDE_PATHSPEC = ":!tests/fixtures/**"
+
+_BINARY_DIFFERS_RE = re.compile(r"^Binary files (.+) and (.+) differ$")
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,26 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
+def _post_image_rev(repo: Repo, diff_args: tuple[str, ...]) -> str:
+    if diff_args and diff_args[0] == "--cached":
+        return ""
+    out = git("rev-parse", diff_args[0], cwd=repo.root)
+    revs = [line for line in out.splitlines() if not line.startswith("^")]
+    return revs[-1] if revs else diff_args[0]
+
+
+def _binary_marked_text_hits(repo: Repo, rev: str, path: str) -> list[tuple[str, int, str]]:
+    """A path attributes call binary still scans here when its blob has no NUL
+    byte. Scans the whole post-image, not just the diff — a binary diff carries
+    no hunk boundaries to say what changed."""
+    spec = f"{rev}:{path}" if rev else f":{path}"
+    blob = git_bytes("show", spec, cwd=repo.root)
+    if b"\x00" in blob:
+        return []
+    text = blob.decode("utf-8", errors="replace")
+    return [(path, i, line) for i, line in enumerate(text.splitlines(), start=1)]
+
+
 def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]:
     out = git(
         "diff", "-U0", "--no-color", "--no-renames", *DIFF_PREFIX_PIN_ARGS,
@@ -100,6 +122,7 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
     current: str | None = None
     in_hunk = False
     next_line = 0
+    binary_paths: list[str] = []
     for raw in out.splitlines():
         if raw.startswith("diff --git "):
             current, in_hunk = None, False
@@ -112,6 +135,16 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
         elif in_hunk and current is not None and raw.startswith("+"):
             hits.append((current, next_line, raw[1:]))
             next_line += 1
+        else:
+            m = _BINARY_DIFFERS_RE.match(raw)
+            if m:
+                path = post_image_path(m.group(2))
+                if path is not None:
+                    binary_paths.append(path)
+    if binary_paths:
+        rev = _post_image_rev(repo, diff_args)
+        for path in binary_paths:
+            hits.extend(_binary_marked_text_hits(repo, rev, path))
     return hits
 
 

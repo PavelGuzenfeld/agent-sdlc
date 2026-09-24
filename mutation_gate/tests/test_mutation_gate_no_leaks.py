@@ -49,7 +49,7 @@ def _diff(path: str, *lines: str, start: int = 1) -> str:
     )
 
 
-def _stub_git(monkeypatch, *, diff: str = "", log: str = ""):
+def _stub_git(monkeypatch, *, diff: str = "", log: str = "", rev_parse: str = ""):
     calls: list[tuple[str, ...]] = []
 
     def fake_git(*args: str, cwd=None) -> str:
@@ -58,10 +58,39 @@ def _stub_git(monkeypatch, *, diff: str = "", log: str = ""):
             return diff
         if args[0] == "log":
             return log
+        if args[0] == "rev-parse":
+            return rev_parse
         raise AssertionError(f"unexpected git call {args}")
 
     monkeypatch.setattr(no_leaks, "git", fake_git)
     return calls
+
+
+def _stub_git_bytes(monkeypatch, blob: bytes):
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git_bytes(*args: str, cwd=None) -> bytes:
+        calls.append(args)
+        return blob
+
+    monkeypatch.setattr(no_leaks, "git_bytes", fake_git_bytes)
+    return calls
+
+
+def _binary_diff(path: str, *, deleted: bool = False) -> str:
+    if deleted:
+        return (
+            f"diff --git a/{path} b/{path}\n"
+            f"deleted file mode 100644\n"
+            f"index 1111111..0000000\n"
+            f"Binary files a/{path} and /dev/null differ\n"
+        )
+    return (
+        f"diff --git a/{path} b/{path}\n"
+        f"new file mode 100644\n"
+        f"index 0000000..1111111\n"
+        f"Binary files /dev/null and b/{path} differ\n"
+    )
 
 
 def _repo(tmp_path: Path, config: Config | None = None) -> Repo:
@@ -389,3 +418,48 @@ def test_a_failing_diff_refuses(monkeypatch, tmp_path):
     monkeypatch.setattr(no_leaks, "git", boom)
     monkeypatch.setattr(no_leaks, "discover", lambda: _repo(tmp_path))
     assert _local(monkeypatch, tmp_path) == 2
+
+
+def test_a_gitattributes_marked_binary_file_with_no_nul_byte_is_scanned_as_text(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_real_binary_file_with_a_nul_byte_is_skipped(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, b"\x00" + EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_deleted_binary_marked_file_reads_no_post_image_blob(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", deleted=True))
+    assert _local(monkeypatch, tmp_path) == 0
+    assert calls == []
+
+
+def test_the_cached_form_reads_the_staged_blob_by_path(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _local(monkeypatch, tmp_path)
+    assert calls == [("show", ":fixture.bin")]
+
+
+def test_the_range_form_reads_the_post_image_blob_at_the_ranges_tip(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    diff_calls = _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"), rev_parse="deadbeef\n^cafebabe\n")
+    _range(monkeypatch, tmp_path)
+    assert calls == [("show", "deadbeef:fixture.bin")]
+    assert ("rev-parse", "base..HEAD") in diff_calls
+
+
+def test_a_diff_with_no_binary_entry_never_calls_rev_parse_or_show(monkeypatch, tmp_path):
+    show_calls = _stub_git_bytes(monkeypatch, b"")
+    diff_calls = _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
+    _local(monkeypatch, tmp_path)
+    assert show_calls == []
+    assert all(call[0] != "rev-parse" for call in diff_calls)
