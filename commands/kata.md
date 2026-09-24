@@ -1,5 +1,5 @@
 ---
-description: Pick a ready ticket, slice it, push it through review, wait for LGTM, merge. `/kata` runs the whole ready queue; `/kata <N>` runs one ticket.
+description: Pick a model-labelled ticket, slice it, push it through review, wait for LGTM, merge. `/kata` runs the whole model-label queue; `/kata <N>` runs one ticket.
 ---
 
 # Kata
@@ -8,20 +8,23 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
 
 ## Queue
 
-- `/kata` — every issue labelled `ready`. Tickets also labelled size:tiny that
-  share one `model:<name>` label group into batches of at most five, each
-  batch taking its oldest ticket's queue position — a longer tiny queue splits
-  into more batches. Kata's own judgment may pull a ticket out of a batch it
-  finds not tiny; it never adds an unlabelled ticket to one.
+- `/kata` — every open issue labelled `model:haiku`, `model:sonnet`,
+  `model:opus` or `model:fable`. An unlabelled ticket was never in the queue.
+  Tickets also labelled size:tiny that share one `model:<name>` label group
+  into batches of at most five, each batch taking its oldest ticket's queue
+  position — a longer tiny queue splits into more batches. Kata's own
+  judgment may pull a ticket out of a batch it finds not tiny; it never adds
+  an unlabelled ticket to one.
 - `/kata <N>` — just ticket `N`, alone, even when it carries size:tiny.
   Batching only happens in whole-queue `/kata`. Naming a ticket in plain
   English is the same authorisation as the label.
 
-Read each ticket's `model:<name>` label before dispatch. A repo missing the
-`ready`/`model:*` labels, or a ticket missing one: create what's missing, then
-continue — this loop creates labels and repo config on demand, the same way
-the labels `rules/tickets.md`'s Follow-ups section requires get created if
-missing. It never adds `ready` or `model:<name>` to an untriaged follow-up.
+Read each ticket's `model:<name>` label before dispatch. Triage adding it is
+the approval, so kata never creates or adds a `model:*` label at dispatch —
+it only creates repo config and labels on demand the way the labels
+`rules/tickets.md`'s Follow-ups section requires get created if missing.
+`/kata <N>` on a ticket with no model label asks which model before
+dispatching.
 
 ## Dispatch
 
@@ -93,10 +96,13 @@ another lane's live agents.
 
 ## Acceptance
 
-`/kata 3` against a `ready` + `model:sonnet` ticket #3 ends with an open PR
-whose body has `Closes #3` and, when applicable, a Human-testing section — and
-a worktree that is gone once that PR merges.
+`/kata 3` against a `model:sonnet` ticket #3 ends with an open PR whose body
+has `Closes #3` and, when applicable, a Human-testing section — and a
+worktree that is gone once that PR merges.
 
-`/kata` over three `ready` + size:tiny + `model:sonnet` tickets and one plain
-`ready` ticket opens two PRs, one of them with a `Closes #N` line for all
-three tiny tickets.
+`/kata` over three size:tiny `model:sonnet` tickets and one plain
+`model:sonnet` ticket opens two PRs, one of them with a `Closes #N` line for
+all three tiny tickets.
+
+`/kata` over one `model:haiku` ticket and one unlabelled ticket dispatches
+only the first, on haiku.
