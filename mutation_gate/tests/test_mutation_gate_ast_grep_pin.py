@@ -11,7 +11,7 @@ from mutation_gate.mutants import PINNED_AST_GREP_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-PIN_RE = re.compile(r"ast-grep-cli==(\d+\.\d+\.\d+)")
+PIN_RE = re.compile(r"ast-grep-cli(==[^\s\"'\]]*)?")
 
 PIN_SITES = (
     "pyproject.toml",
@@ -23,8 +23,8 @@ PIN_SITES = (
 
 
 @pytest.mark.parametrize("rel", PIN_SITES)
-def test_every_pin_site_pins_ast_grep_cli_to_the_pinned_version(rel):
+def test_every_ast_grep_cli_reference_is_pinned_to_the_pinned_version(rel):
     text = (REPO_ROOT / rel).read_text()
-    found = PIN_RE.findall(text)
-    assert found, f"{rel}: no ast-grep-cli==X.Y.Z pin found"
-    assert set(found) == {PINNED_AST_GREP_VERSION}
+    pins = PIN_RE.findall(text)
+    assert pins, f"{rel}: no ast-grep-cli reference found"
+    assert pins == [f"=={PINNED_AST_GREP_VERSION}"] * len(pins)

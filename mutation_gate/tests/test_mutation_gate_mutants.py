@@ -616,18 +616,36 @@ def test_staged_dry_run_says_skipped_when_the_gdscript_parser_is_not_ready(
     assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
 
 
-def test_require_ast_grep_warns_once_when_the_installed_version_differs_from_the_pin(
+def test_require_ast_grep_prints_one_warning_line_naming_both_versions_on_a_mismatch(
     monkeypatch, capsys
 ):
+    calls = []
+
+    def fake_run(cmd, *args, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ast-grep 0.44.1\n", stderr="")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    mutants.require_ast_grep()
+    assert calls == [["ast-grep", "--version"]]
+    assert capsys.readouterr().err == (
+        "mutation-gate: ast-grep 0.44.1 on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version\n"
+    )
+
+
+def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, capsys):
+    installed = mutants.PINNED_AST_GREP_VERSION.rsplit(".", 1)[0] + ".999"
+    assert installed != mutants.PINNED_AST_GREP_VERSION
     stubbed = subprocess.CompletedProcess(
-        ["ast-grep", "--version"], 0, stdout="ast-grep 0.44.1\n", stderr=""
+        ["ast-grep", "--version"], 0, stdout=f"ast-grep {installed}\n", stderr=""
     )
     monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
     mutants.require_ast_grep()
     err = capsys.readouterr().err
     assert err.count("\n") == 1
-    assert "0.44.1" in err
-    assert mutants.PINNED_AST_GREP_VERSION in err
+    assert installed in err
 
 
 def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
@@ -640,3 +658,31 @@ def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
     monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
     mutants.require_ast_grep()
     assert capsys.readouterr().err == ""
+
+
+def test_cli_dry_run_surfaces_the_ast_grep_version_warning_on_a_real_gate_run(
+    tmp_path, monkeypatch, capsys
+):
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    (tmp_path / "a.py").write_text("x = 1\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+
+    real_run = mutants.subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if cmd == ["ast-grep", "--version"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="ast-grep 0.44.1\n", stderr="")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert (
+        "mutation-gate: ast-grep 0.44.1 on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version"
+    ) in err
