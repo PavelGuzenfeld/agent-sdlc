@@ -99,6 +99,16 @@ def test_core_concept_reject_list_resolves_to_its_concept(tmp_path, monkeypatch,
     assert out == "count: noun, verb\n  num is a rejected synonym of count\n"
 
 
+def test_mined_core_resolves_src_to_source_and_made_to_make(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("src", capsys)
+    assert code == 0
+    assert out == "source: noun\n  src is a rejected synonym of source\n"
+    code, out, _ = _lookup("made", capsys)
+    assert code == 0
+    assert out == "make: verb\n  made is the -ed form of make\n"
+
+
 def test_canonical_lookup_lists_the_derived_forms(tmp_path, monkeypatch, capsys):
     _repo(tmp_path, monkeypatch, OPTED_IN, MERGE + 'forms = ["-s", "-ed", "-ing", "-er"]\n')
     code, out, _ = _lookup("merge", capsys)
@@ -225,9 +235,9 @@ def test_reject_spelling_that_is_canonical_elsewhere_is_refused(tmp_path):
 
 
 def test_derived_form_colliding_with_another_concept_is_refused(tmp_path):
-    text = ('[[concept]]\nword = "loader"\nmeaning = "x"\npos = ["noun"]\n'
-            '[[concept]]\nword = "load"\nmeaning = "y"\npos = ["verb"]\nforms = ["-er"]\n')
-    assert "`loader` (form) is already canonical `loader`" in _refusal(tmp_path, text)
+    text = ('[[concept]]\nword = "prowler"\nmeaning = "x"\npos = ["noun"]\n'
+            '[[concept]]\nword = "prowl"\nmeaning = "y"\npos = ["verb"]\nforms = ["-er"]\n')
+    assert "`prowler` (form) is already canonical `prowler`" in _refusal(tmp_path, text)
 
 
 def test_same_concept_may_spell_a_form_like_its_own_word(tmp_path):
@@ -245,7 +255,7 @@ def test_distinct_pair_naming_a_non_canonical_word_is_refused(tmp_path):
 
 def test_distinct_pair_of_canonical_words_loads(tmp_path):
     loaded = _domain(tmp_path, '[[distinct]]\npair = ["frame", "index"]\n')
-    assert loaded.distinct == frozenset({frozenset({"frame", "index"})})
+    assert frozenset({"frame", "index"}) in loaded.distinct
 
 
 def test_distinct_entry_that_is_not_a_pair_is_refused(tmp_path):

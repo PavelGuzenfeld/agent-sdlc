@@ -1,10 +1,11 @@
 """WordNet synonym check on dictionary additions (#110; decisions 12, 37 of
-#103). A canonical word a diff adds to any dictionary layer blocks when it
+#103). A canonical word a diff adds to any dictionary layer collides when it
 shares a WordNet synset, restricted to the parts of speech both concepts
 declare, with an existing canonical word — unless the pair is in
-`[[distinct]]` or waived. `vocabulary_synonyms = "report"` turns the block
-into a report line. nltk is optional at import time; a missing install or
-unfetchable data refuses only once a dictionary change needs a lookup.
+`[[distinct]]` or waived. The default `vocabulary_synonyms = "report"`
+prints a report line; `"block"` turns a collision into a refusal. nltk is
+optional at import time; a missing install or unfetchable data refuses
+only once a dictionary change needs a lookup.
 """
 
 from __future__ import annotations
