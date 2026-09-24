@@ -455,6 +455,29 @@ def test_a_modified_real_binary_file_with_a_nul_byte_is_skipped(monkeypatch, tmp
     assert _local(monkeypatch, tmp_path) == 0
 
 
+def test_a_modified_binary_marked_files_blob_is_fetched_by_the_new_sha_not_the_old(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _local(monkeypatch, tmp_path)
+    assert calls == [("cat-file", "-p", "2222222")]
+
+
+def test_the_range_form_blocks_a_leak_in_a_modified_binary_marked_file(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _range(monkeypatch, tmp_path) == 1
+    assert "fixture.bin:1" in capsys.readouterr().err
+
+
+def test_a_failing_blob_read_for_a_binary_marked_file_refuses(monkeypatch, tmp_path):
+    def boom(*args, cwd=None):
+        raise GateError("git cat-file: fatal")
+
+    monkeypatch.setattr(no_leaks, "git_bytes", boom)
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    assert _local(monkeypatch, tmp_path) == 2
+
+
 def test_the_range_form_skips_a_real_binary_file_with_a_nul_byte(monkeypatch, tmp_path):
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
