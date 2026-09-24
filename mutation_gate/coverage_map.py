@@ -225,6 +225,13 @@ def _cache_path(repo: Repo, target: str, fingerprint: str) -> Path:
     return CACHE_ROOT / repo.key / "coverage" / f"{safe}.{fingerprint}.json"
 
 
+def _cov_scope(target: str) -> str:
+    """`--cov=<dir>/<file>.py` warns module-not-imported and yields no contexts
+    (#133); the containing directory still gets measured, and `_read_contexts`
+    narrows the result back down to `target` by path."""
+    return str(Path(target).parent)
+
+
 def covering_tests(
     repo: Repo, target: str, cands: list[Path], fingerprint: str
 ) -> dict[int, list[str]]:
@@ -239,7 +246,7 @@ def covering_tests(
         return {}
     lang_cfg = repo.config.for_language("python")
     rels = " ".join(str(p.relative_to(repo.root)) for p in cands)
-    cmd = lang_cfg.coverage_command.format(file=target, tests=rels)
+    cmd = lang_cfg.coverage_command.format(file=_cov_scope(target), tests=rels)
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
     # Overrunning leaves no contexts, which widens selection to the whole suite.
     runner.run_capped(repo, cmd, repo.config.baseline_timeout)
@@ -251,12 +258,11 @@ def covering_tests(
 
 
 def _numbits_to_lines(numbits: bytes) -> list[int]:
-    """Decode coverage.py's per-context line bitmap: byte i, bit j -> source
-    line i * 8 + j + 1. Read directly so the host needs no `coverage` install —
-    the container that ran the instrumented tests is the only place that
-    package belongs (decision behind #49)."""
+    """Decode coverage.py's line bitmap: byte i, bit j -> line i*8+j, matching
+    coveragepy's own `nums_to_numbits` (#133). Read directly so the host needs
+    no `coverage` install (decision behind #49)."""
     return [
-        i * 8 + j + 1
+        i * 8 + j
         for i, byte in enumerate(numbits)
         for j in range(8)
         if byte & (1 << j)

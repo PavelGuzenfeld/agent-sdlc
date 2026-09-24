@@ -65,14 +65,20 @@ def gated(tmp_path, monkeypatch):
     """Gate one file whose mutants all end in `outcome`, returning what the run
     printed and whether it blocked."""
 
-    def _run(outcomes: list[str], config: repo_mod.Config, baseline: float):
+    def _run(
+        outcomes: list[str],
+        config: repo_mod.Config,
+        baseline: float,
+        cover: dict | None = None,
+        rel: str = "src/x.py",
+    ):
         repo = repo_mod.Repo(root=tmp_path, origin="", remotes=(), config=config)
         (tmp_path / "t.py").write_text("x\n")
         seen: dict = {"lines": []}
 
         monkeypatch.setattr(cli.coverage_map, "candidates", lambda *a: [tmp_path / "t.py"])
         monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
-        monkeypatch.setattr(cli.coverage_map, "covering_tests", lambda *a: {})
+        monkeypatch.setattr(cli.coverage_map, "covering_tests", lambda *a: cover if cover is not None else {})
         monkeypatch.setattr(cli.token, "is_valid", lambda *a: False)
         monkeypatch.setattr(cli.token, "write", lambda *a: None)
         monkeypatch.setattr(cli.mutants, "generate", lambda *a: [MUTANT] * len(outcomes))
@@ -86,7 +92,7 @@ def gated(tmp_path, monkeypatch):
 
         monkeypatch.setattr(cli.runner, "classify", fake_classify)
         monkeypatch.setattr(cli, "_emit", lambda line="": seen["lines"].append(line))
-        blocked, _survivors, _cands = cli._gate_file(repo, "src/x.py", {1}, [])
+        blocked, _survivors, _cands = cli._gate_file(repo, rel, {1}, [])
         seen["blocked"] = blocked
         return seen
 
@@ -126,6 +132,21 @@ def test_a_run_with_no_timeouts_stays_quiet_about_them(gated):
     seen = gated([runner.KILLED, runner.KILLED], repo_mod.Config(), baseline=1.0)
     assert seen["blocked"] is False
     assert not any("timed out" in line for line in seen["lines"])
+
+
+def test_empty_coverage_says_so_instead_of_silently_widening(gated):
+    seen = gated([runner.KILLED], repo_mod.Config(), baseline=1.0, cover={})
+    assert any("coverage came back empty" in line for line in seen["lines"])
+
+
+def test_nonempty_coverage_stays_quiet_about_the_empty_notice(gated):
+    seen = gated([runner.KILLED], repo_mod.Config(), baseline=1.0, cover={1: ["t.py::test_x"]})
+    assert not any("coverage came back empty" in line for line in seen["lines"])
+
+
+def test_a_non_python_target_never_gets_the_empty_coverage_notice(gated):
+    seen = gated([runner.KILLED], repo_mod.Config(), baseline=1.0, cover={}, rel="src/x.cpp")
+    assert not any("coverage came back empty" in line for line in seen["lines"])
 
 
 def test_a_survivor_alongside_a_timeout_still_blocks_and_both_are_reported(gated):

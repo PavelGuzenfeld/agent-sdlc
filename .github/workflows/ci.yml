@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh
+      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh && sh tests/activity.sh
 
   mutation-gate-tests:
     runs-on: ubuntu-latest
@@ -87,6 +87,7 @@ jobs:
           sh tests/no-leaks-hook.sh
           sh tests/worktree-shim-hook.sh
           sh tests/hook-stages.sh
+          sh tests/mutants-diff-prefix.sh
 
   docs:
     runs-on: ubuntu-latest
