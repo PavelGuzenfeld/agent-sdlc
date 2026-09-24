@@ -978,7 +978,17 @@ names = [
   "setUp", "tearDown", "setUpClass", "tearDownClass",
   "tmp_path", "tmp_path_factory", "tmpdir", "monkeypatch", "capsys", "capfd", "caplog",
   "request", "recwarn", "pytestconfig",
-  "_ready", "_process", "_physics_process", "_input",
+  "_init", "_get", "_set", "_get_property_list", "_to_string", "_notification",
+  "_iter_get", "_iter_init", "_iter_next", "_property_can_revert", "_property_get_revert",
+  "_validate_property",
+  "_enter_tree", "_exit_tree", "_ready", "_process", "_physics_process", "_input",
+  "_unhandled_input", "_unhandled_key_input", "_shortcut_input", "_get_configuration_warnings",
+  "_get_accessibility_configuration_warnings", "_get_focused_accessibility_element",
+  "_draw",
+  "_gui_input", "_can_drop_data", "_drop_data", "_get_drag_data", "_get_cursor_shape",
+  "_get_minimum_size", "_get_maximum_size", "_get_tooltip", "_has_point",
+  "_make_custom_tooltip", "_structured_text_parser", "_accessibility_get_contextual_info",
+  "_get_accessibility_container_name", "_get_tooltip_auto_translate_mode_at",
 ]
 prefixes = ["_on_"]
 
