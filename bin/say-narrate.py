@@ -12,7 +12,7 @@ import threading
 
 import numpy as np
 
-BIN = os.path.expanduser("~/.claude/bin")
+BIN = os.path.join(os.environ.get("CLAUDE_PLUGIN_ROOT") or os.path.expanduser("~/.claude"), "bin")
 DIR = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "claude-say")
 KOKORO_DATA = os.path.expanduser("~/.local/share/kokoro")
 SAMPLE_RATE = 24000

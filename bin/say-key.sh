@@ -2,7 +2,7 @@
 # WezTerm toggle key. speaking -> stop; armed -> disarm; fresh -> speak; already spoken -> arm.
 set -eu
 
-BIN="$HOME/.claude/bin"
+BIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin"
 DIR="${XDG_RUNTIME_DIR:-/tmp}/claude-say"
 P="$DIR/p${1:?usage: say-key.sh <wezterm-pane-id>}"
 

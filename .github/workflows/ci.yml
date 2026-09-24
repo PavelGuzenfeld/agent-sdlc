@@ -24,13 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: pip install numpy pytest pyyaml
-      - run: pytest skills/sol-budget/tests
+      - run: pytest skills/sol-budget/tests tests/test_say_narrate_bin.py
 
   bin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh && sh tests/activity.sh
+      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh && sh tests/activity.sh && sh tests/say-plugin-root.sh && sh tests/mutation-gate-hook.sh
 
   mutation-gate-tests:
     runs-on: ubuntu-latest

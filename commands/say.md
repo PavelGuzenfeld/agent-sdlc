@@ -8,14 +8,14 @@ Speak your immediately preceding response aloud.
 
 ## Instructions
 
-Run `sh ~/.claude/bin/say-trigger.sh <voice> <speed> <extra>` and reply with one short
-line and nothing else — never a summary of what was spoken. The command returns
-immediately; narration and playback happen outside this conversation. If it fails,
-that one line is the error.
+Run `sh "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin/say-trigger.sh" <voice> <speed> <extra>`
+and reply with one short line and nothing else — never a summary of what was
+spoken. The command returns immediately; narration and playback happen outside
+this conversation. If it fails, that one line is the error.
 
 The rendering itself is generated out of context by Claude Haiku from the rules in
-`~/.claude/bin/say-prompt.md`. Do not write a rendering yourself and do not restate
-those rules here — that file is the only copy.
+`${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin/say-prompt.md`. Do not write a rendering
+yourself and do not restate those rules here — that file is the only copy.
 
 `ctrl+shift+s` does the same thing without costing a turn: it speaks the pane's last
 answer, stops playback if something is already speaking, and arms itself if the answer

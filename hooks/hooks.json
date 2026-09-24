@@ -8,6 +8,14 @@
             "command": "sh ${CLAUDE_PLUGIN_ROOT}/bin/say-hook.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/bin/mutation-gate-hook.sh"
+          }
+        ]
       }
     ],
     "PreToolUse": [
