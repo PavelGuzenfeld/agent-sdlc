@@ -386,6 +386,19 @@ def test_tsx_hook_shaped_arrow_function_keeps_the_function_mold(tmp_path):
     assert _findings(tmp_path, "ui/a.tsx", "const useCount = () => {};\n", {1}) == []
 
 
+def test_tsx_hook_declared_with_the_function_keyword_keeps_the_function_mold(tmp_path):
+    assert _findings(tmp_path, "ui/a.tsx", "function useCount() {}\n", {1}) == []
+
+
+def test_tsx_hook_with_an_unknown_word_blocks_as_a_function_not_a_type(tmp_path):
+    found = _findings(tmp_path, "ui/a.tsx", "const useFrob = () => {};\n", {1})
+    assert found == ["1:function:useFrob:`Frob` is not in the dictionary:"]
+
+
+def test_tsx_pascal_case_function_that_passes_is_checked_on_the_type_mold(tmp_path):
+    assert _findings(tmp_path, "ui/a.tsx", "function FrameViewer() {}\n", {1}) == []
+
+
 def test_ts_pascal_case_function_stays_on_the_function_mold_outside_tsx(tmp_path):
     found = _findings(tmp_path, "ui/a.ts", "function FrameViewer() {}\n", {1})
     assert [f.split(":")[:2] for f in found] == [["1", "function"]]
@@ -393,7 +406,10 @@ def test_ts_pascal_case_function_stays_on_the_function_mold_outside_tsx(tmp_path
 
 def test_tsx_pascal_case_function_ending_in_ing_blocks_as_a_type(tmp_path):
     found = _findings(tmp_path, "ui/a.tsx", "function FrameParsing() {}\n", {1})
-    assert [f.split(":")[:2] for f in found] == [["1", "type"]]
+    assert found == [
+        "1:type:FrameParsing:a type takes a noun phrase ending in a noun, never an -ing form:"
+        "ParsingFrame"
+    ]
 
 
 def test_ts_interface_i_prefix_blocks_as_a_non_local_symbol(tmp_path):
@@ -426,6 +442,28 @@ def test_ts_private_keyword_field_with_no_underscore_at_all_blocks_suggesting_tr
 def test_ts_private_member_with_trailing_underscore_passes(tmp_path, field):
     text = f"class Frame {{\n  {field}\n}}\n"
     assert _findings(tmp_path, "ui/a.ts", text, {2}) == []
+
+
+@pytest.mark.parametrize("method, name", [
+    ("private run(): void {}", "run"), ("#run(): void {}", "#run"),
+])
+def test_ts_private_method_without_trailing_underscore_blocks(tmp_path, method, name):
+    text = f"class Frame {{\n  {method}\n}}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2}) == [
+        f"2:method:{name}:a private member takes a trailing `_`:{name}_"
+    ]
+
+
+@pytest.mark.parametrize("method", ["private run_(): void {}", "#run_(): void {}"])
+def test_ts_private_method_with_trailing_underscore_passes(tmp_path, method):
+    text = f"class Frame {{\n  {method}\n}}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2}) == []
+
+
+def test_ts_private_method_leaves_the_getter_and_setter_alone(tmp_path):
+    text = ("class Frame {\n  get count(): number { return 1; }\n"
+            "  set count(v: number) {}\n}\n")
+    assert _findings(tmp_path, "ui/a.ts", text, {2, 3}) == []
 
 
 def test_ts_getter_takes_the_variable_mold_and_setter_is_exempt(tmp_path):
@@ -565,6 +603,13 @@ def test_gdscript_private_variable_leading_underscore_blocks_suggesting_trailing
     assert [(f.kind, f.rule, f.suggestion) for f in found] == [
         ("variable", vocabulary_check.RULE_LEADING_UNDERSCORE, "health_")
     ]
+
+
+def test_gdscript_trailing_underscore_variable_and_function_pass(tmp_path):
+    _require_gdscript_parser()
+    text = "var health_ := 100\nfunc run_():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1, 2}}, []) == []
 
 
 def test_gdscript_private_function_leading_underscore_blocks_suggesting_trailing(tmp_path):

@@ -156,7 +156,15 @@ _TS_PRIVATE_FIELD_NAME = {"any": [
         "kind": "public_field_definition", "field": "name",
         "has": {"kind": "accessibility_modifier", "regex": "^private$"}}},
 ]}
+_TS_METHOD_NOT_ACCESSOR = {"kind": "method_definition", "field": "name",
+                           "not": {"regex": r"^(get|set)\b"}}
+_TS_PRIVATE_METHOD_NAME = {"any": [
+    {"kind": "private_property_identifier", "inside": _TS_METHOD_NOT_ACCESSOR},
+    {"kind": "property_identifier", "inside": {
+        **_TS_METHOD_NOT_ACCESSOR, "has": {"kind": "accessibility_modifier", "regex": "^private$"}}},
+]}
 RULE_FIELD_PRIVATE = "field_private"
+RULE_METHOD_PRIVATE = "method_private"
 
 RULES["typescript"] = {
     "function": _TS_FUNCTION_NAME,
@@ -164,6 +172,7 @@ RULES["typescript"] = {
     "property": _TS_GETTER,
     "field": _TS_FIELD_NAME,
     RULE_FIELD_PRIVATE: _TS_PRIVATE_FIELD_NAME,
+    RULE_METHOD_PRIVATE: _TS_PRIVATE_METHOD_NAME,
 }
 RULES["tsx"] = {
     "function": {"all": [_TS_FUNCTION_NAME, {"not": _TS_PASCAL}]},
@@ -171,6 +180,7 @@ RULES["tsx"] = {
     "property": _TS_GETTER,
     "field": _TS_FIELD_NAME,
     RULE_FIELD_PRIVATE: _TS_PRIVATE_FIELD_NAME,
+    RULE_METHOD_PRIVATE: _TS_PRIVATE_METHOD_NAME,
 }
 
 _GD_GETTER = {"field": "setget", "kind": "setget", "has": {"field": "get", "kind": "get_body"}}
@@ -319,9 +329,9 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         for line, kind, name in declarations(repo.root / rel, lang, config):
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
-            if kind == RULE_FIELD_PRIVATE:
+            if kind in (RULE_FIELD_PRIVATE, RULE_METHOD_PRIVATE):
                 faults = private_trailing(dictionary, name)
-                reported_kind = "field"
+                reported_kind = "field" if kind == RULE_FIELD_PRIVATE else "method"
             else:
                 faults = judge(dictionary, kind, name, catalogue)
                 reported_kind = kind
