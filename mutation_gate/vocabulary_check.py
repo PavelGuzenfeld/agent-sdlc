@@ -202,8 +202,8 @@ def _gd_function_parameters(conventions: frozenset[str]) -> dict:
 
 
 def _gd_parameter_rule(conventions: frozenset[str]) -> dict:
-    """A default value's own reference (`= MAX_SPEED`) sits in the wrapper's
-    unfielded position too; excluded so a reference stays unscanned (module intent)."""
+    """A default's own reference (`= MAX_SPEED`) is also a direct child of the wrapper,
+    in its `value` field; excluded so a reference stays unscanned (module intent)."""
     scopes = {"any": [_GD_CONSTRUCTOR_PARAMETERS, _gd_function_parameters(conventions),
                        _GD_SIGNAL_PARAMETERS]}
     return {"kind": "identifier", "any": [

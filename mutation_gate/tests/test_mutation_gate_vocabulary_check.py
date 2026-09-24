@@ -897,9 +897,10 @@ def test_gdscript_non_virtual_underscore_function_parameter_still_blocks(tmp_pat
     text = "func _run(frob):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in [
-        (f.line, f.kind, f.rule, f.name) for f in found
-    ]
+    assert {(f.line, f.kind, f.rule, f.name) for f in found} == {
+        (1, "function", vocabulary_check.RULE_LEADING_UNDERSCORE, "_run"),
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob"),
+    }
 
 
 def test_gdscript_autoconnect_handler_parameter_still_blocks(tmp_path):
@@ -907,8 +908,8 @@ def test_gdscript_autoconnect_handler_parameter_still_blocks(tmp_path):
     text = "func _on_button_pressed(frob):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in [
-        (f.line, f.kind, f.rule, f.name) for f in found
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
     ]
 
 
