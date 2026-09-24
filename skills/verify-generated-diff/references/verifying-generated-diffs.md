@@ -46,72 +46,18 @@ one-line edit rebuild the world.
 
 ### 0.2 The harness
 
-Save as `tools/mutate.sh`, `chmod +x`. It refuses to run on a dirty file and
-restores on any exit path, including Ctrl-C.
-
-```bash
-#!/usr/bin/env bash
-# usage: mutate.sh <file> <literal-old> <literal-new> [ctest-regex]
-# Exactly-one-occurrence substitution, build, test, classify, revert.
-set -uo pipefail
-
-FILE="$1"; OLD="$2"; NEW="$3"; TESTS="${4:-.}"
-BUILD="${BUILD_DIR:-build}"
-TARGET="${BUILD_TARGET:-}"
-
-if ! git diff --quiet -- "$FILE" || ! git diff --cached --quiet -- "$FILE"; then
-  echo "REFUSING: $FILE is dirty. Commit or stash first." >&2
-  exit 2
-fi
-
-restore() { git checkout -- "$FILE"; }
-trap restore EXIT INT TERM
-
-python3 - "$FILE" "$OLD" "$NEW" <<'PY' || exit 3
-import sys, pathlib
-p = pathlib.Path(sys.argv[1]); old, new = sys.argv[2], sys.argv[3]
-s = p.read_text(); n = s.count(old)
-if n != 1:
-    sys.exit(f"pattern occurs {n} times, need exactly 1")
-p.write_text(s.replace(old, new, 1))
-PY
-
-BUILD_ARGS=(--build "$BUILD" -j"$(nproc)")
-[ -n "$TARGET" ] && BUILD_ARGS+=(--target "$TARGET")
-
-if ! cmake "${BUILD_ARGS[@]}" >/tmp/mut_build.log 2>&1; then
-  printf 'BUILD-FAIL  %-28s %s -> %s\n' "$FILE" "$OLD" "$NEW"
-  exit 0
-fi
-
-if ctest --test-dir "$BUILD" -R "$TESTS" >/tmp/mut_test.log 2>&1; then
-  printf 'SURVIVED    %-28s %s -> %s\n' "$FILE" "$OLD" "$NEW"
-else
-  printf 'KILLED      %-28s %s -> %s\n' "$FILE" "$OLD" "$NEW"
-fi
-```
-
-### 0.3 The batch runner
+Use this skill's `scripts/mutate.sh` and `scripts/run_mutants.sh`; the inline
+copy that used to be here predated their baseline and untracked-file guards.
 
 Mutants are worth keeping, so put them in a file rather than typing them.
-`tools/mutants.tsv`, tab-separated, `#` for comments:
+`mutants.tsv`, tab-separated, `#` for comments, `<DELETE>` for a deletion —
+never an empty field:
 
 ```
 # file<TAB>old<TAB>new<TAB>ctest-regex
 src/trk/gate.cpp	d2 < gate_sq	d2 <= gate_sq	trk_gate
 src/trk/gate.cpp	d2 < gate_sq	true	trk_gate
 src/trk/predict.cpp	dt * dt / 2.0	dt * dt	trk_predict
-```
-
-```bash
-#!/usr/bin/env bash
-# usage: tools/run_mutants.sh [mutants.tsv]
-set -uo pipefail
-FILE="${1:-tools/mutants.tsv}"
-while IFS=$'\t' read -r f old new tests; do
-  [[ -z "${f:-}" || "$f" == \#* ]] && continue
-  tools/mutate.sh "$f" "$old" "$new" "${tests:-.}"
-done < "$FILE"
 ```
 
 Baseline first — if the suite is red before you start, every result is noise:
@@ -157,7 +103,7 @@ The **stub** is the important one and the awkward one to express as a string
 substitution. Match the line right after the signature:
 
 ```bash
-BUILD_TARGET=trk_filter_test tools/mutate.sh src/trk/gate.cpp \
+BUILD_TARGET=trk_filter_test scripts/mutate.sh src/trk/gate.cpp \
   'bool Gate::accept(const Meas& m) const {' \
   'bool Gate::accept(const Meas& m) const { return true;' \
   trk_gate
@@ -169,7 +115,7 @@ For a `void` function, stub with a bare `return;`. For one returning a struct,
 ### Step 3: run and classify
 
 ```bash
-BUILD_TARGET=trk_filter_test tools/run_mutants.sh
+BUILD_TARGET=trk_filter_test scripts/run_mutants.sh
 ```
 
 Four outcomes, three of which are informative:
@@ -227,7 +173,7 @@ Same harness, `new` is the empty string. Substitution must be exactly one
 occurrence, so include enough surrounding text:
 
 ```bash
-tools/mutate.sh src/trk/track.cpp \
+scripts/mutate.sh src/trk/track.cpp \
   '  if (!m.valid) return;
 ' \
   '' \
@@ -441,12 +387,12 @@ git tag -f reviewed                          # read pointer
 git diff --stat -M reviewed | tail -1        # comprehension debt
 
 # Pass A — do the tests test anything?
-BUILD_TARGET=x_test tools/run_mutants.sh     # boundary / constant / branch / stub
+BUILD_TARGET=x_test scripts/run_mutants.sh     # boundary / constant / branch / stub
 #   SURVIVED on a stub  = test is worthless
 #   SURVIVED otherwise  = write the killing test, from the spec
 
 # Pass B — is it load-bearing?
-tools/mutate.sh <file> '<guard>' '' <tests>
+scripts/mutate.sh <file> '<guard>' '' <tests>
 #   SURVIVED + breaking input exists  = untested, write the test
 #   SURVIVED + invariant guaranteed   = delete
 #   SURVIVED + unsure                 = assert + counter

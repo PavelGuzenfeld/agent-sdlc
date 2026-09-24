@@ -17,7 +17,7 @@ inside a repo that opts in. `mutation-gate rules check` catches drift from
 that sync; it's wired in as the `rules-check` pre-commit hook.
 
 Add `--deps` to install the tools the pack expects on `PATH`:
-`git gh jq docker python3 ast-grep pytest`, plus `mutation-gate` itself.
+`git gh jq docker python3 ast-grep pytest pre-commit`, plus `mutation-gate` itself.
 
 ```bash
 ./install.sh --target claude --deps
@@ -64,9 +64,9 @@ it runs.
 
 ## The gate
 
-Every commit and every session Stop also runs `mutation-gate`: it mutates
-your diff and blocks on any mutant your tests don't kill. That's a separate
-component (`mutation_gate/`, tracked in
-[#8](https://github.com/PavelGuzenfeld/agent-sdlc/issues/8)) with its own
+In a repo with a `.mutation-gate.toml`, every session Stop also runs
+`mutation-gate`, and so does every commit once the repo's pre-commit config
+wires the hook: it mutates your diff and blocks on any mutant your tests
+don't kill. That's a separate component (`mutation_gate/`) with its own
 waiver file. See [Gate](gate.md) for how it fires and what to do when it
 blocks you.

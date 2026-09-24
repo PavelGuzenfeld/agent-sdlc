@@ -38,7 +38,7 @@ fi
 
 if ! git ls-files --error-unmatch "$FILE" >/dev/null 2>&1; then
   echo "REFUSED: $FILE is untracked — 'git checkout --' cannot restore it." >&2
-  echo "         Commit it first (git add -A && git commit) so revert is safe." >&2
+  echo "         Commit it first (git add \"$FILE\" && git commit) so revert is safe." >&2
   exit 2
 fi
 

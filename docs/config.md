@@ -1,7 +1,7 @@
 # Config
 
-Every key `.mutation-gate.toml` accepts. An unknown key is a `GateError` at
-load time.
+Every key `.mutation-gate.toml` accepts. An unknown top-level, `languages.*`
+or `[[golden]]` key is a `GateError` at load time.
 
 | Key | Default | What it does |
 |---|---|---|
@@ -15,7 +15,7 @@ load time.
 | `languages` | `{}` | `[languages.<name>]` tables, each a `test_paths`/`test_globs`/`test_command`/`coverage_command`/`coverage_data_file` override, for a repo gating more than one language. |
 | `exclude_paths` | `[]` | Path prefixes the gate never touches; announced on every skip. |
 | `model_paths` | `[]` | Path prefixes in scope for model V&V, declared, never inferred; `rules sync` also builds `model-vv.md`'s `paths:` frontmatter from this. |
-| `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live: a repo-relative file, or `issue:N` for a GitHub issue. |
+| `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live. The rules require `issue:N`, a GitHub issue; the file default is legacy and the gate still reads it. |
 | `model_test_paths` | `[]` | Test paths that must cite an `MS-n` spec line. |
 | `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a keyword-probe hit outside `model_paths` that isn't model code. |
 | `golden` | `[]` | `[[golden]]` entries, each a `source` and an `artifact`: a generated F/Q artefact and the SymPy source its hash is checked against. |
@@ -26,9 +26,9 @@ load time.
 | `closure_depth` | `1` | Import hops from a test to the mutated file that still count as covering it. |
 | `import_roots` | `[]` | Extra repo-root-relative import roots for a src layout with no `sys.path.insert` in the test files. |
 | `no_comments` | `false` | Blocks on a comment line the diff added. |
-| `vocabulary` | `""` | Path to the repo's own vocabulary file, layered over the packaged core dictionary; empty uses the core dictionary alone. |
+| `vocabulary` | `""` | Path to the repo's own vocabulary file, layered over the packaged core dictionary; empty turns the gate's vocabulary checks off, and `vocabulary lookup` uses the core dictionary alone. |
 | `vocabulary_molds` | `{}` | Per-kind naming molds `vocabulary lookup --kind` checks names against; narrows the built-in set, never widens. |
-| `vocabulary_synonyms` | `"block"` | `"block"` fails a WordNet-synonym collision on a dictionary addition; `"report"` turns it into a report line. |
+| `vocabulary_synonyms` | `"report"` | `"report"` prints a WordNet-synonym collision on a dictionary addition as a report line; `"block"` fails it. |
 | `own_namespaces` | `[]` | Origin substrings this checkout is allowed to gate under; outside all of them reads as a fork. The `MUTATION_GATE_OWN_NAMESPACES` env var overrides this when set. |
 | `doc_allow` | `[]` | `[[doc_allow]]` entries, each a `glob` and a `reason`: a new `.md` file the built-in allowlist doesn't cover. |
 | `banned_names_file` | `""` | Path to a file of `X → Y` lines `no-leaks` must reject from the staged diff and commit message. |

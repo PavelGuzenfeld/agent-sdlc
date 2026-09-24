@@ -10,7 +10,7 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
 
 - `/kata` — every open issue labelled `model:haiku`, `model:sonnet`,
   `model:opus` or `model:fable`. An unlabelled ticket was never in the queue.
-  Tickets also labelled size:tiny that share one `model:<name>` label group
+  Follow-ups also labelled size:tiny that share one `model:<name>` label group
   into batches of at most five, each batch taking its oldest ticket's queue
   position — a longer tiny queue splits into more batches. Kata's own
   judgment may pull a ticket out of a batch it finds not tiny; it never adds
@@ -26,8 +26,8 @@ Read each ticket's `model:<name>` label before dispatch. Triage adding it is
 the approval, so kata never creates or adds a `model:*` label at dispatch —
 it only creates repo config and labels on demand the way the labels
 `rules/tickets.md`'s Follow-ups section requires get created if missing.
-`/kata <N>` on a ticket with no model label asks which model before
-dispatching.
+`/kata <N>` on a ticket with no model label asks which model; that answer is
+the triage, so kata adds its `model:<name>` label, then dispatches.
 
 ## Dispatch
 
@@ -75,7 +75,8 @@ A ticket the agent finds not tiny mid-batch: it reverts that ticket's changes
 off the branch, drops its `Closes #N` line, strips its size:tiny label with a
 one-line comment giving the reason, then finishes the rest of the batch. That
 ticket reports as pulled, not closed, and returns to the queue as a single
-run.
+run. If it is the batch's oldest ticket, stop the batch instead; the branch
+name depends on it.
 
 At work: stop once CI is green on the pushed sha, never sooner. No self-merge,
 ever, regardless of LGTM.
@@ -91,7 +92,7 @@ comments — never open a second PR for the same ticket or batch.
 
 Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
 removes the worktree, then deletes the branch with `git branch -D`, which the
-guardrail allows once the branch's tip is that merged PR's head. The merge
+guardrail allows once the branch's tip is that merged PR's head or an ancestor of it. The merge
 closes every ticket still in it through its own `Closes #N` line.
 
 Run `/done`'s tail without its handoff step or its agent-checkpoint step —

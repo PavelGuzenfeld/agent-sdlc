@@ -9,8 +9,8 @@ Codex.
 ## Install
 
 `./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
-`skills/`, `commands/` and `bin/` into `~/.claude` and `~/.codex`, renders
-`commands/` as Codex skills, merges the hooks from `settings.example.json`
+`skills/` into `~/.claude` and `~/.codex`, `commands/` and `bin/` into
+`~/.claude`, renders `commands/` as Codex skills, merges the hooks from `settings.example.json`
 and, with `--deps`, installs the tooling (`--deps=say` adds the Kokoro TTS
 stack). A second run changes nothing. It installs `ast-grep-cli` via pipx,
 which puts an `sg` shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it

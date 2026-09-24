@@ -34,7 +34,7 @@ tracker. Triage adds a `model:*` label once the ticket is the plan — the
 label names who runs it and is itself the approval; from there the SDLC
 chart applies. No preamble, no restated brief, no closing summary.
 
-Triage itself uses two skills, depending on how settled the ask already is.
+Triage itself uses two commands, depending on how settled the ask already is.
 A raw idea with open questions goes through
 [`/grill`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/commands/grill.md):
 one question at a time, recommended answer first, until nothing is left

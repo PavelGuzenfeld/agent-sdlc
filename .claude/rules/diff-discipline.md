@@ -8,7 +8,7 @@ physical quantity — especially in real-time or ICD-facing code.
 - Reach for the standard library before hand-rolling it, and a native platform
   feature before a new dependency.
 - About to patch around, wrap, or reimplement behaviour a third-party dependency
-  owns: stop and run `/upstream` — the fix may belong in the dependency.
+  owns: stop and ask the user to run `/upstream` — the fix may belong in the dependency.
 - No new file, dependency, abstraction-with-one-caller, or config knob unasked.
 - Before finalizing, delete every added line not required by the requirement, an
   existing test, or the safety of the code path.
@@ -26,5 +26,5 @@ A multi-line or syntax-shaped edit to code goes through `ast-grep run -p ... -r 
 then the repo's formatter (`ruff format`, `prettier --write`): ast-grep gets the
 structure right and the **layout wrong**. `sed`/`perl` only for prose, config and
 single-line literals — a regex alternation matches across lines and eats them.
-`sg` is NOT ast-grep here; it is the `setgroup` binary. Always `ast-grep`.
+`sg` is ambiguous: `/usr/bin/sg` is newgrp's alias, and ast-grep-cli's shim can shadow it. Always `ast-grep`.
 Use it to audit too: a structural question deserves a pattern, not a grep heuristic.
