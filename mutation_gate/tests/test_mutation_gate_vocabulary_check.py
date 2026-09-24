@@ -829,9 +829,21 @@ def test_gdscript_constructor_parameter_with_unknown_word_blocks(tmp_path):
     text = "func _init(frob):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert [(f.kind, f.rule, f.name) for f in found] == [
-        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
     ]
+
+
+def test_gdscript_constructor_typed_and_default_parameters_are_checked(tmp_path):
+    _require_gdscript_parser()
+    text = "func _init(frobtype: int, frobdefault = 1, frobboth: int = 1):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert {(f.kind, f.rule, f.name) for f in found} == {
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobtype"),
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobdefault"),
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobboth"),
+    }
 
 
 def test_gdscript_constructor_itself_passes_with_a_known_parameter(tmp_path):
