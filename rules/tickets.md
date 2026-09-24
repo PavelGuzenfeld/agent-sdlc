@@ -38,9 +38,9 @@ form's label.
 
 The filer proposes `size:tiny` when the ticket is tiny: its evidence names
 one location, it leaves no design choice open, and it needs no new file,
-dependency or config key. The maintainer confirms the proposal by adding
-`ready`. A follow-up is never born with `ready` or `model:<name>`, and a
-label-creation step must never add either to an untriaged follow-up.
+dependency or config key. The maintainer confirms the proposal by adding its
+model label. A follow-up is never born with a `model:<name>` label, and a
+label-creation step must never add one to an untriaged follow-up.
 
 Labels are created if missing; if creation is refused, file without them
 rather than drop the item.
