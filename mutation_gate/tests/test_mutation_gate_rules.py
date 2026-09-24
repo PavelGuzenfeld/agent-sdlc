@@ -201,6 +201,21 @@ def test_follow_up_filers_point_to_the_tickets_rule_instead_of_naming_labels(pat
     assert "rules/tickets.md" in content
 
 
+def test_kata_batches_confirmed_tiny_tickets_onto_one_batch_branch():
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "never batch tickets onto a shared branch" not in normalized
+    assert "size:tiny" in normalized
+    assert "batches of at most five" in normalized
+    assert "oldest ticket" in normalized
+    assert "never adds an unlabelled ticket" in normalized
+    assert "reverts that ticket's changes off the branch" in normalized
+    assert "returns to the queue as a single run" in normalized
+    assert "`/kata <N>`" in normalized
+    assert "alone, even when it carries size:tiny" in normalized
+    assert "opens two PRs" in normalized
+
+
 def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
     core_words = set(vocabulary.load(Path("."), "").concepts)
     content = (rules.RULES_DIR / "naming.md").read_text()
