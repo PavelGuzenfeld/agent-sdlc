@@ -38,6 +38,21 @@ expect_allow() {
     fi
 }
 
+expect_block_reason() {
+    target="$1"; label="$2"; name="$3"; needle="$4"
+    set +e
+    stderr=$(run "$target" "$5" 2>&1 >/dev/null)
+    code=$?
+    set -e
+    if [ "$code" -ne 2 ]; then
+        echo "FAIL: [$label] $name (expected exit 2, got $code)" >&2
+        failures=$((failures + 1))
+    elif ! printf '%s' "$stderr" | grep -Fq -- "$needle"; then
+        echo "FAIL: [$label] $name (exit 2 but stderr missing '$needle'): $stderr" >&2
+        failures=$((failures + 1))
+    fi
+}
+
 run_case_table() {
     target="$1"; label="$2"
 
@@ -98,12 +113,42 @@ fi
 STUB
     chmod +x "$stub_dir/gh"
 
+    fail_stub_dir=$(mktemp -d)
+    cat >"$fail_stub_dir/gh" <<'STUB'
+#!/bin/sh
+exit 1
+STUB
+    chmod +x "$fail_stub_dir/gh"
+
+    empty_stub_dir=$(mktemp -d)
+    cat >"$empty_stub_dir/gh" <<'STUB'
+#!/bin/sh
+printf '[]'
+STUB
+    chmod +x "$empty_stub_dir/gh"
+
+    minimal_bin=$(mktemp -d)
+    for t in sh git jq sed grep tr; do
+        ln -s "$(command -v "$t")" "$minimal_bin/$t"
+    done
+
     orig_path=$PATH
     export PATH="$stub_dir:$orig_path"
     expect_allow "$repo_script" "$label" "tip equals merged PR head"       "git -C $tmp branch -D merged-ok"
     expect_block "$repo_script" "$label" "tip one commit past merged head" "git -C $tmp branch -D one-past"
-    export PATH="/usr/bin:/bin"
-    expect_block "$repo_script" "$label" "no gh on PATH"                  "git -C $tmp branch -D merged-ok"
+
+    export PATH="$minimal_bin"
+    expect_block_reason "$repo_script" "$label" "no gh on PATH" "no gh on PATH" \
+        "git -C $tmp branch -D merged-ok"
+
+    export PATH="$fail_stub_dir:$orig_path"
+    expect_block_reason "$repo_script" "$label" "gh exits non-zero" "gh failed" \
+        "git -C $tmp branch -D merged-ok"
+
+    export PATH="$empty_stub_dir:$orig_path"
+    expect_block_reason "$repo_script" "$label" "gh reports no merged PR" "no merged PR" \
+        "git -C $tmp branch -D merged-ok"
+
     export PATH="$orig_path"
 
     expect_allow "$repo_script" "$label" "quoted text mentioning it is not a real invocation" \

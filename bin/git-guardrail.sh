@@ -23,8 +23,11 @@ check_delete_branch_head() {
         command -v gh >/dev/null 2>&1 || { printf 'no gh on PATH to verify %s' "$b"; exit 1; }
         tip=$(git rev-parse --verify --quiet "refs/heads/$b" 2>/dev/null) || tip=""
         [ -n "$tip" ] || { printf 'no local branch %s' "$b"; exit 1; }
-        json=$(gh pr list --head "$b" --state merged --json headRefOid 2>/dev/null) || json=""
-        [ -n "$json" ] || { printf 'no merged PR found for %s' "$b"; exit 1; }
+        gh_status=0
+        json=$(gh pr list --head "$b" --state merged --json headRefOid 2>/dev/null) || gh_status=$?
+        [ "$gh_status" -eq 0 ] || { printf 'gh failed listing merged PRs for %s' "$b"; exit 1; }
+        count=$(printf '%s' "$json" | jq 'length' 2>/dev/null) || count=""
+        [ "$count" != "0" ] && [ -n "$count" ] || { printf 'no merged PR found for %s' "$b"; exit 1; }
         printf '%s' "$json" | jq -e --arg t "$tip" 'any(.[]; .headRefOid == $t)' >/dev/null 2>&1 \
             || { printf '%s tip does not match its merged PR head' "$b"; exit 1; }
     )
