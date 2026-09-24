@@ -330,20 +330,22 @@ def test_an_unset_banned_names_file_still_blocks_the_generic_scan(monkeypatch, t
     assert _local(monkeypatch, tmp_path) == 1
 
 
-_DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+_DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
 
 
 def test_local_form_uses_the_staged_index(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _local(monkeypatch, tmp_path)
-    assert (*_DIFF_ARGS, "--cached") in calls
+    assert calls == [(*_DIFF_ARGS, "--cached")]
 
 
 def test_range_form_diffs_the_given_range_and_walks_its_commit_messages(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _range(monkeypatch, tmp_path)
-    assert (*_DIFF_ARGS, "base..HEAD") in calls
-    assert ("log", "-z", "base..HEAD", "--pretty=format:%H%x1f%B") in calls
+    assert calls == [
+        (*_DIFF_ARGS, "base..HEAD"),
+        ("log", "-z", "base..HEAD", "--pretty=format:%H%x1f%B"),
+    ]
 
 
 def test_range_form_blocks_a_banned_name_in_a_ranged_commit_message(monkeypatch, tmp_path, capsys, banned_config):
