@@ -73,17 +73,19 @@ else rather than guessing.
 - **Day row:** Active is the union over the merged work+personal event stream. Span is
   the union of the work and personal brackets, so a gap between an afternoon work block
   and an evening personal block is not counted as time at the desk.
-- **Work vs personal:** by directory. `~/personalspace*` is personal; **everything
-  else is work**, including `-tmp` and any project dir added later. Nothing is dropped.
-- **Commits:** yours only (`--author` matches Pavel), deduped by SHA so a worktree pair
-  like `foo`/`foo-worktree` counts once. Git stash entries are filtered out.
+- **Work vs personal:** by directory under `$HOME`. Dirs named in `ACTIVITY_PERSONAL_DIRS`
+  (default `personalspace`) are personal; **everything else is work**, including `-tmp`
+  and any project dir added later. Nothing is dropped.
+- **Commits:** yours only, matched via `git config user.name`/`user.email` (override with
+  `ACTIVITY_AUTHOR`), deduped by SHA so a worktree pair like `foo`/`foo-worktree` counts
+  once. Git stash entries are filtered out.
 - **Excluded:** `<session>/subagents/*.jsonl` — subagents run inside a parent session,
   so counting them double-counts the parent's hours.
 
 ## Caveats to carry into the report
 
-- `~/workspace/gst-nvmm-cpp` is the public `PavelGuzenfeld/gst-nvmm-cpp` repo living
-  under the work directory. The directory rule counts it as work. Say so.
+- A public repo can live under a work directory (a personal open-source project
+  checked out alongside client work). The directory rule still counts it as work. Say so.
 - Active can exceed Span on a day whose last event is followed by a long gap: the
   30-minute capped tail lands inside that day but past the last event.
 - Truncated transcripts abort `jq` mid-file; the parsed prefix is kept and the rest of
@@ -106,6 +108,18 @@ MONTH="${1:-$(date +%Y-%m)}"
 export TZ="${ACTIVITY_TZ:-Asia/Jerusalem}"
 CAP="${ACTIVITY_GAP_CAP:-1800}"
 PROJECTS="$HOME/.claude/projects"
+PERSONAL_DIRS="${ACTIVITY_PERSONAL_DIRS:-personalspace}"
+BASE_DIRS="${ACTIVITY_DIRS:-workspace personalspace}"
+HOME_ENC=$(printf '%s' "$HOME" | sed 's#/#-#g')
+AUTHOR="${ACTIVITY_AUTHOR:-}"
+if [ -z "$AUTHOR" ]; then
+  AUTHOR=$(git config --get user.name 2>/dev/null || true)
+  email=$(git config --get user.email 2>/dev/null || true)
+  [ -n "$email" ] && AUTHOR="${AUTHOR:+$AUTHOR\\|}$email"
+fi
+home_esc=$(printf '%s' "$HOME" | sed -e 's/\\/\\\\/g' -e 's/\./\\./g')
+alt=$(printf '%s' "$BASE_DIRS" | tr ' ' '|')
+home_regex="$home_esc/($alt)/[A-Za-z0-9._-]+"
 
 month_start=$(date -d "$MONTH-01 00:00:00" +%s)
 next_month=$(date -d "$MONTH-01 +32 days" +%Y-%m)
@@ -124,8 +138,11 @@ done > "$work/bounds"
 while IFS= read -r -d '' f; do
   dir=$(basename "$(dirname "$f")")
   sid=$(basename "$f" .jsonl)
-  case "$dir" in -home-pavelgu-personalspace*) space=personal ;; *) space=work ;; esac
-  label=${dir#-home-pavelgu-}; [ -n "$label" ] || label=$dir
+  space=work
+  for pd in $PERSONAL_DIRS; do
+    case "$dir" in "$HOME_ENC-$pd"*) space=personal ;; esac
+  done
+  label=${dir#"$HOME_ENC"-}; [ -n "$label" ] || label=$dir
 
   jq -r --arg s "$space" --arg i "$sid" \
     'select(.timestamp)|.timestamp|sub("\\.[0-9]+Z$";"Z")|fromdateiso8601|"\($s)\t\($i)\t\(.)"' \
@@ -270,43 +287,50 @@ BEGIN{ OFS="\t"
   while((getline l < DF)>0){split(l,a," "); ok[a[1]"/"a[2]]=1}
   while((getline l < BF)>0){split(l,b,"\t"); nd++; dn[nd]=b[1]; ds[nd]=b[2]+0}
   for(i=1;i<=nd;i++) de[i]=(i<nd?ds[i+1]:ds[nd]+86400)
+  np=split(PD, pdarr, " "); for(i=1;i<=np;i++) pset[pdarr[i]]=1
+  hlen=length(HOMEDIR)
 }
 { if (match($0, /"timestamp":"[0-9T:.Z-]+"/)) ts=substr($0,RSTART+13,RLENGTH-14); else next
   t=to_epoch(ts); day=0
   for(j=1;j<=nd;j++) if(t>=ds[j] && t<de[j]){day=j; break}
   if(!day) next
   delete seen; s=$0
-  while (match(s, /\/home\/pavelgu\/(workspace|personalspace)\/[A-Za-z0-9._-]+/)) {
-    p=substr(s,RSTART,RLENGTH); s=substr(s,RSTART+RLENGTH); n=split(p,a,"/")
-    if(n>=5 && !(a[5] in seen) && ((a[4]"/"a[5]) in ok)){ seen[a[5]]=1
-      c[dn[day] OFS ((a[4]=="personalspace")?"personal":"work") OFS a[5]]++ } }
+  while (match(s, HR)) {
+    p=substr(s,RSTART,RLENGTH); s=substr(s,RSTART+RLENGTH)
+    rest=substr(p, hlen+2); n=split(rest,a,"/")
+    if(n>=2 && !(a[2] in seen) && ((a[1]"/"a[2]) in ok)){ seen[a[2]]=1
+      c[dn[day] OFS ((a[1] in pset)?"personal":"work") OFS a[2]]++ } }
 }
 END{ for(k in c) print c[k], k }
 AWKEOF
 
 : > "$work/dirs"
-for b in "$HOME/workspace" "$HOME/personalspace"; do
-  for p in "$b"/*/; do [ -d "$p" ] && echo "$(basename "$b") $(basename "$p")" >> "$work/dirs"; done
+for bd in $BASE_DIRS; do
+  for p in "$HOME/$bd"/*/; do [ -d "$p" ] && echo "$bd $(basename "$p")" >> "$work/dirs"; done
 done
 
 echo "###REPOS###"
 find "$PROJECTS" -mindepth 2 -maxdepth 2 -name '*.jsonl' -print0 |
-  xargs -0 -r gawk -v DF="$work/dirs" -v BF="$work/bounds" -f "$work/repos.awk" |
+  xargs -0 -r gawk -v DF="$work/dirs" -v BF="$work/bounds" -v PD="$PERSONAL_DIRS" -v HR="$home_regex" \
+    -v HOMEDIR="$HOME" -f "$work/repos.awk" |
   sort -t$'\t' -k2,2 -k1,1nr
 
 echo "###COMMITS###"
 : > "$work/craw"
-for b in "$HOME/workspace" "$HOME/personalspace"; do
-  sp=work; [ "$b" = "$HOME/personalspace" ] && sp=personal
-  for p in "$b"/*/; do
-    git -C "$p" rev-parse --git-dir >/dev/null 2>&1 || continue
-    id=$(git -C "$p" remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)$|\1|; s|\.git$||')
-    [ -n "$id" ] || id=$(basename "$p")
-    git -C "$p" log --all --since="$MONTH-01 -10 days" --until="$next_month-05" \
-      --author='PavelGuzenfeld\|pavelguzenfeld\|Pavel' \
-      --date=format-local:'%Y-%m-%d' --pretty="%H%x09%ad%x09$sp%x09$id%x09%s" 2>/dev/null >> "$work/craw" || true
+if [ -n "$AUTHOR" ]; then
+  for bd in $BASE_DIRS; do
+    sp=work
+    for pd in $PERSONAL_DIRS; do [ "$bd" = "$pd" ] && sp=personal; done
+    for p in "$HOME/$bd"/*/; do
+      git -C "$p" rev-parse --git-dir >/dev/null 2>&1 || continue
+      id=$(git -C "$p" remote get-url origin 2>/dev/null | sed 's|.*[:/]\([^/]*/[^/]*\)$|\1|; s|\.git$||')
+      [ -n "$id" ] || id=$(basename "$p")
+      git -C "$p" log --all -i --since="$MONTH-01 -10 days" --until="$next_month-05" \
+        --author="$AUTHOR" \
+        --date=format-local:'%Y-%m-%d' --pretty="%H%x09%ad%x09$sp%x09$id%x09%s" 2>/dev/null >> "$work/craw" || true
+    done
   done
-done
+fi
 sort -u "$work/craw" | gawk -F'\t' -v M="$MONTH" '!seen[$1]++ && $2 ~ "^" M' \
   | grep -v $'\t\(index on\|On \|untracked files on\|WIP on\)' | cut -f2- | sort
 ```
