@@ -11,7 +11,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
@@ -326,14 +325,6 @@ def _literal_mutants(
     return out
 
 
-GDSCRIPT_MUTATION_SKIPPED = ("gdscript mutation skipped: no sgconfig.yml — install "
-                              "the parser with bin/install-gdscript-parser and commit one")
-
-
-def _emit(line: str) -> None:
-    print(line, file=sys.stderr)
-
-
 def _gdscript_config(root: Path) -> Path | None:
     from . import vocabulary_check
     return vocabulary_check._gdscript_ready(root)
@@ -343,22 +334,14 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
     """Every catalogue site landing on a changed line. No budget (decision 8).
     A GDScript file is skipped, not refused, when the parser is not ready."""
     out: list[Mutant] = []
-    gdscript_config: Path | None = None
-    gdscript_checked = False
     for rel, lines in sorted(files.items()):
         path = root / rel
         if not path.exists():
             continue
         lang = language_of(rel) or language
-        if lang == "gdscript":
-            if not gdscript_checked:
-                gdscript_config = _gdscript_config(root)
-                gdscript_checked = True
-                if gdscript_config is None:
-                    _emit(GDSCRIPT_MUTATION_SKIPPED)
-            if gdscript_config is None:
-                continue
-        config = gdscript_config if lang == "gdscript" else None
+        config = _gdscript_config(root) if lang == "gdscript" else None
+        if lang == "gdscript" and config is None:
+            continue
         data = path.read_bytes()
         starts = _line_starts(data)
         spans = masked_spans(path, lang, config)
