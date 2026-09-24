@@ -36,6 +36,25 @@ printf '%s\n' "$out" | grep -q 'new.c: void \*p = malloc(4);' \
 
 rm -rf "$repo"
 
+no_index_repo=$(mktemp -d)
+git -C "$no_index_repo" init -q -b main
+git -C "$no_index_repo" -c user.email=s -c user.name=s commit -q --allow-empty -m init
+git -C "$no_index_repo" tag reviewed
+rm -f "$no_index_repo/.git/index"
+
+printf 'void *p = malloc(4);\n' > "$no_index_repo/new.c"
+
+no_index_out=$(cd "$no_index_repo" && bash "$script")
+
+no_index_status="$(git -C "$no_index_repo" status --porcelain)"
+[ "$no_index_status" = "?? new.c" ] || fail "survey.sh must work with no index file yet" \
+    "got status: $no_index_status"
+
+printf '%s\n' "$no_index_out" | grep -qE 'files added +: 1' \
+    || fail "survey.sh did not count the untracked file with no index file yet"
+
+rm -rf "$no_index_repo"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1

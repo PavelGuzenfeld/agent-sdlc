@@ -43,7 +43,7 @@ d()  { git diff -M "$BASE" "$@" -- "${EX[@]}"; }
 # otherwise not appear in the review at all.
 scratch_index=$(mktemp)
 trap 'rm -f "$scratch_index"' EXIT
-cp "$(git rev-parse --git-path index)" "$scratch_index" 2>/dev/null || true
+cp "$(git rev-parse --git-path index)" "$scratch_index" 2>/dev/null || rm -f "$scratch_index"
 GIT_INDEX_FILE="$scratch_index"
 export GIT_INDEX_FILE
 git add -A -N >/dev/null 2>&1 || true
