@@ -424,19 +424,35 @@ def test_name_splits_on_case_and_underscore_with_digit_chunks_whole(name, expect
 
 def test_core_convention_list_is_loaded_from_the_packaged_core(tmp_path):
     dictionary = vocabulary.load(tmp_path, "")
-    assert {"main", "self", "setUp", "monkeypatch"} <= dictionary.conventions
+    assert {"main", "self", "setUp", "monkeypatch"} <= dictionary.convention_for("python").names
+
+
+def test_core_convention_list_does_not_leak_python_names_into_gdscript(tmp_path):
+    dictionary = vocabulary.load(tmp_path, "")
+    leaked = dictionary.convention_for("gdscript").names & (
+        dictionary.convention_for("python").names | dictionary.convention_for("cpp").names
+    )
+    assert leaked == set()
 
 
 def test_core_convention_list_carries_gdscript_engine_virtuals_and_autoconnect_prefix(tmp_path):
     dictionary = vocabulary.load(tmp_path, "")
-    assert {"_ready", "_process", "_physics_process", "_input"} <= dictionary.conventions
-    assert "_on_" in dictionary.convention_prefixes
+    convention = dictionary.convention_for("gdscript")
+    assert {"_ready", "_process", "_physics_process", "_input"} <= convention.names
+    assert "_on_" in convention.prefixes
 
 
 @pytest.mark.parametrize("name", GODOT_ENGINE_VIRTUALS)
 def test_core_convention_list_carries_every_godot_engine_virtual(tmp_path, name):
     dictionary = vocabulary.load(tmp_path, "")
-    assert name in dictionary.conventions
+    assert name in dictionary.convention_for("gdscript").names
+
+
+def test_lookup_with_no_file_falls_back_to_the_union_across_languages(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(vocabulary, "discover", lambda cwd=None: Repo(
+        root=tmp_path, origin="", remotes=(), config=Config()))
+    assert cli.main(["vocabulary", "lookup", "--kind", "function", "_ready"]) == 0
+    assert capsys.readouterr().out == "_ready: fits the function mold\n"
 
 
 def test_gated_files_drops_non_gated_languages_and_excluded_paths(tmp_path, monkeypatch):
@@ -581,8 +597,28 @@ def test_ts_setter_with_an_unknown_word_is_still_exempt(tmp_path):
     assert _findings(tmp_path, "ui/a.ts", text, {2, 3}) == []
 
 
+def test_python_on_prefix_no_longer_borrows_the_gdscript_exemption(tmp_path):
+    found = _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1})
+    assert found == [
+        "1:variable:_on_button_pressed:a leading `_` is not the private mark; "
+        "private is a trailing `_`:on_button_pressed_",
+        "1:variable:_on_button_pressed:`on_` starts the handler mold, not open to a variable:",
+    ]
+
+
+def test_python_ready_no_longer_borrows_the_gdscript_convention_name(tmp_path):
+    found = _findings(tmp_path, "pkg/a.py", "_ready = 1\n", {1})
+    assert found == [
+        "1:variable:_ready:a leading `_` is not the private mark; private is a trailing `_`:ready_",
+        "1:variable:_ready:a variable takes a noun phrase, with at most one prepositional tail:",
+    ]
+
+
 def test_on_prefix_is_exempt_via_the_core_convention_list(tmp_path):
-    assert _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1}) == []
+    _require_gdscript_parser()
+    text = "func _on_button_pressed():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
 
 
 def _without_gdscript_conventions(monkeypatch, keep_prefixes=True, keep_ready=True):
@@ -590,24 +626,31 @@ def _without_gdscript_conventions(monkeypatch, keep_prefixes=True, keep_ready=Tr
 
     def _loaded(root, domain):
         d = real_load(root, domain)
-        prefixes = d.convention_prefixes if keep_prefixes else frozenset()
-        conventions = d.conventions if keep_ready else d.conventions - {"_ready"}
-        return vocabulary.Dictionary(d.concepts, d.matches, d.collections, d.distinct,
-                                     conventions, prefixes)
+        convention = d.conventions["gdscript"]
+        prefixes = convention.prefixes if keep_prefixes else frozenset()
+        names = convention.names if keep_ready else convention.names - {"_ready"}
+        conventions = {**d.conventions, "gdscript": vocabulary.Convention(names, prefixes)}
+        return vocabulary.Dictionary(d.concepts, d.matches, d.collections, d.distinct, conventions)
 
     monkeypatch.setattr(vocabulary_check.vocabulary, "load", _loaded)
 
 
 def test_on_prefix_exemption_is_read_from_the_dictionary_not_hardcoded(tmp_path, monkeypatch):
+    _require_gdscript_parser()
     _without_gdscript_conventions(monkeypatch, keep_prefixes=False)
-    assert _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1}) != []
+    text = "func _on_button_pressed():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) != []
 
 
 def test_ready_convention_name_exemption_is_read_from_the_dictionary_not_hardcoded(
     tmp_path, monkeypatch
 ):
+    _require_gdscript_parser()
     _without_gdscript_conventions(monkeypatch, keep_ready=False)
-    assert _findings(tmp_path, "pkg/a.py", "_ready = 1\n", {1}) != []
+    text = "func _ready():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) != []
 
 
 def test_gdscript_missing_message_names_the_install_script(tmp_path, capsys):
@@ -949,6 +992,40 @@ def test_gdscript_engine_virtual_exemption_does_not_bleed_into_the_next_function
     assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
         (3, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
     ]
+
+
+def test_gdscript_function_named_like_a_python_convention_still_checks_its_parameter(tmp_path):
+    """#250: `main` is a Python/C++ entrypoint convention, not a Godot engine
+    virtual; it must not skip a GDScript function's own parameters."""
+    _require_gdscript_parser()
+    text = "func main(frob):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert {(f.line, f.kind, f.rule, f.name) for f in found} == {
+        (1, "function", vocabulary_check.RULE_UNKNOWN_WORD, "main"),
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob"),
+    }
+
+
+def test_gdscript_request_function_from_the_ticket_still_checks_its_parameter(tmp_path):
+    """#250's own repro: `request` is a pytest fixture name, not a GDScript one."""
+    _require_gdscript_parser()
+    text = "func request(url):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert {(f.line, f.kind, f.rule, f.name) for f in found} == {
+        (1, "function", vocabulary_check.RULE_UNKNOWN_WORD, "request"),
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "url"),
+    }
+
+
+def test_cpp_argc_parameter_of_main_is_still_exempt(tmp_path):
+    found = _findings(tmp_path, "src/k.cpp", "int main(int argc, char** argv) {\n  return 0;\n}\n", {1})
+    assert found == []
+
+
+def test_python_entrypoint_function_and_its_argv_parameter_pass(tmp_path):
+    assert _findings(tmp_path, "pkg/a.py", "def main(argv):\n    pass\n", {1, 2}) == []
 
 
 def test_gdscript_non_virtual_underscore_function_parameter_still_blocks(tmp_path):

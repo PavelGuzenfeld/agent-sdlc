@@ -50,16 +50,34 @@ class Match:
 
 
 @dataclass(frozen=True)
+class Convention:
+    names: frozenset[str]
+    prefixes: frozenset[str]
+
+
+_EMPTY_CONVENTION = Convention(frozenset(), frozenset())
+
+
+@dataclass(frozen=True)
 class Dictionary:
     concepts: dict[str, Concept]
     matches: dict[str, Match]
     collections: frozenset[str]
     distinct: frozenset[frozenset[str]]
-    conventions: frozenset[str]
-    convention_prefixes: frozenset[str]
+    conventions: dict[str, Convention]
 
     def resolve(self, word: str) -> Match | None:
         return self.matches.get(word)
+
+    def convention_for(self, lang: str) -> Convention:
+        """A known `lang` gets only its own names/prefixes; blank (no file, e.g. the
+        standalone CLI lookup or a bare path segment) falls back to their union."""
+        if lang:
+            return self.conventions.get(lang, _EMPTY_CONVENTION)
+        return Convention(
+            frozenset(w for c in self.conventions.values() for w in c.names),
+            frozenset(p for c in self.conventions.values() for p in c.prefixes),
+        )
 
 
 def _emit(line: str) -> None:
@@ -226,10 +244,14 @@ def load(root: Path, domain: str) -> Dictionary:
                 )
             distinct.add(frozenset(pair))
     convention = layers[0][1].get("convention", {})
-    conventions = frozenset(convention.get("names", []))
-    convention_prefixes = frozenset(convention.get("prefixes", []))
-    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct),
-                       conventions, convention_prefixes)
+    names_by_lang = convention.get("names", {})
+    prefixes_by_lang = convention.get("prefixes", {})
+    conventions = {
+        lang: Convention(frozenset(names_by_lang.get(lang, [])),
+                         frozenset(prefixes_by_lang.get(lang, [])))
+        for lang in set(names_by_lang) | set(prefixes_by_lang)
+    }
+    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct), conventions)
 
 
 def describe(match: Match) -> str:
