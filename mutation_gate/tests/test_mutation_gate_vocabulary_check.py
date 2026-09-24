@@ -1109,3 +1109,74 @@ def test_gdscript_default_parameter_value_reference_is_not_scanned_as_a_paramete
     text = "func run(count = MAX_SPEED):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_unused_parameter_leading_underscore_is_exempt(tmp_path):
+    """#251: Godot's own `_unused` idiom silences the engine's warning."""
+    _require_gdscript_parser()
+    text = "func _on_timer_timeout(_health):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_parameter_leading_underscore_still_checks_its_word(tmp_path):
+    _require_gdscript_parser()
+    text = "func run(_frob):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "_frob")
+    ]
+
+
+def test_gdscript_variable_leading_underscore_is_still_not_exempt(tmp_path):
+    _require_gdscript_parser()
+    text = "var _health := 100\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert [(f.kind, f.rule, f.suggestion) for f in found] == [
+        ("variable", vocabulary_check.RULE_LEADING_UNDERSCORE, "health_")
+    ]
+
+
+def test_python_parameter_leading_underscore_still_blocks(tmp_path):
+    found = _findings(tmp_path, "pkg/a.py", "def read(_health):\n    pass\n", {1})
+    assert ("1:parameter:_health:a leading `_` is not the private mark; "
+            "private is a trailing `_`:health_") in found
+
+
+def test_gdscript_judge_exempts_only_the_parameter_kind(tmp_path):
+    """Drives judge() directly (no ast-grep) so the kind/lang scoping is
+    covered even where the real GDScript parser is unavailable."""
+    repo = _repo(tmp_path, OPTED_IN, {})
+    dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    assert vocabulary_check.judge(dictionary, "parameter", "_health", lang="gdscript") == []
+    assert vocabulary_check.judge(dictionary, "variable", "_health", lang="gdscript") == [
+        (vocabulary_check.RULE_LEADING_UNDERSCORE,
+         "a leading `_` is not the private mark; private is a trailing `_`", "health_")
+    ]
+    assert [rule for rule, *_ in vocabulary_check.judge(dictionary, "parameter", "_frob",
+                                                        lang="gdscript")] == [
+        vocabulary_check.RULE_UNKNOWN_WORD
+    ]
+
+
+def test_leading_underscore_audit_exempts_a_gdscript_unused_parameter(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, "", {"game/a.gd": "func _on_timer_timeout(_health):\n\tpass\n",
+                                 "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: "game/a.gd\0")
+    assert vocabulary_check.leading_underscore(repo) == []
+
+
+def test_leading_underscore_audit_parameter_skip_does_not_drop_a_later_row(tmp_path, monkeypatch):
+    """continue, not break: the skipped parameter must not swallow the rest
+    of the file's declarations, without depending on the real parser."""
+    repo = _repo(tmp_path, "", {"game/a.gd": ""})
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: "game/a.gd\0")
+    monkeypatch.setattr(vocabulary_check, "_gdscript_ready", lambda root: repo.root)
+    monkeypatch.setattr(
+        vocabulary_check, "declarations",
+        lambda *a, **k: [(1, "parameter", "_frob"), (2, "variable", "_health")],
+    )
+    assert vocabulary_check.leading_underscore(repo) == [("game/a.gd", 2, "_health", "health_")]
