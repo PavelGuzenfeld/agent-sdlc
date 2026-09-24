@@ -11,6 +11,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
@@ -192,20 +193,24 @@ def changed_lines(root: Path, staged: bool) -> dict[str, set[int]]:
     return {f: lines for f, lines in result.items() if lines}
 
 
-def _ast_grep(path: Path, lang: str, pattern: str, replacement: str) -> list[dict]:
-    """`--pattern=` / `--rewrite=`, never `-p` / `-r`: a pattern starting with a
-    dash (`-$A`, `!$A`) is otherwise parsed as a flag and silently matches
-    nothing, so the catalogue claims coverage it does not have."""
-    proc = subprocess.run(
-        [
+def _ast_grep(
+    path: Path, lang: str, pattern: str, replacement: str, config: Path | None = None
+) -> list[dict]:
+    """`--pattern=` / `--rewrite=`, never `-p` / `-r`: a leading `-` (`-$A`, `!$A`)
+    would else parse as a flag. `config` routes through `scan`, ast-grep's only
+    mode for loading a custom language such as GDScript."""
+    if config is not None:
+        rule = json.dumps({"id": "mutant", "language": lang,
+                           "rule": {"pattern": pattern}, "fix": replacement})
+        cmd = ["ast-grep", "scan", f"--config={config}",
+               f"--inline-rules={rule}", "--json=compact", str(path)]
+    else:
+        cmd = [
             "ast-grep", "run", "-l", lang,
             f"--pattern={pattern}", f"--rewrite={replacement}",
             "--json=compact", str(path),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+        ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode not in (0, 1):
         raise GateError(
             f"ast-grep failed on pattern {pattern!r}: {proc.stderr.strip()[:200]}"
@@ -245,11 +250,14 @@ MASK_KINDS = {
 }
 
 
-def kind_hits(path: Path, lang: str, kind: str) -> list[dict]:
-    proc = subprocess.run(
-        ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)],
-        capture_output=True, text=True, check=False,
-    )
+def kind_hits(path: Path, lang: str, kind: str, config: Path | None = None) -> list[dict]:
+    if config is not None:
+        rule = json.dumps({"id": "kind", "language": lang, "rule": {"kind": kind}})
+        cmd = ["ast-grep", "scan", f"--config={config}",
+               f"--inline-rules={rule}", "--json=compact", str(path)]
+    else:
+        cmd = ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode not in (0, 1):
         detail = proc.stderr.strip().partition("\n")[0]
         raise GateError(f"ast-grep run failed on {path}: {detail or f'exit {proc.returncode}'}")
@@ -261,21 +269,21 @@ def kind_hits(path: Path, lang: str, kind: str) -> list[dict]:
         return []
 
 
-def _kind_spans(path: Path, lang: str) -> list[tuple[int, int]]:
+def _kind_spans(path: Path, lang: str, config: Path | None = None) -> list[tuple[int, int]]:
     """Grammar-driven alternative to `tokenize` for languages it cannot read."""
     return [
         (h["range"]["byteOffset"]["start"], h["range"]["byteOffset"]["end"])
         for kind in MASK_KINDS[lang]
-        for h in kind_hits(path, lang, kind)
+        for h in kind_hits(path, lang, kind, config)
     ]
 
 
-def masked_spans(path: Path, lang: str) -> list[tuple[int, int]]:
+def masked_spans(path: Path, lang: str, config: Path | None = None) -> list[tuple[int, int]]:
     """Byte spans where a literal perturbation cannot be observed: strings and
     comments, which are not code, and the compile-time extents of MASK_KINDS.
     Mutating inside one yields a guaranteed meaningless survivor."""
     if lang in MASK_KINDS:
-        return _kind_spans(path, lang)
+        return _kind_spans(path, lang, config)
     if lang != "python":
         return []
     spans, starts = [], _line_starts(path.read_bytes())
@@ -321,20 +329,45 @@ def _literal_mutants(
     return out
 
 
+GDSCRIPT_MUTATION_SKIPPED = ("gdscript mutation skipped: no sgconfig.yml — install "
+                              "the parser with bin/install-gdscript-parser and commit one")
+
+
+def _emit(line: str) -> None:
+    print(line, file=sys.stderr)
+
+
+def _gdscript_config(root: Path) -> Path | None:
+    from . import vocabulary_check
+    return vocabulary_check._gdscript_ready(root)
+
+
 def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Mutant]:
-    """Every catalogue site landing on a changed line. No budget (decision 8)."""
+    """Every catalogue site landing on a changed line. No budget (decision 8).
+    A GDScript file is skipped, not refused, when the parser is not ready."""
     out: list[Mutant] = []
+    gdscript_config: Path | None = None
+    gdscript_checked = False
     for rel, lines in sorted(files.items()):
         path = root / rel
         if not path.exists():
             continue
         lang = language_of(rel) or language
+        if lang == "gdscript":
+            if not gdscript_checked:
+                gdscript_config = _gdscript_config(root)
+                gdscript_checked = True
+                if gdscript_config is None:
+                    _emit(GDSCRIPT_MUTATION_SKIPPED)
+            if gdscript_config is None:
+                continue
+        config = gdscript_config if lang == "gdscript" else None
         data = path.read_bytes()
         starts = _line_starts(data)
-        spans = masked_spans(path, lang)
+        spans = masked_spans(path, lang, config)
         seen: set[tuple[int, int]] = set()
         for pattern, replacement in CATALOGUE.get(lang, []):
-            for hit in _ast_grep(path, lang, pattern, replacement):
+            for hit in _ast_grep(path, lang, pattern, replacement, config):
                 lineno = hit["range"]["start"]["line"] + 1
                 span = (
                     hit["range"]["byteOffset"]["start"],
