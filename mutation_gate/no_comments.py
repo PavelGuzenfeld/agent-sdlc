@@ -10,7 +10,6 @@ nothing. Runs before any mutant and runs no tests.
 from __future__ import annotations
 
 import re
-import sys
 import tempfile
 from collections import Counter
 from dataclasses import dataclass
@@ -27,12 +26,6 @@ PRAGMA_RE = re.compile(
     r"@ts-expect-error|@ts-ignore|eslint-disable|<reference|istanbul ignore)"
 )
 LICENSE_RE = re.compile(r"SPDX-|copyright|licen[cs]e", re.IGNORECASE)
-GDSCRIPT_MISSING = ("gdscript comments skipped: no sgconfig.yml — install the "
-                    "parser with bin/install-gdscript-parser and commit one")
-
-
-def _emit(line: str) -> None:
-    print(line, file=sys.stderr)
 
 
 @dataclass(frozen=True)
@@ -77,22 +70,14 @@ def _excluded(repo: Repo, rel: str) -> bool:
 
 def check(repo: Repo, changed: dict[str, set[int]], wvs, staged: bool) -> list[Finding]:
     out: list[Finding] = []
-    gdscript_config: Path | None = None
-    gdscript_checked = False
     for rel, lines in sorted(changed.items()):
         lang = mutants.language_of(rel)
         if lang not in LANGUAGES or _excluded(repo, rel) or not (repo.root / rel).exists():
             continue
         mutants.require_ast_grep()
-        if lang == "gdscript":
-            if not gdscript_checked:
-                gdscript_config = mutants._gdscript_config(repo.root)
-                gdscript_checked = True
-                if gdscript_config is None:
-                    _emit(GDSCRIPT_MISSING)
-            if gdscript_config is None:
-                continue
-        config = gdscript_config if lang == "gdscript" else None
+        config = mutants._gdscript_config(repo.root) if lang == "gdscript" else None
+        if lang == "gdscript" and config is None:
+            continue
         touched: list[tuple[int, str]] = []
         untouched: list[str] = []
         for first, last, text in comments(repo.root / rel, lang, config):

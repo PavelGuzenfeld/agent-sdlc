@@ -12,6 +12,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import (
+    GDSCRIPT_BROKEN_SGCONFIG,
+    GDSCRIPT_SGCONFIG,
+    require_gdscript_parser as _require_gdscript_parser,
+)
 
 from mutation_gate import cli, mutants, runner, token, vocabulary, vocabulary_check, vocabulary_path
 from mutation_gate.repo import Config, GateError, Repo
@@ -21,15 +26,6 @@ DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
 LOC = '[reject]\nloc = "position"\n'
 Q_SYMBOL = '[[symbol]]\nword = "Q"\nmeaning = "process noise covariance"\n'
-GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
-GDSCRIPT_SGCONFIG = (
-    "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
-    "\n    extensions: [gd]\n    expandoChar: _\n"
-)
-GDSCRIPT_BROKEN_SGCONFIG = (
-    "customLanguages:\n  gdscript:\n    libraryPath: /nonexistent/gdscript.so\n"
-    "    extensions: [gd]\n    expandoChar: _\n"
-)
 GODOT_ENGINE_VIRTUALS = [
     "_init", "_get", "_set", "_get_property_list", "_to_string", "_notification",
     "_iter_get", "_iter_init", "_iter_next", "_property_can_revert", "_property_get_revert",
@@ -43,11 +39,6 @@ GODOT_ENGINE_VIRTUALS = [
     "_make_custom_tooltip", "_structured_text_parser", "_accessibility_get_contextual_info",
     "_get_accessibility_container_name", "_get_tooltip_auto_translate_mode_at",
 ]
-
-
-def _require_gdscript_parser() -> None:
-    if not GDSCRIPT_LIB.exists():
-        pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -694,6 +685,15 @@ def test_declarations_passes_the_config_flag_for_a_custom_language(tmp_path):
         vocabulary_check.declarations(gd, "gdscript", config)
 
 
+def test_check_does_not_probe_gdscript_readiness_for_a_python_only_diff(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        vocabulary_check, "_gdscript_ready",
+        lambda root: pytest.fail("probed gdscript readiness for a python-only diff"),
+    )
+    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": "position = 1\n"})
+    assert vocabulary_check.check(repo, {"pkg/a.py": {1}}, []) == []
+
+
 def test_gdscript_with_a_broken_library_is_skipped_like_a_missing_one(tmp_path, capsys):
     repo = _repo(tmp_path, OPTED_IN,
                  {"game/a.gd": "signal health_changed\n", "sgconfig.yml": GDSCRIPT_BROKEN_SGCONFIG})
@@ -733,6 +733,18 @@ def test_leading_underscore_skips_a_missing_gdscript_parser_and_still_reaches_th
     err = capsys.readouterr().err
     assert rows == [("pkg/b.py", 1, "_frob", "frob_")]
     assert vocabulary_check.GDSCRIPT_MISSING in err
+
+
+def test_leading_underscore_does_not_probe_gdscript_readiness_for_a_python_only_diff(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        vocabulary_check, "_gdscript_ready",
+        lambda root: pytest.fail("probed gdscript readiness for a python-only diff"),
+    )
+    repo = _repo(tmp_path, "", {"pkg/a.py": "_frob = 1\n"})
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: "pkg/a.py\0")
+    assert vocabulary_check.leading_underscore(repo) == [("pkg/a.py", 1, "_frob", "frob_")]
 
 
 def test_leading_underscore_audit_skips_the_tool_dictated_path_list(tmp_path, monkeypatch, capsys):
