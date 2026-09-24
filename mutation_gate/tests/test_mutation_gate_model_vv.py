@@ -1,6 +1,7 @@
 """Intent: dotfiles#56 — Layer 0 of model-vv.md becomes a hook. The seven
 acceptance steps in the issue's design comment, one failure mode each."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -342,3 +343,47 @@ def test_no_spec_finding_comes_before_the_citation_findings(tmp_path):
         [], staged=False,
     )
     assert _checks(findings) == ["no-spec", "no-citation"]
+
+
+def test_source_error_reads_first_line_of_error_output(monkeypatch, tmp_path):
+    """#202: model_vv.test_extents truncated at 200 chars instead of the
+    first line, so a multi-line ast-grep error gave a multi-line refusal."""
+    fixture = tmp_path / "test_a.py"
+    fixture.write_text("def test_a():\n    assert True\n")
+    first_line = "bad kind " + "x" * 200
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr=f"{first_line}\nsee --help")
+
+    monkeypatch.setattr(model_vv.subprocess, "run", fake_run)
+    with pytest.raises(GateError) as excinfo:
+        model_vv.test_extents(fixture, "python")
+    assert str(excinfo.value).splitlines() == [str(excinfo.value)]
+    assert first_line in str(excinfo.value)
+    assert "see --help" not in str(excinfo.value)
+
+
+def test_source_error_uses_status_code_for_empty_output(monkeypatch, tmp_path):
+    fixture = tmp_path / "test_a.py"
+    fixture.write_text("def test_a():\n    assert True\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="")
+
+    monkeypatch.setattr(model_vv.subprocess, "run", fake_run)
+    with pytest.raises(GateError, match=r"exit 8$"):
+        model_vv.test_extents(fixture, "python")
+
+
+def test_source_error_sends_output_to_reader(monkeypatch, tmp_path):
+    """#202: one helper backs every ast-grep refusal; this pins test_extents'."""
+    fixture = tmp_path / "test_a.py"
+    fixture.write_text("def test_a():\n    assert True\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="boom")
+
+    monkeypatch.setattr(model_vv.subprocess, "run", fake_run)
+    monkeypatch.setattr(model_vv.mutants, "render_error_line", lambda result: "stub-line")
+    with pytest.raises(GateError, match="stub-line"):
+        model_vv.test_extents(fixture, "python")
