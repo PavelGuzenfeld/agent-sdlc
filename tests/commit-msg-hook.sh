@@ -129,6 +129,44 @@ check_editor_message \
     "$(printf 'we should leverage this\n\n; template hint line\n')" \
     1 'banned word "leverage"'
 
+git -C "$consumer" config core.commentString '//'
+
+check_editor_message \
+    "a banned word only on a '//' template line, with core.commentString overriding an earlier core.commentChar=';'" \
+    "$(printf 'fix a plain thing\n\n// we should leverage this template hint\n')" \
+    0 ""
+
+check_editor_message \
+    "a banned word in the real message body under core.commentString='//' overriding commentChar" \
+    "$(printf 'we should leverage this\n\n// template hint line\n')" \
+    1 'banned word "leverage"'
+
+git -C "$consumer" config --unset core.commentChar
+echo "we should leverage this" > "$consumer/scissors.txt"
+git -C "$consumer" add scissors.txt
+
+prepend_script=$(mktemp)
+cat > "$prepend_script" <<'EOF'
+#!/bin/sh
+tmp=$(mktemp)
+printf 'fix a plain thing\n\n' > "$tmp"
+cat "$1" >> "$tmp"
+mv "$tmp" "$1"
+EOF
+chmod +x "$prepend_script"
+
+set +e
+out=$(cd "$consumer" && GIT_EDITOR="$prepend_script" git -c user.email=sentinel -c user.name=sentinel commit -q -e -m placeholder -v 2>&1)
+code=$?
+set -e
+rm -f "$prepend_script"
+if [ "$code" -ne 0 ]; then
+    echo "FAIL: commit-msg should cut the verbose diff at the multi-char core.commentString scissors line, not reject on its content" >&2
+    printf '%s\n' "$out" >&2
+    rm -rf "$consumer"
+    exit 1
+fi
+
 rm -f "$editor_script"
 rm -rf "$consumer"
 echo "all cases passed"
