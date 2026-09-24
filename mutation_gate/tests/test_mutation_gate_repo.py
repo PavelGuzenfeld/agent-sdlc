@@ -42,6 +42,14 @@ def _stub_subprocess_run(monkeypatch, returncode: int, stdout: bytes = b"", stde
     monkeypatch.setattr(repo_module.subprocess, "run", fake_run)
 
 
+def test_git_decodes_invalid_utf8_stdout_without_raising(tmp_path, monkeypatch):
+    fake_git = tmp_path / "git"
+    fake_git.write_text("#!/bin/sh\nprintf 'caf\\351.py\\n'\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert git("ls-files") == "caf\udce9.py\n"
+
+
 def test_git_bytes_returns_raw_stdout_on_success(monkeypatch):
     _stub_subprocess_run(monkeypatch, returncode=0, stdout=b"\x00binary")
     assert git_bytes("show", ":x") == b"\x00binary"

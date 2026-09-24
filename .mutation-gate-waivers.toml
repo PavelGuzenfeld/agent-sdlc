@@ -606,7 +606,7 @@ reason = "equivalent: this continue sits under `if is_last and ...`, so it only 
 
 [[waiver]]
 file = "mutation_gate/vocabulary_check.py"
-line = 563
+line = 603
 column = 16
 old = """continue"""
 new = """break"""

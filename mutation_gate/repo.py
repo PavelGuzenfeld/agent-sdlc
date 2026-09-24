@@ -33,7 +33,8 @@ def git(*args: str, cwd: Path | None = None) -> str:
     # index being committed, which --staged must read. Test commands scrub it.
     try:
         out = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+            ["git", *args], cwd=cwd, capture_output=True, text=True,
+            errors="surrogateescape", check=False,
         )
     except FileNotFoundError as exc:
         raise GateError(f"git not found on PATH: {exc}") from exc
