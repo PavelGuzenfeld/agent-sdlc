@@ -438,8 +438,10 @@ def test_core_convention_list_is_loaded_from_the_packaged_core(tmp_path):
 
 def test_core_convention_list_does_not_leak_python_names_into_gdscript(tmp_path):
     dictionary = vocabulary.load(tmp_path, "")
-    assert dictionary.convention_for("gdscript").names.isdisjoint(
-        {"main", "self", "setUp", "monkeypatch", "request"})
+    leaked = dictionary.convention_for("gdscript").names & (
+        dictionary.convention_for("python").names | dictionary.convention_for("cpp").names
+    )
+    assert leaked == set()
 
 
 def test_core_convention_list_carries_gdscript_engine_virtuals_and_autoconnect_prefix(tmp_path):
@@ -455,7 +457,7 @@ def test_core_convention_list_carries_every_godot_engine_virtual(tmp_path, name)
     assert name in dictionary.convention_for("gdscript").names
 
 
-def test_lookup_without_a_kind_falls_back_to_the_union_across_languages(tmp_path, monkeypatch, capsys):
+def test_lookup_with_no_file_falls_back_to_the_union_across_languages(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(vocabulary, "discover", lambda cwd=None: Repo(
         root=tmp_path, origin="", remotes=(), config=Config()))
     assert cli.main(["vocabulary", "lookup", "--kind", "function", "_ready"]) == 0
@@ -991,6 +993,23 @@ def test_gdscript_function_named_like_a_python_convention_still_checks_its_param
         (1, "function", vocabulary_check.RULE_UNKNOWN_WORD, "main"),
         (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob"),
     }
+
+
+def test_gdscript_request_function_from_the_ticket_still_checks_its_parameter(tmp_path):
+    """#250's own repro: `request` is a pytest fixture name, not a GDScript one."""
+    _require_gdscript_parser()
+    text = "func request(url):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert {(f.line, f.kind, f.rule, f.name) for f in found} == {
+        (1, "function", vocabulary_check.RULE_UNKNOWN_WORD, "request"),
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "url"),
+    }
+
+
+def test_cpp_argc_parameter_of_main_is_still_exempt(tmp_path):
+    found = _findings(tmp_path, "src/k.cpp", "int main(int argc, char** argv) {\n  return 0;\n}\n", {1})
+    assert found == []
 
 
 def test_python_entrypoint_function_and_its_argv_parameter_pass(tmp_path):
