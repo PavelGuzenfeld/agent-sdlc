@@ -376,3 +376,18 @@ def test_model_vv_leads_agents_md_section_with_its_globs(tmp_path, monkeypatch):
     frontmatter = rules.frontmatter(paths)
     body = (rules.RULES_DIR / rules.SCOPED_RULE).read_bytes()
     assert b"## model-vv\n\n" + frontmatter + body in written
+
+
+def test_debrief_agent_references_file_follow_ups_step():
+    repo_root = Path(__file__).parents[2]
+    done_content = (repo_root / "commands" / "done.md").read_text()
+    debrief_content = (repo_root / "commands" / "debrief-agent.md").read_text()
+
+    match = re.search(r"### (\d+)\. File follow-ups", done_content)
+    assert match, "Could not find '### N. File follow-ups' heading in done.md"
+    file_follow_ups_step = match.group(1)
+
+    assert f"step {file_follow_ups_step} uses" in debrief_content, (
+        f"debrief-agent.md should reference step {file_follow_ups_step} "
+        f"(the 'File follow-ups' step from done.md), but does not"
+    )
