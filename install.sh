@@ -4,10 +4,11 @@ set -eu
 repo="$(cd "$(dirname "$0")" && pwd)"
 target=all
 deps=
+uninstall_legacy=
 status=0
 
 usage() {
-    echo "usage: ./install.sh [--target claude|codex|all] [--deps | --deps=say]" >&2
+    echo "usage: ./install.sh [--target claude|codex|all] [--deps | --deps=say] [--uninstall-legacy]" >&2
     exit 2
 }
 
@@ -17,6 +18,7 @@ while [ $# -gt 0 ]; do
         --target=*) target="${1#--target=}"; shift ;;
         --deps) deps=base; shift ;;
         --deps=say) deps=say; shift ;;
+        --uninstall-legacy) uninstall_legacy=1; shift ;;
         *) usage ;;
     esac
 done
@@ -51,6 +53,20 @@ link() {
     mkdir -p "$(dirname "$dst")"
     ln -sfn "$src" "$dst"
     echo "link $dst"
+}
+
+owns_link() {
+    src="$1"
+    dst="$2"
+    [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]
+}
+
+unlink_matching() {
+    src="$1"
+    dst="$2"
+    owns_link "$src" "$dst" || return 0
+    rm "$dst"
+    echo "unlink $dst"
 }
 
 command_description() {
@@ -95,6 +111,29 @@ merge_hook() {
     [ "$before" = "$(jq -c . "$settings")" ] || echo "hook $hook_type $guard"
 }
 
+unmerge_hook() {
+    hook_type="$1"
+    entry="$2"
+    before=$(jq -c . "$settings")
+    tmp=$(mktemp)
+    jq --arg t "$hook_type" --argjson e "$entry" '
+        .hooks[$t] = ((.hooks[$t] // []) - [$e])
+        | if (.hooks[$t] // []) == [] then .hooks |= del(.[$t]) else . end
+        | if (.hooks // {}) == {} then del(.hooks) else . end
+    ' "$settings" > "$tmp"
+    mv "$tmp" "$settings"
+    [ "$before" = "$(jq -c . "$settings")" ] || echo "unhook $hook_type"
+}
+
+example_hook_entries() {
+    jq -c '.hooks | to_entries[] | .key as $t | .value[] | {type: $t, entry: .}' "$repo/settings.example.json"
+}
+
+hook_entry_guard() {
+    printf '%s' "$1" | jq -r \
+        '.entry.hooks[0].command | split(" ") | ((map(select(contains("/"))) | first) // .[0]) | split("/") | last'
+}
+
 install_claude() {
     for d in "$repo"/skills/*/; do
         link "${d%/}" "$HOME/.claude/skills/$(basename "$d")"
@@ -112,11 +151,11 @@ install_claude() {
         printf '{}\n' > "$settings"
         echo "write $settings"
     fi
-    jq -c '.hooks | to_entries[] | .key as $t | .value[] | {type: $t, entry: .}' "$repo/settings.example.json" |
+    example_hook_entries |
     while IFS= read -r line; do
         merge_hook \
             "$(printf '%s' "$line" | jq -r .type)" \
-            "$(printf '%s' "$line" | jq -r '.entry.hooks[0].command | split(" ") | ((map(select(contains("/"))) | first) // .[0]) | split("/") | last')" \
+            "$(hook_entry_guard "$line")" \
             "$(printf '%s' "$line" | jq -c .entry)"
     done
     if command -v mutation-gate >/dev/null 2>&1; then
@@ -127,6 +166,36 @@ install_claude() {
         cp "$repo/CLAUDE.md.example" "$HOME/.claude/CLAUDE.md"
         echo "write $HOME/.claude/CLAUDE.md"
     fi
+}
+
+uninstall_claude() {
+    for d in "$repo"/skills/*/; do
+        unlink_matching "${d%/}" "$HOME/.claude/skills/$(basename "$d")"
+    done
+    for f in "$repo"/commands/*.md; do
+        unlink_matching "$f" "$HOME/.claude/commands/$(basename "$f")"
+    done
+
+    settings="$HOME/.claude/settings.json"
+    owned_bins=$(mktemp)
+    for f in "$repo"/bin/*; do
+        name=$(basename "$f")
+        ! owns_link "$f" "$HOME/.claude/bin/$name" || echo "$name" >> "$owned_bins"
+        unlink_matching "$f" "$HOME/.claude/bin/$name"
+    done
+
+    if [ -f "$settings" ]; then
+        example_hook_entries |
+        while IFS= read -r line; do
+            guard=$(hook_entry_guard "$line")
+            grep -qx "$guard" "$owned_bins" || continue
+            unmerge_hook "$(printf '%s' "$line" | jq -r .type)" "$(printf '%s' "$line" | jq -c .entry)"
+        done
+        if grep -qx mutation-gate "$owned_bins"; then
+            unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
+        fi
+    fi
+    rm -f "$owned_bins"
 }
 
 install_codex() {
@@ -203,6 +272,11 @@ install_say() {
         fi
     done
 }
+
+if [ -n "$uninstall_legacy" ]; then
+    uninstall_claude
+    exit "$status"
+fi
 
 [ -n "$deps" ] && install_deps
 wants claude && install_claude

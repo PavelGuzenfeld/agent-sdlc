@@ -14,6 +14,13 @@ expect() {
     fi
 }
 
+expect "marketplace.json names this marketplace agent-sdlc" \
+    test "$(jq -r .name "$dir/.claude-plugin/marketplace.json")" = agent-sdlc
+expect "marketplace.json names an owner" \
+    test -n "$(jq -r '.owner.name // empty' "$dir/.claude-plugin/marketplace.json")"
+expect "marketplace.json's plugin source is this repo" \
+    test "$(jq -r '.plugins[0].source' "$dir/.claude-plugin/marketplace.json")" = "./"
+
 assert_tree() {
     label="$1"
     expect "[$label] claude skill is a symlink" test -L "$home/.claude/skills/diagnose"
@@ -103,6 +110,59 @@ PATH="$stubs:$PATH" HOME="$deps_home" sh "$dir/install.sh" --deps --target codex
 expect "an already-pinned ast-grep version is left alone" test -z "$(cat "$pipx_log")"
 
 rm -rf "$stubs" "$deps_home"
+
+gate_stub=$(mktemp -d)
+printf '#!/usr/bin/env sh\nexit 0\n' > "$gate_stub/mutation-gate"
+chmod +x "$gate_stub/mutation-gate"
+
+uninstall_home=$(mktemp -d)
+PATH="$gate_stub:$PATH" HOME="$uninstall_home" sh "$dir/install.sh" --target all >/dev/null
+expect "[pre-uninstall] mutation-gate Stop hook was added" \
+    jq -e '.hooks.Stop | tostring | contains("mutation-gate --worktree")' "$uninstall_home/.claude/settings.json"
+
+settings="$uninstall_home/.claude/settings.json"
+tmp=$(mktemp)
+jq '.permissions = {"allow": ["Bash(ls *)"]}
+    | .hooks.Stop += [{"hooks":[{"type":"command","command":"echo unrelated-stop"}]}]
+    | .hooks.PreToolUse += [{"matcher":"Bash","hooks":[{"type":"command","command":"echo unrelated-pretooluse"}]}]' \
+    "$settings" > "$tmp"
+mv "$tmp" "$settings"
+
+foreign=$(mktemp -d)
+mkdir -p "$foreign/bin"
+: > "$foreign/bin/git-guardrail.sh"
+chmod +x "$foreign/bin/git-guardrail.sh"
+ln -sfn "$foreign/bin/git-guardrail.sh" "$uninstall_home/.claude/bin/git-guardrail.sh"
+
+HOME="$uninstall_home" sh "$dir/install.sh" --uninstall-legacy >/dev/null
+
+expect "[uninstall] owned skill symlink removed" test ! -e "$uninstall_home/.claude/skills/diagnose"
+expect "[uninstall] owned command symlink removed" test ! -e "$uninstall_home/.claude/commands/done.md"
+expect "[uninstall] owned bin symlink removed" test ! -e "$uninstall_home/.claude/bin/say-hook.sh"
+expect "[uninstall] a bin symlink pointing at a different clone survives" \
+    test "$(readlink "$uninstall_home/.claude/bin/git-guardrail.sh")" = "$foreign/bin/git-guardrail.sh"
+expect "[uninstall] settings.json drops the say hook" \
+    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("say-hook.sh"))] | length' "$settings")" = 0
+expect "[uninstall] settings.json drops the mutation-gate hook" \
+    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$settings")" = 0
+expect "[uninstall] the not-owned git-guardrail hook survives" \
+    jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$settings"
+expect "[uninstall] an unrelated Stop entry survives" \
+    jq -e '[.hooks.Stop[]?.hooks[]?.command | select(contains("unrelated-stop"))] | length == 1' "$settings"
+expect "[uninstall] an unrelated PreToolUse entry survives" \
+    jq -e '[.hooks.PreToolUse[]?.hooks[]?.command | select(contains("unrelated-pretooluse"))] | length == 1' "$settings"
+expect "[uninstall] top-level permissions block survives" \
+    jq -e '.permissions.allow | index("Bash(ls *)")' "$settings"
+expect "[uninstall] CLAUDE.md is untouched" test -f "$uninstall_home/.claude/CLAUDE.md"
+expect "[uninstall] codex install is untouched" test -L "$uninstall_home/.codex/skills/diagnose"
+
+before_second=$(jq -c . "$settings")
+second_uninstall=$(HOME="$uninstall_home" sh "$dir/install.sh" --uninstall-legacy 2>&1)
+expect "[uninstall] a second run is a no-op" test -z "$second_uninstall"
+expect "[uninstall] a second run changes nothing in settings.json" \
+    test "$(jq -c . "$settings")" = "$before_second"
+
+rm -rf "$gate_stub" "$uninstall_home" "$foreign"
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
