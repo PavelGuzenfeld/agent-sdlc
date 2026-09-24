@@ -233,19 +233,90 @@ def describe(match: Match) -> str:
     return f"{head}\n  {match.detail}" if match.detail else head
 
 
+_WORD_IN_DETAIL = re.compile(r"^`([^`]+)`")
+
+
+def _unknown_words(findings) -> list[tuple[str, int, object]]:
+    from . import vocabulary_check
+
+    counts: dict[str, int] = {}
+    samples: dict[str, object] = {}
+    for f in findings:
+        if f.rule != vocabulary_check.RULE_UNKNOWN_WORD:
+            continue
+        word = _WORD_IN_DETAIL.match(f.detail).group(1).lower()
+        counts[word] = counts.get(word, 0) + 1
+        samples.setdefault(word, f)
+    return sorted(((w, n, samples[w]) for w, n in counts.items()), key=lambda row: (-row[1], row[0]))
+
+
+def _rule_counts(findings) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for f in findings:
+        counts[f.rule] = counts.get(f.rule, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _print_audit(findings) -> None:
+    from . import vocabulary_check
+
+    print("unknown words:")
+    for word, count, sample in _unknown_words(findings):
+        print(f"  {word} ({count}) — {vocabulary_check.describe(sample)}")
+    print("per-rule counts:")
+    for kind, count in _rule_counts(findings).items():
+        print(f"  {kind}: {count}")
+
+
+def _print_toml_stubs(findings) -> None:
+    from . import vocabulary_check
+
+    for word, count, sample in _unknown_words(findings):
+        print(f"# review ({count}): {vocabulary_check.describe(sample)}")
+        print(f'[[concept]]\nword = "{word}"\nmeaning = ""\npos = ["noun"]\n')
+
+
+def _audit(args, repo) -> int:
+    from . import vocabulary_check
+
+    try:
+        if args.leading_underscore:
+            for rel, line, old, new in vocabulary_check.leading_underscore(repo):
+                print(f"{rel}:{line} {old} {new}")
+            return 0
+        findings = vocabulary_check.audit(repo)
+    except GateError as exc:
+        _emit(f"mutation-gate vocabulary refused: {exc}")
+        return 2
+    if args.format == "toml":
+        _print_toml_stubs(findings)
+    else:
+        _print_audit(findings)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     from . import vocabulary_check, vocabulary_molds
 
     parser = argparse.ArgumentParser(prog="mutation-gate vocabulary")
-    parser.add_argument("action", choices=["lookup"])
-    parser.add_argument("--kind", choices=sorted(vocabulary_molds.KINDS),
-                        help="judge the word as a declared name of this kind")
-    parser.add_argument("word")
+    sub = parser.add_subparsers(dest="action", required=True)
+    lookup_parser = sub.add_parser("lookup")
+    lookup_parser.add_argument("--kind", choices=sorted(vocabulary_molds.KINDS),
+                                help="judge the word as a declared name of this kind")
+    lookup_parser.add_argument("word")
+    audit_parser = sub.add_parser("audit")
+    audit_parser.add_argument("--format", choices=["text", "toml"], default="text")
+    audit_parser.add_argument("--leading-underscore", action="store_true")
     args = parser.parse_args(argv)
     try:
         repo = discover()
     except GateError:
         repo = None
+    if args.action == "audit":
+        if repo is None:
+            _emit("mutation-gate vocabulary audit refused: not a git repository")
+            return 2
+        return _audit(args, repo)
     root = repo.root if repo else Path.cwd()
     domain = repo.config.vocabulary if repo else ""
     try:
@@ -259,7 +330,7 @@ def main(argv: list[str]) -> int:
         if not faults:
             print(f"{args.word}: fits the {args.kind} mold")
             return 0
-        detail, suggestion = faults[0]
+        _rule, detail, suggestion = faults[0]
         _emit(f"vocabulary lookup: `{args.word}` as a {args.kind}: {detail}"
               + (f" — try `{suggestion}`" if suggestion else ""))
         return 1
