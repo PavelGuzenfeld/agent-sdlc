@@ -314,6 +314,12 @@ pos = ["noun"]
 forms = ["plural"]
 
 [[concept]]
+word = "model"
+meaning = "a mathematical or learned representation of a system's behaviour, or an AI system trained to generate answers"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
 word = "line"
 meaning = "one row of text in a file or output"
 pos = ["noun"]
