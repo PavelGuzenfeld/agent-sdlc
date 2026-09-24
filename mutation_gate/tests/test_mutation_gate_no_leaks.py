@@ -49,7 +49,7 @@ def _diff(path: str, *lines: str, start: int = 1) -> str:
     )
 
 
-def _stub_git(monkeypatch, *, diff: str = "", log: str = "", rev_parse: str = ""):
+def _stub_git(monkeypatch, *, diff: str = "", log: str = ""):
     calls: list[tuple[str, ...]] = []
 
     def fake_git(*args: str, cwd=None) -> str:
@@ -58,8 +58,6 @@ def _stub_git(monkeypatch, *, diff: str = "", log: str = "", rev_parse: str = ""
             return diff
         if args[0] == "log":
             return log
-        if args[0] == "rev-parse":
-            return rev_parse
         raise AssertionError(f"unexpected git call {args}")
 
     monkeypatch.setattr(no_leaks, "git", fake_git)
@@ -506,6 +504,14 @@ def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(mo
     assert "caf\\303\\251.bin:1" in err
 
 
+def test_a_trailing_blank_line_after_a_binary_entry_is_not_treated_as_another_one(monkeypatch, tmp_path, capsys):
+    calls = _stub_git_bytes(monkeypatch, EMAIL.encode())
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin") + "\n")
+    assert _local(monkeypatch, tmp_path) == 1
+    assert calls == [("cat-file", "-p", "1111111")]
+    assert "fixture.bin:1" in capsys.readouterr().err
+
+
 def test_the_range_form_blocks_a_leak_in_a_binary_marked_file_with_no_nul_byte(monkeypatch, tmp_path, capsys):
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _stub_git_bytes(monkeypatch, EMAIL.encode())
@@ -522,30 +528,59 @@ def test_a_deleted_binary_marked_file_reads_no_post_image_blob(monkeypatch, tmp_
     assert calls == []
 
 
-def test_the_cached_form_reads_the_staged_blob_by_path(monkeypatch, tmp_path):
+def test_a_binary_marked_files_blob_is_fetched_by_its_post_image_sha(monkeypatch, tmp_path):
     calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _local(monkeypatch, tmp_path)
-    assert calls == [("show", ":fixture.bin")]
+    assert calls == [("cat-file", "-p", "1111111")]
 
 
-def test_the_range_form_reads_the_post_image_blob_at_the_ranges_tip(monkeypatch, tmp_path):
+def test_the_range_form_also_fetches_the_blob_by_sha(monkeypatch, tmp_path):
     calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _range(monkeypatch, tmp_path)
-    assert calls == [("show", "HEAD:fixture.bin")]
+    assert calls == [("cat-file", "-p", "1111111")]
 
 
-def test_a_three_dot_ranges_post_image_blob_is_read_at_its_right_hand_tip(monkeypatch, tmp_path):
-    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
-    monkeypatch.setattr(no_leaks, "discover", lambda: _repo(tmp_path))
-    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
-    no_leaks.main(["--range", "base...HEAD"])
-    assert calls == [("show", "HEAD:fixture.bin")]
-
-
-def test_a_diff_with_no_binary_entry_never_calls_show(monkeypatch, tmp_path):
+def test_a_diff_with_no_binary_entry_never_calls_cat_file(monkeypatch, tmp_path):
     show_calls = _stub_git_bytes(monkeypatch, b"")
     _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
     _local(monkeypatch, tmp_path)
     assert show_calls == []
+
+
+def test_a_real_binary_with_and_in_its_name_is_skipped_not_refused(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/a and b.bin b/a and b.bin\n"
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        "Binary files /dev/null and b/a and b.bin differ\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00binary")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_gitattributes_marked_file_with_and_in_its_name_is_still_scanned(monkeypatch, tmp_path, capsys):
+    diff = (
+        "diff --git a/a and b.txt b/a and b.txt\n"
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        "Binary files /dev/null and b/a and b.txt differ\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    assert "a and b.txt:1" in capsys.readouterr().err
+
+
+def test_a_real_binary_with_a_quoted_non_ascii_name_is_skipped_not_refused(monkeypatch, tmp_path):
+    diff = (
+        'diff --git "a/caf\\303\\251.bin" "b/caf\\303\\251.bin"\n'
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        'Binary files /dev/null and "b/caf\\303\\251.bin" differ\n'
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00binary")
+    assert _local(monkeypatch, tmp_path) == 0

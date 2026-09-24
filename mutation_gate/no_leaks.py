@@ -34,7 +34,8 @@ _ARROW = "→"
 
 _FIXTURE_EXCLUDE_PATHSPEC = ":!tests/fixtures/**"
 
-_BINARY_DIFFERS_RE = re.compile(r"^Binary files (.+) and (.+) differ$")
+_BINARY_DIFFERS_RE = re.compile(r'^Binary files (?:/dev/null|"?a/.+) and ("?b/.+|/dev/null) differ$')
+_INDEX_SHA_RE = re.compile(r"^index [0-9a-f]+\.\.([0-9a-f]+)")
 
 
 @dataclass(frozen=True)
@@ -93,26 +94,12 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
-def _post_image_rev(diff_args: tuple[str, ...]) -> str:
-    """The tip `git show` reads a path at — `git diff`'s post-image side for
-    both `A..B` and `A...B`, so a plain string split settles it without
-    trusting `git rev-parse`'s per-form line order."""
-    if diff_args and diff_args[0] == "--cached":
-        return ""
-    rev_range = diff_args[0]
-    if "..." in rev_range:
-        return rev_range.rpartition("...")[2]
-    if ".." in rev_range:
-        return rev_range.rpartition("..")[2]
-    return rev_range
-
-
-def _binary_marked_text_hits(repo: Repo, rev: str, path: str) -> list[tuple[str, int, str]]:
+def _binary_marked_text_hits(repo: Repo, sha: str, path: str) -> list[tuple[str, int, str]]:
     """A path attributes call binary still scans here when its blob has no NUL
-    byte. Scans the whole post-image, not just the diff — a binary diff carries
-    no hunk boundaries to say what changed."""
-    spec = f"{rev}:{path}" if rev else f":{path}"
-    blob = git_bytes("show", spec, cwd=repo.root)
+    byte. Fetched by blob sha, never by path, so quoting or an ` and ` in the
+    name never breaks the lookup. Scans the whole post-image, not just the
+    diff — a binary diff carries no hunk boundaries to say what changed."""
+    blob = git_bytes("cat-file", "-p", sha, cwd=repo.root)
     if b"\x00" in blob:
         return []
     text = blob.decode("utf-8", errors="replace")
@@ -128,12 +115,17 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
     current: str | None = None
     in_hunk = False
     next_line = 0
-    binary_paths: list[str] = []
+    pending_sha: str | None = None
+    binary_entries: list[tuple[str, str]] = []
     for raw in out.splitlines():
         if raw.startswith("diff --git "):
-            current, in_hunk = None, False
+            current, in_hunk, pending_sha = None, False, None
         elif not in_hunk and raw.startswith("+++ "):
             current = post_image_path(raw[4:])
+        elif not in_hunk and raw.startswith("index "):
+            m = _INDEX_SHA_RE.match(raw)
+            if m:
+                pending_sha = m.group(1)
         elif raw.startswith("@@"):
             in_hunk = True
             m = re.search(r"\+(\d+)", raw)
@@ -143,14 +135,12 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
             next_line += 1
         else:
             m = _BINARY_DIFFERS_RE.match(raw)
-            if m:
-                path = post_image_path(m.group(2))
+            if m and pending_sha is not None:
+                path = post_image_path(m.group(1))
                 if path is not None:
-                    binary_paths.append(path)
-    if binary_paths:
-        rev = _post_image_rev(diff_args)
-        for path in binary_paths:
-            hits.extend(_binary_marked_text_hits(repo, rev, path))
+                    binary_entries.append((path, pending_sha))
+    for path, sha in binary_entries:
+        hits.extend(_binary_marked_text_hits(repo, sha, path))
     return hits
 
 
