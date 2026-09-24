@@ -619,6 +619,7 @@ def test_staged_dry_run_says_skipped_when_the_gdscript_parser_is_not_ready(
 def test_require_ast_grep_prints_one_warning_line_naming_both_versions_on_a_mismatch(
     monkeypatch, capsys
 ):
+    monkeypatch.setattr(mutants, "_version_warned", False)
     calls = []
 
     def fake_run(cmd, *args, **kwargs):
@@ -636,6 +637,7 @@ def test_require_ast_grep_prints_one_warning_line_naming_both_versions_on_a_mism
 
 
 def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, capsys):
+    monkeypatch.setattr(mutants, "_version_warned", False)
     installed = mutants.PINNED_AST_GREP_VERSION.rsplit(".", 1)[0] + ".999"
     assert installed != mutants.PINNED_AST_GREP_VERSION
     stubbed = subprocess.CompletedProcess(
@@ -648,9 +650,24 @@ def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, 
     assert installed in err
 
 
+def test_require_ast_grep_warns_only_once_across_repeated_calls_in_one_process(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(mutants, "_version_warned", False)
+    stubbed = subprocess.CompletedProcess(
+        ["ast-grep", "--version"], 0, stdout="ast-grep 0.44.1\n", stderr=""
+    )
+    monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
+    mutants.require_ast_grep()
+    mutants.require_ast_grep()
+    mutants.require_ast_grep()
+    assert capsys.readouterr().err.count("\n") == 1
+
+
 def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
     monkeypatch, capsys
 ):
+    monkeypatch.setattr(mutants, "_version_warned", False)
     stubbed = subprocess.CompletedProcess(
         ["ast-grep", "--version"], 0,
         stdout=f"ast-grep {mutants.PINNED_AST_GREP_VERSION}\n", stderr="",
@@ -663,6 +680,7 @@ def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
 def test_cli_dry_run_surfaces_the_ast_grep_version_warning_on_a_real_gate_run(
     tmp_path, monkeypatch, capsys
 ):
+    monkeypatch.setattr(mutants, "_version_warned", False)
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     (tmp_path / "a.py").write_text("x = 1\n")
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
