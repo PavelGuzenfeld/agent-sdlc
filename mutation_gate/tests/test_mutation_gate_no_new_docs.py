@@ -72,6 +72,25 @@ def test_default_allowlist_root_files_pass(monkeypatch, tmp_path, name):
     assert _local(monkeypatch, tmp_path) == 0
 
 
+@pytest.mark.parametrize("name", [
+    "README.md", "LICENSE.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
+    "SECURITY.md", "NOTICE.md", "CHANGELOG.md",
+])
+def test_default_allowlist_files_pass_at_any_depth(monkeypatch, tmp_path, name):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / name).write_text("x")
+    _stub_git(monkeypatch, added=_added([f"pkg/{name}"]))
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_nested_non_allowlisted_md_file_is_still_blocked(monkeypatch, tmp_path, capsys):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "design.md").write_text("x")
+    _stub_git(monkeypatch, added=_added(["pkg/design.md"]))
+    assert _local(monkeypatch, tmp_path) == 1
+    assert "pkg/design.md" in capsys.readouterr().err
+
+
 def test_a_file_under_dot_github_passes_a_sibling_dot_dir_is_still_blocked(monkeypatch, tmp_path, capsys):
     (tmp_path / ".github").mkdir()
     (tmp_path / ".github" / "x.md").write_text("x")

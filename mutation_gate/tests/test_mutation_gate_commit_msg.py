@@ -217,26 +217,70 @@ def test_a_hash_scissors_line_does_not_truncate_under_a_semicolon_comment_char()
     assert "leverage" in stripped
 
 
+def test_strip_editor_cruft_strips_every_line_prefixed_with_a_multi_char_comment_string():
+    message = (
+        "fix a plain thing\n"
+        "\n"
+        ";; Please enter the commit message for your changes. Lines starting\n"
+        ";; with ';;' will be ignored.\n"
+    )
+    stripped = commit_msg._strip_editor_cruft(message, ";;")
+    assert "fix a plain thing" in stripped
+    assert "Please enter the commit message" not in stripped
+
+
+def test_scissors_line_under_a_multi_char_comment_string_truncates_the_diff():
+    message = (
+        "fix a plain thing\n"
+        "\n"
+        ";; ------------------------ >8 ------------------------\n"
+        "diff --git a/x.py b/x.py\n"
+        "+we should leverage this\n"
+    )
+    stripped = commit_msg._strip_editor_cruft(message, ";;")
+    assert "fix a plain thing" in stripped
+    assert "leverage" not in stripped
+
+
 def test_strip_editor_cruft_is_a_no_op_when_comment_char_is_none():
     message = "fix a thing\n\n# nothing was resolved so nothing is stripped\n"
     assert commit_msg._strip_editor_cruft(message, None) == message
 
 
 def test_resolve_comment_char_returns_the_literal_configured_value(monkeypatch):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
     assert commit_msg._resolve_comment_char("anything") == ";"
 
 
-def test_configured_comment_char_reads_core_commentchar(monkeypatch):
+def test_configured_comment_char_reads_both_comment_config_keys(monkeypatch):
     seen = {}
 
     def fake_git(*args, cwd=None):
         seen["args"] = args
-        return ";\n"
+        return "core.commentchar ;\n"
 
     monkeypatch.setattr(commit_msg, "git", fake_git)
     commit_msg._configured_comment_char()
-    assert seen["args"] == ("config", "--get", "core.commentChar")
+    assert seen["args"] == ("config", "--get-regexp", r"^core\.comment(char|string)$")
+
+
+def test_configured_comment_char_prefers_commentstring_when_listed_after_commentchar(monkeypatch):
+    monkeypatch.setattr(
+        commit_msg, "git", lambda *a, cwd=None: "core.commentchar @\ncore.commentstring ;;\n"
+    )
+    assert commit_msg._configured_comment_char() == ";;"
+
+
+def test_configured_comment_char_prefers_commentchar_when_listed_after_commentstring(monkeypatch):
+    monkeypatch.setattr(
+        commit_msg, "git", lambda *a, cwd=None: "core.commentstring ;;\ncore.commentchar @\n"
+    )
+    assert commit_msg._configured_comment_char() == "@"
+
+
+def test_configured_comment_char_defaults_to_hash_when_the_matched_line_carries_no_value(monkeypatch):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar\n")
+    assert commit_msg._configured_comment_char() == "#"
 
 
 def test_resolve_comment_char_defaults_to_hash_when_core_commentchar_is_unset(monkeypatch):
@@ -257,7 +301,7 @@ def test_resolve_comment_char_defaults_to_hash_when_git_binary_is_missing(monkey
 
 @pytest.mark.parametrize("char", ["@", ";", "!"])
 def test_resolve_comment_char_auto_reads_whichever_char_git_actually_used(monkeypatch, char):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar auto\n")
     message = (
         "fix a thing\n"
         "\n"
@@ -268,7 +312,7 @@ def test_resolve_comment_char_auto_reads_whichever_char_git_actually_used(monkey
 
 
 def test_resolve_comment_char_auto_ignores_an_unrelated_char_before_the_hint(monkeypatch):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar auto\n")
     message = (
         "fix a thing\n"
         "; not the resolved char, just message prose\n"
@@ -280,8 +324,19 @@ def test_resolve_comment_char_auto_ignores_an_unrelated_char_before_the_hint(mon
 
 
 def test_resolve_comment_char_auto_strips_nothing_without_a_hint_line(monkeypatch):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar auto\n")
     assert commit_msg._resolve_comment_char("fix a thing\n\nbody text\n") is None
+
+
+def test_resolve_comment_char_auto_from_commentstring_reads_the_hint_line(monkeypatch):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentstring auto\n")
+    message = (
+        "fix a thing\n"
+        "\n"
+        "; Please enter the commit message for your changes. Lines starting\n"
+        "; with ';' will be ignored, and an empty message aborts the commit.\n"
+    )
+    assert commit_msg._resolve_comment_char(message) == ";"
 
 
 def _msgfile(tmp_path: Path, text: str) -> str:
@@ -310,7 +365,7 @@ def test_cli_rejects_a_signed_off_by_trailer(tmp_path, capsys):
 def test_cli_under_semicolon_comment_char_trips_on_the_body_word_not_the_template_line(
     tmp_path, monkeypatch, capsys
 ):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
     message = (
         "we should leverage this\n"
         "\n"
@@ -327,14 +382,40 @@ def test_cli_under_semicolon_comment_char_trips_on_the_body_word_not_the_templat
 def test_cli_under_semicolon_comment_char_accepts_a_banned_word_confined_to_the_template_line(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: ";\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
     message = "fix a plain thing\n\n; we should leverage this template hint\n"
     msgfile = _msgfile(tmp_path, message)
     assert cli.main(["commit-msg", msgfile]) == 0
 
 
+def test_cli_under_a_multi_char_commentstring_trips_on_the_body_word_not_the_template_line(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentstring ;;\n")
+    message = (
+        "we should leverage this\n"
+        "\n"
+        "fix a plain thing\n"
+        ";; we should leverage this too\n"
+    )
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 1
+    err = capsys.readouterr().err
+    assert "line 1:" in err
+    assert "line 4:" not in err
+
+
+def test_cli_commentstring_wins_over_an_earlier_commentchar(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        commit_msg, "git", lambda *a, cwd=None: "core.commentchar @\ncore.commentstring ;;\n"
+    )
+    message = "fix a plain thing\n\n;; we should leverage this template hint\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 0
+
+
 def test_cli_under_auto_comment_char_strips_using_the_char_git_actually_used(tmp_path, monkeypatch):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "auto\n")
+    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar auto\n")
     message = (
         "fix a plain thing\n"
         "\n"

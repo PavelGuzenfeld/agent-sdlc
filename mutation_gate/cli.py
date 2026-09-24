@@ -230,7 +230,11 @@ def _run(repo, args, staged: bool) -> int:
         return 1
 
     if repo.config.no_comments:
-        comments = no_comments.check(repo, all_changed, wvs, staged)
+        try:
+            comments = no_comments.check(repo, all_changed, wvs, staged)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
         if comments:
             _emit(f"BLOCKED: no-comments — {len(comments)} added comment line(s).")
             for c in comments:
@@ -304,7 +308,7 @@ def _run(repo, args, staged: bool) -> int:
                 continue
             changed[f] = lines
     if not changed:
-        _emit("mutation-gate: no gated source files in this change")
+        _emit("mutation-gate: no gated source files in this change — no mutants, so no adversary review")
         return 0
 
     try:

@@ -142,7 +142,10 @@ def _findings_for(
                 detail, _ = misfit
                 faults = [*faults, (vocabulary_check.RULE_MOLD, detail, "")]
         for rule, detail, suggestion in faults:
-            renamed = f"{suggestion}{suffix}" if suggestion else ""
+            if rule == vocabulary_check.RULE_VAGUE_WORD:
+                renamed = suggestion
+            else:
+                renamed = f"{suggestion}{suffix}" if suggestion else ""
             out.append(Finding(rel, segment, kind, stem, rule, detail, renamed))
     return out
 

@@ -63,5 +63,26 @@ check_once "commit message check (voice.md banned words, attribution, sign-off)"
 check_once "diff discipline (branch line limit without a ticket reference)"
 check_once "no-leaks (identity/RFC1918/home-path scan plus optional banned_names_file)"
 
+cat > "$consumer/pkg.py" <<'PY'
+import os
+PY
+mkdir -p "$consumer/tests"
+cat > "$consumer/tests/test_pkg.py" <<'PY'
+import pkg
+
+
+def test_pkg_imports_os():
+    assert pkg.os.path is not None
+PY
+cgit add pkg.py tests/test_pkg.py
+set +e
+out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add pkg" 2>&1)
+code=$?
+set -e
+[ "$code" -eq 0 ] || fail "the pkg.py commit should pass (no mutable sites, one covering test)" "$out"
+printf '%s\n' "$out" | grep -qF \
+    "adversary skipped: no linked ticket and no user prompt available" \
+    || fail "verbose: true on mutation-gate should surface the adversary line on a passing commit" "$out"
+
 rm -rf "$consumer"
 echo "all cases passed"

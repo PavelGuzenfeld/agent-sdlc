@@ -17,7 +17,8 @@ which puts an `sg` shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it
 shadows the system `sg` (execute as a different group).
 
 Rules aren't installed globally: run `mutation-gate rules sync` inside a repo
-that opts in.
+that opts in. `mutation-gate rules check` catches drift from that sync and
+runs automatically as the `rules-check` pre-commit hook.
 
 The `mutation-gate` CLI alone can be installed with `pip install agent-sdlc`,
 or from a tagged [release](https://github.com/PavelGuzenfeld/agent-sdlc/releases)'s
