@@ -53,4 +53,8 @@ tests, never the implementation — checks whether the tests actually assert
 the requirement or just match what the code happens to do. It reports into
 the session; it never blocks.
 
+Consuming repos opt in with `mutation-gate rules sync` and catch drift from
+it with `mutation-gate rules check`, wired in as the `rules-check`
+pre-commit hook.
+
 Source: [`rules/testing.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/testing.md), [`rules/model-vv.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/model-vv.md), [`mutation_gate/`](https://github.com/PavelGuzenfeld/agent-sdlc/tree/main/mutation_gate).
