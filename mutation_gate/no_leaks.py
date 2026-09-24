@@ -32,6 +32,8 @@ _NPM_VERSION_RE = re.compile(
 _BULLET_RE = re.compile(r"^\s*-\s*")
 _ARROW = "→"
 
+_FIXTURE_EXCLUDE_PATHSPEC = ":!tests/fixtures/**"
+
 
 @dataclass(frozen=True)
 class BannedName:
@@ -92,7 +94,7 @@ def _banned_hit(line: str, name: BannedName) -> bool:
 def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]:
     out = git(
         "diff", "-U0", "--no-color", "--no-renames", *DIFF_PREFIX_PIN_ARGS,
-        *diff_args, cwd=repo.root,
+        *diff_args, "--", ".", _FIXTURE_EXCLUDE_PATHSPEC, cwd=repo.root,
     )
     hits: list[tuple[str, int, str]] = []
     current: str | None = None

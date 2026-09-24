@@ -429,6 +429,9 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
         _emit("")
         _emit(f"── adversary (isolated; reports only, never blocks; saved to {path}) ──")
         _emit(findings)
+    elif not args.no_adversary:
+        _emit("mutation-gate: no covering tests for any gated file — "
+              "no mutants to review, so no adversary review")
     if not args.no_adversary and model_vv.model_changed(repo, all_changed):
         findings = model_vv.blind_pass(repo)
         path = _write_report(repo, "blind-pass", findings, staged)
