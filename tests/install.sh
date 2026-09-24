@@ -68,6 +68,42 @@ fi
 expect "collision message names the colliding name" grep -q dup "$collide/out"
 rm -rf "$collide"
 
+stubs=$(mktemp -d)
+pipx_log="$stubs/pipx.log"
+: > "$pipx_log"
+ast_grep_version_file="$stubs/ast-grep-version"
+
+cat > "$stubs/ast-grep" <<EOF
+#!/usr/bin/env sh
+echo "ast-grep \$(cat "$ast_grep_version_file")"
+EOF
+cat > "$stubs/pipx" <<EOF
+#!/usr/bin/env sh
+echo "\$*" >> "$pipx_log"
+EOF
+cat > "$stubs/python3" <<'EOF'
+#!/usr/bin/env sh
+exit 0
+EOF
+for name in git gh jq docker curl pre-commit mutation-gate; do
+    printf '#!/usr/bin/env sh\nexit 0\n' > "$stubs/$name"
+done
+chmod +x "$stubs"/*
+
+deps_home=$(mktemp -d)
+
+echo "0.44.1" > "$ast_grep_version_file"
+PATH="$stubs:$PATH" HOME="$deps_home" sh "$dir/install.sh" --deps --target codex >/dev/null
+expect "a wrong installed ast-grep version is force-reinstalled to the pin" \
+    test "$(cat "$pipx_log")" = "install --force ast-grep-cli==0.45.3"
+
+: > "$pipx_log"
+echo "0.45.3" > "$ast_grep_version_file"
+PATH="$stubs:$PATH" HOME="$deps_home" sh "$dir/install.sh" --deps --target codex >/dev/null
+expect "an already-pinned ast-grep version is left alone" test -z "$(cat "$pipx_log")"
+
+rm -rf "$stubs" "$deps_home"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1

@@ -717,7 +717,7 @@ def test_require_ast_grep_warns_instead_of_crashing_on_unparseable_version_outpu
     monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
     mutants.require_ast_grep()
     assert capsys.readouterr().err == (
-        "mutation-gate: ast-grep  on PATH, pinned to "
+        "mutation-gate: ast-grep unknown on PATH, pinned to "
         f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
         "waivers were pinned against that version\n"
     )

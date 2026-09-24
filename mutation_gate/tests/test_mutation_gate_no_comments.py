@@ -64,7 +64,8 @@ def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
 
 
 def _stub_comment_scan(monkeypatch, returncode: int, stderr: str = "", stdout: str = "") -> None:
-    """Only the comment-kind scan is faked; `ast-grep --version` stays real."""
+    """Only the comment-kind scan is faked; `ast-grep --version` still goes
+    through the autouse pin-matching fixture, not the real binary."""
     real_run = mutants.subprocess.run
 
     def fake_run(cmd, *args, **kwargs):
