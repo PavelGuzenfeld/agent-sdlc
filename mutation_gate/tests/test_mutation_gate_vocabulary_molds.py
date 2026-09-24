@@ -58,6 +58,7 @@ def test_staged_variable_count_frame_blocks_suggesting_frame_count(tmp_path, mon
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "count_frame = 1\n"})
     err = capsys.readouterr().err
     assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
     assert "pkg/a.py:1: variable `count_frame` — `count` is a head noun" in err
     assert "try `frame_count`" in err
 
@@ -71,18 +72,22 @@ def test_staged_function_frame_read_blocks_suggesting_read_frame(tmp_path, monke
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "def frame_read():\n    pass\n"})
     err = capsys.readouterr().err
     assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
     assert "function `frame_read` — a function takes a verb first" in err
     assert "try `read_frame`" in err
 
 
 @pytest.mark.parametrize("name, hint", [
     ("is_not_empty", "`not`: name the positive predicate and negate at the call site"),
+    ("no_frames", "`no`: name the positive predicate and negate at the call site"),
     ("read_and_parse", "`and`: one action per name: split the function, or name the combined step"),
+    ("read_or_parse", "`or`: name the outcome, not the alternatives"),
 ])
 def test_staged_function_with_a_rejected_function_word_blocks(tmp_path, monkeypatch, capsys, name, hint):
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"def {name}():\n    pass\n"})
     err = capsys.readouterr().err
     assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
     assert f"function `{name}` — {hint}" in err
 
 
@@ -90,6 +95,7 @@ def test_staged_five_word_variable_blocks_on_the_cap(tmp_path, monkeypatch, caps
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "distance_to_first_target_frame = 1\n"})
     err = capsys.readouterr().err
     assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
     assert "variable `distance_to_first_target_frame` — 5 words; a name has 1 to 4" in err
 
 
@@ -122,23 +128,25 @@ def test_staged_config_narrowed_to_no_conversion_blocks_the_classmethod(tmp_path
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": FROM_BYTES}, toml)
     err = capsys.readouterr().err
     assert code == 1
+    assert "BLOCKED: vocabulary — 2 finding(s)." in err
     assert "pkg/a.py:3: method `from_bytes` — `from_` starts the conversion mold" in err
 
 
-@pytest.mark.parametrize("narrowing, key", [
-    ('function = ["function", "conversion"]\n', "function"),
-    ('frob = ["variable"]\n', "frob"),
-    ("function = []\n", "function"),
+@pytest.mark.parametrize("narrowing, refusal", [
+    ('function = ["function", "conversion"]\n',
+     "vocabulary_molds.function = ['function', 'conversion']: a repo narrows function, "
+     "predicate, test, handler, never widens"),
+    ('frob = ["variable"]\n', "vocabulary_molds.frob: not a declaration kind; one of function, "),
+    ("function = []\n", "vocabulary_molds.function = []: a repo narrows"),
 ])
 def test_staged_widened_or_unknown_mold_config_refuses_with_exit_2(
-    tmp_path, monkeypatch, capsys, narrowing, key
+    tmp_path, monkeypatch, capsys, narrowing, refusal
 ):
     toml = OPTED_IN + "[vocabulary_molds]\n" + narrowing
     code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "frame = 1\n"}, toml)
     err = capsys.readouterr().err
     assert code == 2
-    assert "mutation-gate refused" in err
-    assert f"vocabulary_molds.{key}" in err
+    assert f"mutation-gate refused: .mutation-gate.toml: {refusal}" in err
 
 
 def _lookup(monkeypatch, root: Path, toml: str, kind: str, name: str, capsys) -> tuple[int, str, str]:
@@ -159,6 +167,8 @@ def _lookup(monkeypatch, root: Path, toml: str, kind: str, name: str, capsys) ->
     ("field", "frames_of_count"),
     ("constant", "FRAME_COUNT"),
     ("local", "x_i"),
+    ("property", "frame_count"),
+    ("property", "is_empty"),
     ("function", "read"),
     ("function", "read_out_frames"),
     ("function", "is_empty"),
@@ -196,7 +206,13 @@ def test_lookup_kind_reports_a_fit(tmp_path, monkeypatch, capsys, kind, name):
     ("variable", "frame_first", "a variable takes a noun phrase, with at most one prepositional tail — try `first_frame`"),
     ("variable", "frames_out", "a variable takes a noun phrase, with at most one prepositional tail"),
     ("variable", "distance_to_first_target_frame", "5 words; a name has 1 to 4"),
+    ("variable", "count_frame_of_first_target", "5 words; a name has 1 to 4"),
     ("variable", "on_frame_read", "`on_` starts the handler mold, not open to a variable"),
+    ("variable", "on_count_frame", "`on_` starts the handler mold, not open to a variable"),
+    ("property", "read_frame",
+     "a property takes a noun phrase, with at most one prepositional tail — try `frame_read`"),
+    ("function", "to_frame", "`to_` starts the conversion mold, not open to a function"),
+    ("function", "as_bytes", "`as_` starts the conversion mold, not open to a function"),
     ("variable", "frob_count", "`frob` is not in the dictionary"),
     ("function", "frame_read", "a function takes a verb first, then what it acts on — try `read_frame`"),
     ("function", "frame_target_read",
@@ -227,9 +243,11 @@ def test_lookup_kind_names_the_first_failing_rule(tmp_path, monkeypatch, capsys,
 
 def test_lookup_kind_narrowed_config_drops_the_variant(tmp_path, monkeypatch, capsys):
     toml = OPTED_IN + '[vocabulary_molds]\nfunction = ["function"]\n'
-    code, _, err = _lookup(monkeypatch, tmp_path, toml, "function", "is_empty", capsys)
+    code, out, err = _lookup(monkeypatch, tmp_path, toml, "function", "is_empty", capsys)
     assert code == 1
-    assert "`is_` starts the predicate mold, not open to a function" in err
+    assert out == ""
+    assert err == ("vocabulary lookup: `is_empty` as a function: `is_` starts the predicate mold, "
+                   "not open to a function\n")
 
 
 def test_lookup_kind_config_restating_the_core_catalogue_is_accepted(tmp_path, monkeypatch, capsys):
@@ -241,8 +259,8 @@ def test_lookup_kind_widened_config_refuses_naming_the_extra_variant(tmp_path, m
     toml = OPTED_IN + '[vocabulary_molds]\ntype = ["type", "variable"]\n'
     code, _, err = _lookup(monkeypatch, tmp_path, toml, "type", "Frame", capsys)
     assert code == 2
-    assert "vocabulary_molds.type" in err
-    assert "variable" in err
+    assert err == ("mutation-gate vocabulary refused: .mutation-gate.toml: vocabulary_molds.type = "
+                   "['type', 'variable']: a repo narrows type, never widens\n")
 
 
 @pytest.mark.parametrize("word, expected", [
@@ -309,6 +327,15 @@ def test_cpp_macros_are_constants_or_functions_and_the_include_guard_is_skipped(
     assert _kinds(tmp_path, "k.hpp", text) == [
         (3, "constant", "FRAME_COUNT"), (4, "constant", "NDEBUG"), (5, "function", "READ_FRAME"),
         (7, "constant", "LOOSE"), (9, "constant", "Y"),
+    ]
+
+
+def test_cpp_object_macro_takes_the_constant_mold_and_function_macro_the_function_mold(tmp_path):
+    text = "#define COUNT_FRAME 4\n#define FRAME_READ(x) (x)\n#define FRAME_COUNT 4\n"
+    repo = _repo(tmp_path, {"src/k.hpp": text})
+    found = vocabulary_check.check(repo, {"src/k.hpp": {1, 2, 3}}, [])
+    assert [(f.line, f.kind, f.name, f.suggestion) for f in found] == [
+        (1, "constant", "COUNT_FRAME", "FRAME_COUNT"), (2, "function", "FRAME_READ", "READ_FRAME"),
     ]
 
 
