@@ -159,6 +159,7 @@ def test_docstring_is_not_a_comment(tmp_path, monkeypatch):
     "x = 1  # noqa: E501\n",
     "x: int = 1  # type: ignore\n",
     "# ruff: noqa\n",
+    "# gdlint: disable=max-line-length\n",
 ])
 def test_shebang_license_and_pragma_lines_are_carved_out(tmp_path, monkeypatch, text):
     repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": text})
@@ -326,6 +327,58 @@ def test_gdscript_prose_comment_blocks_when_parser_is_ready(tmp_path, monkeypatc
                  {"game/a.gd": "func _ready():\n\tpass  # one\n",
                   "sgconfig.yml": GDSCRIPT_SGCONFIG})
     assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+@pytest.mark.parametrize("text", [
+    "\t#region Movement\n",
+    "\t#endregion Movement\n",
+    "\t# gdlint: disable=max-line-length\n",
+])
+def test_gdscript_region_and_gdlint_pragmas_are_carved_out_when_parser_is_ready(
+    tmp_path, monkeypatch, text
+):
+    """232: `#region`/`#endregion` parse as their own region_start/region_end
+    kind, never `comment` — the grammar carves them out on its own."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": f"func _ready():\n{text}",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == []
+
+
+def test_gdscript_region_prose_blocks_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\t# region is weird\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+def test_gdscript_gdlint_lookalike_prose_blocks_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\t# gdlint is noisy\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+@pytest.mark.parametrize("text", ["#region\nvar x = 1\n#endregion\n", "#region Movement\nvar x = 1\n#endregion\n"])
+def test_gdscript_top_level_region_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch, text):
+    """232: a bare `#region` and a top-level, unindented one both stay
+    region_start/region_end, matching how Godot repos fold class bodies."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {1, 3}) == []
+
+
+def test_gdscript_warning_ignore_annotation_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch):
+    """232 title: `@warning_ignore(...)` parses as `annotation`, never
+    `comment`, so it never reaches PRAGMA_RE either."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": 'func _ready():\n    @warning_ignore("unused_variable")\n    var y = 2\n',
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == []
 
 
 def test_gdscript_missing_parser_skip_still_reaches_a_later_file(tmp_path, monkeypatch):
