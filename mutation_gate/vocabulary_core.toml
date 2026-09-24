@@ -42,6 +42,79 @@ forms = ["-s", "-ed", "-ing", "-er"]
 irregular = { "-ed" = "read" }
 returns = "value"
 
+[[concept]]
+word = "parse"
+meaning = "turn text or bytes into a structure"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+returns = "value"
+
+[[concept]]
+word = "run"
+meaning = "execute, or be executing"
+pos = ["verb"]
+forms = ["-s", "-ing", "-er"]
+
+[[concept]]
+word = "touch"
+meaning = "meet at a boundary without overlapping"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "overlap"
+meaning = "share area or extent with another thing, or the shared part"
+pos = ["verb", "noun"]
+forms = ["-s", "plural"]
+irregular = { "-ed" = "overlapped", "-ing" = "overlapping" }
+
+[[concept]]
+word = "distance"
+meaning = "how far apart two positions are"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "target"
+meaning = "the thing an action or a measurement is aimed at"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "byte"
+meaning = "eight bits; the unit of a raw buffer"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "circle"
+meaning = "the set of points at one distance from a centre"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "corner"
+meaning = "where two edges of a shape meet"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "heading"
+meaning = "the direction a body points, as an angle from a reference direction"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "zero"
+meaning = "the value 0, or having that value"
+pos = ["noun", "adjective"]
+forms = ["plural"]
+
+[[concept]]
+word = "empty"
+meaning = "holding nothing"
+pos = ["adjective"]
+
 [[symbol]]
 word = "i"
 meaning = "loop index"

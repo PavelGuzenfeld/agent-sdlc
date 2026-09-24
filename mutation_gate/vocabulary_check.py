@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import mutants, vocabulary, waivers
+from . import mutants, vocabulary, vocabulary_molds, waivers
 from .repo import GateError, Repo, git
 
 CHECK = "vocabulary"
@@ -20,12 +20,25 @@ SUFFIX = {"python": ".py", "cpp": ".cpp"}
 SYMBOL_KINDS = ("local", "parameter")
 UNKNOWN_DETAIL = "is not in the dictionary"
 
+
+def _decorated(regex: str) -> dict:
+    return {"inside": {"kind": "decorated_definition",
+                       "has": {"kind": "decorator", "regex": regex}}}
+
+
 _END = {"stopBy": "end"}
 _LEFT_OF_ASSIGNMENT = {"inside": {"kind": "assignment", "field": "left"}}
 _IN_FUNCTION = {"inside": {"kind": "function_definition", **_END}}
 _IN_CLASS = {"inside": {"kind": "class_definition", **_END}}
-_OVERRIDDEN = {"inside": {"kind": "decorated_definition",
-                          "has": {"kind": "decorator", "regex": r"^@(\w+\.)?override$"}}}
+_IN_ENUM = {"inside": {"kind": "class_definition", **_END, "has": {
+    "field": "superclasses", "regex": r"\b(Int|Str)?(Enum|Flag)\b"}}}
+_OVERRIDDEN = _decorated(r"^@(\w+\.)?override$")
+_PROPERTY = _decorated(r"^@(\w+\.)*(cached_)?property$")
+_SETTER = _decorated(r"\.(setter|deleter)$")
+_METHOD = {"inside": {"kind": "block", "stopBy": {"not": {"kind": "decorated_definition"}},
+                      "inside": {"kind": "class_definition"}}}
+_INCLUDE_GUARD = {"all": [{"not": {"has": {"field": "value", "kind": "preproc_arg"}}},
+                          {"inside": {"kind": "preproc_ifdef"}}, {"nthChild": 2}]}
 _THROUGH_DECLARATOR_WRAPPERS = {"stopBy": {"not": {"any": [
     {"kind": "pointer_declarator"}, {"kind": "reference_declarator"}, {"kind": "array_declarator"},
 ]}}}
@@ -36,7 +49,15 @@ _IN_BLOCK = {"inside": {"kind": "compound_statement", **_END}}
 RULES: dict[str, dict[str, dict]] = {
     "python": {
         "function": {"kind": "identifier", "inside": {
-            "kind": "function_definition", "field": "name", "not": _OVERRIDDEN}},
+            "kind": "function_definition", "field": "name",
+            "not": {"any": [_OVERRIDDEN, _PROPERTY, _SETTER, _METHOD]}}},
+        "method": {"kind": "identifier", "inside": {
+            "kind": "function_definition", "field": "name", **_METHOD,
+            "not": {"any": [_OVERRIDDEN, _PROPERTY, _SETTER]}}},
+        "property": {"kind": "identifier", "inside": {
+            "kind": "function_definition", "field": "name", **_PROPERTY}},
+        "enumerator": {"kind": "identifier", "all": [
+            _LEFT_OF_ASSIGNMENT, _IN_ENUM, {"not": _IN_FUNCTION}]},
         "type": {"kind": "identifier", "inside": {"kind": "class_definition", "field": "name"}},
         "parameter": {"kind": "identifier", "any": [
             {"inside": {"kind": "parameters"}},
@@ -48,7 +69,7 @@ RULES: dict[str, dict[str, dict]] = {
         ]},
         "local": {"kind": "identifier", "all": [_LEFT_OF_ASSIGNMENT, _IN_FUNCTION]},
         "field": {"kind": "identifier", "any": [
-            {"all": [_LEFT_OF_ASSIGNMENT, _IN_CLASS, {"not": _IN_FUNCTION}]},
+            {"all": [_LEFT_OF_ASSIGNMENT, _IN_CLASS, {"not": {"any": [_IN_FUNCTION, _IN_ENUM]}}]},
             {"inside": {"kind": "attribute", "field": "attribute",
                         "has": {"field": "object", "regex": "^(self|cls)$"},
                         **_LEFT_OF_ASSIGNMENT}},
@@ -60,8 +81,12 @@ RULES: dict[str, dict[str, dict]] = {
         "method": {"kind": "field_identifier", "inside": {
             "kind": "function_declarator", "field": "declarator",
             "not": {"has": {"kind": "virtual_specifier"}}}},
-        "function": {"kind": "identifier",
-                     "inside": {"kind": "function_declarator", "field": "declarator"}},
+        "function": {"kind": "identifier", "any": [
+            {"inside": {"kind": "function_declarator", "field": "declarator"}},
+            {"inside": {"kind": "preproc_function_def", "field": "name"}},
+        ]},
+        "constant": {"kind": "identifier", "inside": {
+            "kind": "preproc_def", "field": "name", "not": _INCLUDE_GUARD}},
         "field": {"kind": "field_identifier", "inside": {"kind": "field_declaration", **_END},
                   "not": {"inside": {"any": [{"kind": "function_declarator"},
                                              {"kind": "field_expression"}], **_END}}},
@@ -143,10 +168,13 @@ RULE_VAGUE_WORD = "vague_word"
 RULE_REJECTED_SYNONYM = "rejected_synonym"
 RULE_FUNCTION_WORD = "function_word"
 RULE_SYMBOL_SCOPE = "symbol_scope"
+RULE_MOLD = "mold"
 
 
-def judge(dictionary: vocabulary.Dictionary, kind: str, name: str) -> list[tuple[str, str, str]]:
-    """(rule, detail, suggested name or "") per fault in one declared name."""
+def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
+          catalogue: dict[str, tuple[str, ...]] = vocabulary_molds.KINDS) -> list[tuple[str, str, str]]:
+    """(rule, detail, suggested name or "") per fault in one declared name; the
+    mold is judged only once every word resolved."""
     if _exempt(dictionary, name):
         return []
     out: list[tuple[str, str, str]] = []
@@ -154,24 +182,34 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str) -> list[tuple
         out.append((RULE_LEADING_UNDERSCORE,
                     "a leading `_` is not the private mark; private is a trailing `_`",
                     f"{name.strip('_')}_"))
-    for word in words(name):
+    parts = words(name)
+    faults: list[tuple[str, str, str]] = []
+    for position, word in enumerate(parts):
+        if position == 0 and word.lower() in vocabulary_molds.PREFIXES:
+            continue
         match = dictionary.resolve(word) or dictionary.resolve(word.lower())
         if match is None:
-            out.append((RULE_UNKNOWN_WORD, f"`{word}` {UNKNOWN_DETAIL}", ""))
+            faults.append((RULE_UNKNOWN_WORD, f"`{word}` {UNKNOWN_DETAIL}", ""))
         elif match.kind == "vague":
-            out.append((RULE_VAGUE_WORD, f"`{word}` is vague — {match.detail}", ""))
+            faults.append((RULE_VAGUE_WORD, f"`{word}` is vague — {match.detail}", ""))
         elif match.kind == "rejected":
             rule = RULE_FUNCTION_WORD if match.pos == ("rejected",) else RULE_REJECTED_SYNONYM
             renamed = name.replace(word, _spelled_like(word, match.word))
-            out.append((rule, f"`{word}`: {match.detail}",
-                        renamed if match.word != word.lower() else ""))
+            faults.append((rule, f"`{word}`: {match.detail}",
+                           renamed if match.word != word.lower() else ""))
         elif match.kind == "symbol" and kind not in SYMBOL_KINDS:
-            out.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}", ""))
-    return out
+            faults.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}", ""))
+    if not faults and parts:
+        misfit = vocabulary_molds.fit(dictionary, catalogue, kind, name, parts)
+        if misfit:
+            detail, suggestion = misfit
+            faults.append((RULE_MOLD, detail, suggestion))
+    return out + faults
 
 
 def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds)
     out: list[Finding] = []
     for rel, lines in sorted(changed.items()):
         lang = mutants.language_of(rel)
@@ -182,7 +220,7 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         for line, kind, name in declarations(repo.root / rel, lang):
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
-            for rule, detail, suggestion in judge(dictionary, kind, name):
+            for rule, detail, suggestion in judge(dictionary, kind, name, catalogue):
                 out.append(Finding(rel, line, kind, name, rule, detail, suggestion))
     return out
 
@@ -194,7 +232,8 @@ def describe(f: Finding) -> str:
 
 def suggest(repo: Repo, f: Finding) -> str:
     return (
-        "Rename it with a dictionary word (`mutation-gate vocabulary lookup <word>`), add a "
+        "Rename it with a dictionary word in the mold for its kind (`mutation-gate vocabulary "
+        f"lookup <word>`, `lookup --kind {f.kind} <name>`), add a "
         f"[[concept]] to {repo.config.vocabulary}, or record a waiver in {waivers.path(repo)}:\n"
         "[[waiver]]\n"
         f'check = "{CHECK}"\n'
