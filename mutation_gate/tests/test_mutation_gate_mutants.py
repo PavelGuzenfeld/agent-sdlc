@@ -645,9 +645,29 @@ def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, 
     )
     monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
     mutants.require_ast_grep()
-    err = capsys.readouterr().err
-    assert err.count("\n") == 1
-    assert installed in err
+    assert capsys.readouterr().err == (
+        f"mutation-gate: ast-grep {installed} on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version\n"
+    )
+
+
+def test_require_ast_grep_warns_on_a_pin_that_is_a_proper_prefix_of_the_installed_version(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(mutants, "_version_warned", False)
+    installed = mutants.PINNED_AST_GREP_VERSION + "0"
+    assert installed.startswith(mutants.PINNED_AST_GREP_VERSION)
+    stubbed = subprocess.CompletedProcess(
+        ["ast-grep", "--version"], 0, stdout=f"ast-grep {installed}\n", stderr=""
+    )
+    monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
+    mutants.require_ast_grep()
+    assert capsys.readouterr().err == (
+        f"mutation-gate: ast-grep {installed} on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version\n"
+    )
 
 
 def test_require_ast_grep_warns_only_once_across_repeated_calls_in_one_process(

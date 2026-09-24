@@ -22,6 +22,10 @@ PIN_SITES = (
 )
 
 
+def test_the_pinned_version_is_a_semver_triple():
+    assert re.fullmatch(r"\d+\.\d+\.\d+", PINNED_AST_GREP_VERSION)
+
+
 @pytest.mark.parametrize("rel", PIN_SITES)
 def test_every_ast_grep_cli_reference_is_pinned_to_the_pinned_version(rel):
     text = (REPO_ROOT / rel).read_text()
