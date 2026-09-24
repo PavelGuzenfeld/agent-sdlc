@@ -671,7 +671,11 @@ def test_require_ast_grep_warns_only_once_across_repeated_calls_in_one_process(
     mutants.require_ast_grep()
     mutants.require_ast_grep()
     mutants.require_ast_grep()
-    assert capsys.readouterr().err.count("\n") == 1
+    assert capsys.readouterr().err == (
+        "mutation-gate: ast-grep 0.44.1 on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version\n"
+    )
     assert mutants._ast_grep_ready.cache_info().misses == 1
 
 
