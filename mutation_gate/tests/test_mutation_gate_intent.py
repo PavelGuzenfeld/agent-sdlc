@@ -62,7 +62,7 @@ def test_a_session_prompt_is_the_intent_when_the_branch_has_no_ticket(on_branch,
 
 def test_the_tickets_body_wins_over_a_session_prompt(on_branch, monkeypatch):
     repo = on_branch("fix/153-the-deferred-fix")
-    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: f"body of {n}")
+    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: (f"body of {n}", ""))
     intent = adversary.resolve_intent(repo, None, "unrelated chat text")
     assert intent is not None
     assert intent.source == "issue #153"
@@ -73,13 +73,13 @@ def test_a_ticket_number_with_no_body_skips_even_with_a_session_prompt_present(
     on_branch, monkeypatch
 ):
     repo = on_branch("fix/153-the-deferred-fix")
-    monkeypatch.setattr(adversary, "_issue_body", lambda *a: "")
+    monkeypatch.setattr(adversary, "_issue_body", lambda *a: ("", ""))
     assert adversary.resolve_intent(repo, None, "unrelated chat text") is None
 
 
 def test_the_ticket_is_the_branchs_issue_not_the_previous_commits(on_branch, monkeypatch):
     repo = on_branch("fix/153-the-deferred-fix")
-    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: f"body of {n}")
+    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: (f"body of {n}", ""))
     intent = adversary.resolve_intent(repo, None)
     assert intent is not None
     assert intent.source == "issue #153"
@@ -97,7 +97,7 @@ def test_an_issue_number_that_resolves_to_nothing_skips_rather_than_reviewing_bl
     on_branch, monkeypatch
 ):
     repo = on_branch("fix/153-the-deferred-fix")
-    monkeypatch.setattr(adversary, "_issue_body", lambda *a: "")
+    monkeypatch.setattr(adversary, "_issue_body", lambda *a: ("", ""))
     assert adversary.resolve_intent(repo, None) is None
 
 
@@ -134,7 +134,7 @@ def test_findings_name_the_intent_they_were_reviewed_against(source, monkeypatch
 def test_the_isolated_review_receives_the_intent_body_that_was_resolved(monkeypatch):
     exported = {}
 
-    def fake_isolated(_name, _prompt, work):
+    def fake_isolated(_name, _prompt, work, _extra=()):
         exported["intent"] = (work / "INTENT.md").read_text()
         return "no gaps found"
 
@@ -142,6 +142,18 @@ def test_the_isolated_review_receives_the_intent_body_that_was_resolved(monkeypa
     adversary.run([], adversary.Intent("issue #153", "the fix #151 deferred"), "")
     assert "the fix #151 deferred" in exported["intent"]
     assert "issue #153" in exported["intent"]
+
+
+def test_an_intent_with_no_model_reaches_the_isolated_review_with_no_model_flag(monkeypatch):
+    captured = {}
+
+    def fake_isolated(_name, _prompt, _work, extra=()):
+        captured["extra"] = extra
+        return "no gaps found"
+
+    monkeypatch.setattr(adversary, "run_isolated", fake_isolated)
+    adversary.run([], adversary.Intent("user prompt", "do the thing"), "")
+    assert captured["extra"] == ()
 
 
 def test_a_skipped_adversary_says_so_instead_of_naming_an_intent():
