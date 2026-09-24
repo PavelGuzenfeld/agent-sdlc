@@ -238,6 +238,46 @@ def test_worktree_still_prefers_the_branchs_ticket_over_the_transcripts_prompt(
     assert intent.text == "body of 153"
 
 
+def test_worktree_user_prompt_flag_wins_over_ticket_and_session_prompt(tmp_path, monkeypatch):
+    seen = {}
+    repo = _repo(tmp_path)
+    transcript = _write_transcript(tmp_path, "unrelated chat text")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps(
+        {"cwd": str(tmp_path), "transcript_path": str(transcript)}))
+    monkeypatch.setattr(cli.adversary, "git", lambda *a, cwd=None: "153-the-deferred-fix\n")
+    monkeypatch.setattr(cli.adversary, "_issue_body", lambda *a: pytest.fail(
+        "looked up a ticket instead of using the explicit --user-prompt flag"))
+
+    def _capture_run(cands, intent, summary):
+        seen["intent"] = intent
+        return "no gaps found"
+
+    monkeypatch.setattr(cli.adversary, "run", _capture_run)
+    _stub_gate_to_pass(monkeypatch, tmp_path, [tmp_path / "t.py"])
+    assert cli.main(["--worktree", "--user-prompt", "explicit override"]) == 0
+    assert seen["intent"].source == "user prompt"
+    assert seen["intent"].text == "explicit override"
+
+
+def test_worktree_skips_the_adversary_cleanly_with_no_transcript_and_no_ticket(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps({"cwd": str(tmp_path)}))
+    monkeypatch.setattr(cli.adversary, "git", lambda *a, cwd=None: "fix/utf-8-decode\n")
+    _stub_gate_to_pass(monkeypatch, tmp_path, [tmp_path / "t.py"])
+    assert cli.main(["--worktree"]) == 0
+    assert "adversary skipped" in capsys.readouterr().err
+
+
 def test_session_prompt_skips_tool_results_and_returns_the_real_user_text(tmp_path):
     transcript = _write_transcript(tmp_path, "the actual prompt")
     assert cli._session_prompt(str(transcript)) == "the actual prompt"

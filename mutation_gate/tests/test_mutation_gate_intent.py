@@ -66,6 +66,7 @@ def test_the_tickets_body_wins_over_a_session_prompt(on_branch, monkeypatch):
     intent = adversary.resolve_intent(repo, None, "unrelated chat text")
     assert intent is not None
     assert intent.source == "issue #153"
+    assert intent.text == "body of 153"
 
 
 def test_a_ticket_number_with_no_body_skips_even_with_a_session_prompt_present(
@@ -123,7 +124,7 @@ def test_a_branch_the_git_call_cannot_resolve_yields_no_ticket(tmp_path, monkeyp
     assert adversary._branch_issue(_repo(tmp_path)) == ""
 
 
-@pytest.mark.parametrize("source", ["issue #153", "user prompt"])
+@pytest.mark.parametrize("source", ["issue #153", "user prompt", "session prompt"])
 def test_findings_name_the_intent_they_were_reviewed_against(source, monkeypatch):
     monkeypatch.setattr(adversary, "run_isolated", lambda *a, **k: "no gaps found")
     out = adversary.run([], adversary.Intent(source, "body"), "")
