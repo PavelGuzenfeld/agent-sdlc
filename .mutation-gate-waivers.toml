@@ -591,3 +591,13 @@ column = 7
 old = """stop < start"""
 new = """stop <= start"""
 reason = "stop and start are text.index() hits for AGENTS_BEGIN and AGENTS_END, which share only a 5-byte prefix (\"<!-- \") before diverging at 'B' vs 'E'; no byte string can make both .index() calls return the same offset, so stop == start is unreachable and < / <= are behaviourally identical for every input this function can see"
+
+# --- vocabulary_path.py path-segment check, from #108 ---------------------------
+
+[[waiver]]
+file = "mutation_gate/vocabulary_path.py"
+line = 128
+column = 12
+old = """continue"""
+new = """break"""
+reason = "equivalent: this continue sits under `if is_last and ...`, so it only runs on the loop's last iteration (index == len(segments)) — there is no further segment for continue to skip to, and the loop has no for/else, so break and continue leave check() identical. Rebuilt the mutant and diffed vocabulary_path.check() over every exempt last-segment case the test file exercises (__init__.py/CMakeLists.txt/README.md, _version.py/_core.so, an ALL-CAPS .md, and a leading-underscore file right after it): byte-identical output both ways."

@@ -46,6 +46,7 @@ def _no_git(*args: str, cwd=None) -> str:
 def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]]) -> int:
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(cli.model_vv, "git", _no_git)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
     monkeypatch.setattr(cli, "_gate_file", lambda *a, **k: (False, [], []))
     monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: added)
     for mod in (cli, runner, token):
