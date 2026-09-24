@@ -479,22 +479,26 @@ def test_staged_dry_run_probes_gdscript_readiness_once_across_no_comments_vocabu
         return real_run(cmd, **kwargs)
 
     monkeypatch.setattr(vocabulary_check.subprocess, "run", counting_run)
+    vocabulary_check._gdscript_ready.cache_clear()
 
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
+    skip_lines = [line for line in err.splitlines()
+                  if "gdscript" in line.lower() and "skip" in line.lower()]
     assert no_comments_calls == [1]
     assert vocabulary_calls == [1]
     assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
     assert "b.gd: 0 candidate test file(s), 0 mutant(s)" in err
-    assert err.count(vocabulary_check.GDSCRIPT_MISSING) == 1
+    assert len(skip_lines) == 1
     assert len(probe_calls) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
 
 
 def test_staged_dry_run_says_skipped_once_with_no_sgconfig_at_all(
     tmp_path, monkeypatch, capsys
 ):
     """#233 (adversary): the missing-sgconfig case, not just the broken-library
-    one, must still print a single skip line across every enabled check."""
+    one, must still resolve and print exactly once across every enabled check."""
     repo = Repo(root=tmp_path, origin="", remotes=(),
                 config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
     (tmp_path / ".vocabulary.toml").write_text("")
@@ -505,9 +509,13 @@ def test_staged_dry_run_says_skipped_once_with_no_sgconfig_at_all(
     monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}})
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+    vocabulary_check._gdscript_ready.cache_clear()
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
-    assert err.count(vocabulary_check.GDSCRIPT_MISSING) == 1
+    skip_lines = [line for line in err.splitlines()
+                  if "gdscript" in line.lower() and "skip" in line.lower()]
+    assert len(skip_lines) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
 
 
 def test_staged_dry_run_never_probes_gdscript_readiness_for_a_python_only_change(
@@ -563,8 +571,11 @@ def test_staged_dry_run_probes_gdscript_readiness_once_when_the_parser_is_ready(
         return real_run(cmd, **kwargs)
 
     monkeypatch.setattr(vocabulary_check.subprocess, "run", counting_run)
+    vocabulary_check._gdscript_ready.cache_clear()
 
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
     assert vocabulary_check.GDSCRIPT_MISSING not in err
+    assert err.count("1 + 2 => 1 - 2") == 2
     assert len(probe_calls) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
