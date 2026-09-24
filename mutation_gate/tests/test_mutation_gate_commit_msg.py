@@ -509,7 +509,22 @@ def test_cli_under_commit_cleanup_whitespace_checks_a_banned_word_confined_to_a_
     message = "fix a plain thing\n\n# we should leverage this\n"
     msgfile = _msgfile(tmp_path, message)
     assert cli.main(["commit-msg", msgfile]) == 1
-    assert 'banned word "leverage"' in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert 'banned word "leverage"' in err
+    assert "line 3:" in err
+
+
+@pytest.mark.parametrize("mode", ["verbatim", "scissors"])
+def test_cli_under_a_cleanup_mode_that_keeps_comments_checks_a_banned_word_confined_to_a_comment_line(
+    tmp_path, monkeypatch, capsys, mode
+):
+    monkeypatch.setattr(commit_msg, "git", _fake_git_for_cleanup_mode(mode))
+    message = "fix a plain thing\n\n# we should leverage this\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 1
+    err = capsys.readouterr().err
+    assert 'banned word "leverage"' in err
+    assert "line 3:" in err
 
 
 def test_cli_under_commit_cleanup_strip_ignores_a_banned_word_confined_to_a_comment_line(
@@ -529,6 +544,51 @@ def test_cli_with_commit_cleanup_unset_keeps_todays_strip_behavior(tmp_path, mon
     message = "fix a plain thing\n\n# we should leverage this\n"
     msgfile = _msgfile(tmp_path, message)
     assert cli.main(["commit-msg", msgfile]) == 0
+
+
+def _fake_git_for_comment_char_and_cleanup_mode(comment_char: str, cleanup_mode: str):
+    def fake_git(*args, cwd=None):
+        if args[:2] == ("config", "--get-regexp"):
+            return f"core.commentchar {comment_char}\n"
+        if args == ("config", "--get", "commit.cleanup"):
+            return f"{cleanup_mode}\n"
+        raise AssertionError(args)
+
+    return fake_git
+
+
+def test_cli_under_a_custom_comment_char_and_commit_cleanup_whitespace_keeps_the_comment_line(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        commit_msg, "git", _fake_git_for_comment_char_and_cleanup_mode(";", "whitespace")
+    )
+    message = "fix a plain thing\n\n; we should leverage this\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 1
+    assert 'banned word "leverage"' in capsys.readouterr().err
+
+
+def test_cli_under_a_custom_comment_char_and_commit_cleanup_strip_strips_the_comment_line(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        commit_msg, "git", _fake_git_for_comment_char_and_cleanup_mode(";", "strip")
+    )
+    message = "fix a plain thing\n\n; we should leverage this\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 0
+
+
+def test_range_form_never_queries_commit_cleanup_or_core_comment_config(monkeypatch, capsys):
+    def strict_git(*args, cwd=None):
+        if args[0] == "log":
+            return f"{SHA_A}\x1ffix a thing\n\n# we should leverage this\n\x00"
+        raise AssertionError(args)
+
+    monkeypatch.setattr(commit_msg, "git", strict_git)
+    assert cli.main(["commit-msg", "--range", "base..head"]) == 1
+    assert 'banned word "leverage"' in capsys.readouterr().err
 
 
 def test_cli_refuses_with_no_msgfile_and_no_range():
