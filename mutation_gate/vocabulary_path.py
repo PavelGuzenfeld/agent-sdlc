@@ -47,16 +47,16 @@ _WORD_FAULT_RULES = frozenset({
 })
 
 
-def _matches_any(name: str, patterns: tuple[re.Pattern, ...]) -> bool:
+def matches_any(name: str, patterns: tuple[re.Pattern, ...]) -> bool:
     return any(p.search(name) for p in patterns)
 
 
-def _fully_exempt(name: str) -> bool:
+def fully_exempt(name: str) -> bool:
     return (
         name in EXEMPT_FILES
         or name in TOOL_DICTATED_FILES
         or any(fnmatch.fnmatch(name, glob) for glob in TOOL_DICTATED_GLOBS)
-        or _matches_any(name, EXEMPT_PATTERNS)
+        or matches_any(name, EXEMPT_PATTERNS)
     )
 
 
@@ -120,13 +120,13 @@ def _findings_for(
         is_last = index == len(segments)
         if not is_last:
             prefix_parts.append(segment)
-            if _matches_any(segment, EXEMPT_PATH_PATTERNS):
+            if matches_any(segment, EXEMPT_PATH_PATTERNS):
                 break
             if "/".join(prefix_parts) in existing_dirs:
                 continue
-        if is_last and _fully_exempt(segment):
+        if is_last and fully_exempt(segment):
             continue
-        if _matches_any(segment, EXEMPT_PATTERNS):
+        if matches_any(segment, EXEMPT_PATTERNS):
             continue
         if waivers.finding_waived(wvs, CHECK, rel, line=index):
             continue
