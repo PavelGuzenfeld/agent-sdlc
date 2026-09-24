@@ -55,6 +55,7 @@ def _gate(monkeypatch, tmp_path: Path, files: dict[str, str], domain: str = WORD
     added = {rel: set(range(1, text.count("\n") + 1)) for rel, text in files.items()}
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(cli.model_vv, "git", _no_git)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
     monkeypatch.setattr(cli, "_gate_file", lambda *a, **k: (False, [], []))
     monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: added)
     for mod in (cli, runner, token):

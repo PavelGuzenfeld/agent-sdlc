@@ -20,7 +20,7 @@ RETURNS = ("value", "none")
 CONCEPT_KEYS = {"word", "meaning", "pos", "reject", "forms", "irregular", "head", "returns"}
 CONCEPT_KINDS = ("canonical", "rejected", "form")
 DOMAIN_TABLES = {"concept", "reject", "symbol", "vague", "collection", "distinct"}
-CORE_TABLES = DOMAIN_TABLES | {"function_words", "convention"}
+CORE_TABLES = DOMAIN_TABLES | {"function_words", "convention", "path"}
 
 _SIBILANT_ENDINGS = ("s", "x", "z", "ch", "sh")
 _SINGLE_VOWEL_CLOSED_SYLLABLE = re.compile(r"[^aeiou]*[aeiou][^aeiouwxy]")
