@@ -158,8 +158,9 @@ install_claude() {
             "$(hook_entry_guard "$line")" \
             "$(printf '%s' "$line" | jq -c .entry)"
     done
+    unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
     if command -v mutation-gate >/dev/null 2>&1; then
-        merge_hook Stop mutation-gate '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
+        merge_hook Stop mutation-gate-hook.sh '{"hooks":[{"type":"command","command":"sh $HOME/.claude/bin/mutation-gate-hook.sh"}]}'
     fi
 
     if [ ! -e "$HOME/.claude/CLAUDE.md" ]; then
@@ -191,8 +192,9 @@ uninstall_claude() {
             grep -qx "$guard" "$owned_bins" || continue
             unmerge_hook "$(printf '%s' "$line" | jq -r .type)" "$(printf '%s' "$line" | jq -c .entry)"
         done
-        if grep -qx mutation-gate "$owned_bins"; then
-            unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
+        unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
+        if grep -qx mutation-gate-hook.sh "$owned_bins"; then
+            unmerge_hook Stop '{"hooks":[{"type":"command","command":"sh $HOME/.claude/bin/mutation-gate-hook.sh"}]}'
         fi
     fi
     rm -f "$owned_bins"
