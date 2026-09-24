@@ -209,7 +209,7 @@ def test_kata_names_the_model_labels_as_the_queue():
     content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
     normalized = " ".join(content.split())
     assert "`model:haiku`, `model:sonnet`, `model:opus` or `model:fable`" in normalized
-    assert "asks which model before dispatching" in normalized
+    assert "asks which model; that answer is the triage" in normalized
     assert "dispatches only the first, on haiku" in normalized
 
 
