@@ -255,9 +255,10 @@ def test_a_modified_file_marked_binary_in_gitattributes_gets_lines_from_the_blob
         "+    return y >= 2\n"
     )
     calls = _stub_git_sequence(monkeypatch, outer, blob_diff)
-    _stub_git_bytes(monkeypatch, {"bbb2222": b"text, present"})
+    bytes_calls = _stub_git_bytes(monkeypatch, {"bbb2222": b"text, present"})
     assert mutants.changed_lines(tmp_path, staged=True) == {"fixture.py": {3, 4, 5}}
-    assert calls[1][-2:] == ("aaa1111", "bbb2222")
+    assert calls[1] == ("diff", "--text", "-U0", "--no-color", "aaa1111", "bbb2222")
+    assert bytes_calls == [("cat-file", "-p", "bbb2222")]
 
 
 def test_a_binary_marked_file_whose_blob_has_a_nul_byte_is_skipped_with_a_message(
@@ -265,11 +266,71 @@ def test_a_binary_marked_file_whose_blob_has_a_nul_byte_is_skipped_with_a_messag
 ):
     outer = _binary_diff("fixture.py", "aaa1111", "bbb2222")
     _stub_git_sequence(monkeypatch, outer)
-    _stub_git_bytes(monkeypatch, {"bbb2222": b"\x00binary"})
+    bytes_calls = _stub_git_bytes(monkeypatch, {"bbb2222": b"\x00binary"})
     assert mutants.changed_lines(tmp_path, staged=True) == {}
-    err = capsys.readouterr().err
-    assert "fixture.py" in err
-    assert "binary" in err.lower()
+    assert bytes_calls == [("cat-file", "-p", "bbb2222")]
+    assert capsys.readouterr().err == "  fixture.py: binary — skipped, no mutants\n"
+
+
+def test_a_binary_marked_files_blob_fetch_failure_refuses_instead_of_dropping_it(
+    monkeypatch, tmp_path
+):
+    outer = _binary_diff("fixture.py", "aaa1111", "bbb2222")
+    _stub_git_sequence(monkeypatch, outer)
+
+    def _boom(*args: str, cwd=None) -> bytes:
+        raise GateError("git cat-file -p bbb2222: bad object")
+
+    monkeypatch.setattr(mutants, "git_bytes", _boom)
+    with pytest.raises(GateError):
+        mutants.changed_lines(tmp_path, staged=True)
+
+
+def test_an_added_file_marked_binary_is_recovered_in_worktree_mode_too(monkeypatch, tmp_path):
+    diff = _binary_diff("fixture.py", "0000000", "abc1234", added=True)
+    calls = _stub_git_sequence(monkeypatch, diff)
+    _stub_git_bytes(monkeypatch, {"abc1234": b"x = 1\n"})
+    assert mutants.changed_lines(tmp_path, staged=False) == {"fixture.py": {1}}
+    assert "--cached" not in calls[0]
+
+
+def test_a_binary_marked_gdscript_file_is_recovered_like_a_python_one(monkeypatch, tmp_path):
+    diff = _binary_diff("fixture.gd", "0000000", "abc1234", added=True)
+    _stub_git_sequence(monkeypatch, diff)
+    _stub_git_bytes(monkeypatch, {"abc1234": b"func f():\n\treturn 1\n"})
+    assert mutants.changed_lines(tmp_path, staged=True) == {"fixture.gd": {1, 2}}
+
+
+def test_a_binary_entry_does_not_swallow_a_normal_files_lines_that_follow_it(
+    monkeypatch, tmp_path
+):
+    diff = _binary_diff("a.py", "0000000", "bbb2222", added=True) + (
+        "diff --git a/b.py b/b.py\n"
+        "index ccc3333..ddd4444 100644\n"
+        "--- a/b.py\n"
+        "+++ b/b.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+y = 2\n"
+    )
+    _stub_git_sequence(monkeypatch, diff)
+    _stub_git_bytes(monkeypatch, {"bbb2222": b"x = 1\n"})
+    assert mutants.changed_lines(tmp_path, staged=True) == {"a.py": {1}, "b.py": {1}}
+
+
+def test_a_binary_entry_does_not_swallow_a_normal_files_lines_that_precede_it(
+    monkeypatch, tmp_path
+):
+    diff = (
+        "diff --git a/b.py b/b.py\n"
+        "index ccc3333..ddd4444 100644\n"
+        "--- a/b.py\n"
+        "+++ b/b.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+y = 2\n"
+    ) + _binary_diff("a.py", "0000000", "bbb2222", added=True)
+    _stub_git_sequence(monkeypatch, diff)
+    _stub_git_bytes(monkeypatch, {"bbb2222": b"x = 1\n"})
+    assert mutants.changed_lines(tmp_path, staged=True) == {"a.py": {1}, "b.py": {1}}
 
 
 def test_a_binary_marked_file_outside_a_gated_suffix_is_left_out_without_a_blob_fetch(
