@@ -212,7 +212,11 @@ def _run(repo, args, staged: bool) -> int:
         target = (repo.root / args.file)
         all_changed = {args.file: set(range(1, len(target.read_text().splitlines()) + 1))}
     else:
-        all_changed = mutants.changed_lines(repo.root, staged)
+        try:
+            all_changed = mutants.changed_lines(repo.root, staged)
+        except GateError as exc:
+            _emit(f"mutation-gate refused: {exc}")
+            return 2
 
     # Before mutants: nothing here runs tests, so a missing spec fails in
     # milliseconds instead of after a baseline run (#56 decision 10).

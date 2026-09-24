@@ -87,6 +87,7 @@ jobs:
           sh tests/no-leaks-hook.sh
           sh tests/worktree-shim-hook.sh
           sh tests/hook-stages.sh
+          sh tests/mutants-diff-prefix.sh
 
   docs:
     runs-on: ubuntu-latest
