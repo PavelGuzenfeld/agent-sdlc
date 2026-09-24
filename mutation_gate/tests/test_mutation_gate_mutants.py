@@ -917,8 +917,8 @@ def test_staged_dry_run_masks_a_literal_inside_an_fstring_expression_on_every_py
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
-    assert "x + 1 => x - 1" in err
-    assert "1 => 2" not in err
+    mut_lines = [ln.strip() for ln in err.splitlines() if ln.strip().startswith("mut")]
+    assert mut_lines == ["mut   1:11: x + 1 => x - 1"]
 
 
 def test_masked_spans_covers_a_literal_inside_an_fstring_expression_on_every_python(tmp_path):
@@ -928,3 +928,19 @@ def test_masked_spans_covers_a_literal_inside_an_fstring_expression_on_every_pyt
     path = tmp_path / "a.py"
     path.write_bytes(b'label = f"{x + 1}"\n')
     assert mutants.masked_spans(path, "python") == [(8, 18)]
+
+
+def test_masked_spans_covers_a_literal_inside_an_fstring_format_spec_on_every_python(tmp_path):
+    """#257: thermal_watch.py's `:>4` waiver was a literal mutated only
+    inside the FSTRING_MIDDLE format-spec text 3.12 emits for it."""
+    path = tmp_path / "a.py"
+    path.write_bytes(b'label = f"{x:>4}"\n')
+    assert mutants.masked_spans(path, "python") == [(8, 17)]
+
+
+def test_masked_spans_covers_a_nested_fstring_as_one_span_on_every_python(tmp_path):
+    """#257: PEP 701 allows an f-string expression to hold another f-string;
+    3.12 emits a nested FSTRING_START..END run, still masked as one span."""
+    path = tmp_path / "a.py"
+    path.write_bytes(b"label = f\"{f'{y}'}\"\n")
+    assert mutants.masked_spans(path, "python") == [(8, 19)]
