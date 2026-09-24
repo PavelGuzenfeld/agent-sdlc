@@ -23,7 +23,7 @@ TIMEOUT_FACTOR = 6.0
 
 
 def _emit(line: str = "") -> None:
-    print(line, file=sys.stderr)
+    print(line.encode(errors="backslashreplace").decode(), file=sys.stderr)
 
 
 def _write_report(repo, name: str, text: str, staged: bool) -> Path:

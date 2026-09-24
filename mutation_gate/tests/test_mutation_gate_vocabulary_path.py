@@ -16,6 +16,7 @@ one."""
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -44,6 +45,15 @@ def _repo(tmp_path: Path, domain: str = "", config: Config | None = None) -> Rep
                 config=config or Config(vocabulary=".vocabulary.toml"))
 
 
+def _c_quote(p: str) -> str:
+    try:
+        p.encode("ascii")
+        return p
+    except UnicodeEncodeError:
+        escaped = "".join(f"\\{b:03o}" for b in p.encode("utf-8"))
+        return f'"{escaped}"'
+
+
 def _fake_git(cached: list[str] = (), worktree: list[str] = (),
               ls_tree: list[str] | None = (), ls_files: list[str] = ()):
     def fake(*args: str, cwd=None) -> str:
@@ -53,9 +63,13 @@ def _fake_git(cached: list[str] = (), worktree: list[str] = (),
         if args[:3] == ("ls-tree", "-r", "--name-only"):
             if ls_tree is None:
                 raise GateError("git ls-tree: fatal: Not a valid object name HEAD")
-            return "".join(f"{p}\n" for p in ls_tree)
-        if args == ("ls-files",):
-            return "".join(f"{p}\n" for p in ls_files)
+            if "-z" in args:
+                return "".join(f"{p}\0" for p in ls_tree)
+            return "".join(f"{_c_quote(p)}\n" for p in ls_tree)
+        if args[0] == "ls-files":
+            if "-z" in args:
+                return "".join(f"{p}\0" for p in ls_files)
+            return "".join(f"{_c_quote(p)}\n" for p in ls_files)
         raise AssertionError(f"unexpected git call {args}")
     return fake
 
@@ -71,6 +85,21 @@ def test_file_named_after_the_class_it_declares_passes(tmp_path, monkeypatch):
     _added(monkeypatch, repo, {"src/frame_parser.py": "class FrameParser:\n    pass\n"},
            existing=["src/existing.py"])
     assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_non_ascii_existing_directory_is_recognized(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"café/frame_parser.py": "class FrameParser:\n    pass\n"},
+           existing=["café/existing.py"])
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_non_ascii_existing_directory_is_recognized_in_worktree_mode(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _write(repo.root, "café/frame_parser.py", "class FrameParser:\n    pass\n")
+    monkeypatch.setattr(vocabulary_path, "git", _fake_git(
+        cached=[], worktree=["café/frame_parser.py"], ls_files=["café/existing.py"]))
+    assert vocabulary_path.check(repo, False, []) == []
 
 
 def test_unknown_word_and_wrong_shape_block_on_the_mold_word(tmp_path, monkeypatch):
@@ -452,6 +481,33 @@ def test_real_git_repo_frame_parser_passes_and_parse_stuff_blocks(tmp_path, monk
                                        True) == []
     assert cli.main(["--staged", "--no-adversary"]) == 0
     assert "a namespace takes nouns only" in err
+
+
+@pytest.mark.skipif(shutil.which("git") is None,
+                    reason="needs a real git binary; the gate's own test image has none")
+def test_real_git_repo_quote_path_false_cafe_file_staged_dry_run_does_not_crash(
+    tmp_path, monkeypatch, capsys,
+):
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "core.quotePath", "false"], cwd=root, check=True)
+    (root / "src").mkdir()
+    (root / "src" / "existing.py").write_text("pass\n")
+    subprocess.run(["git", "add", "src/existing.py"], cwd=root, check=True)
+    subprocess.run(["git", *_GIT_IDENTITY, "commit", "-q", "-m", "init"], cwd=root, check=True)
+    _write(root, ".vocabulary.toml", "")
+    _write(root, ".mutation-gate.toml", 'vocabulary = ".vocabulary.toml"\n')
+    monkeypatch.chdir(root)
+    for mod in (cli, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+
+    name = os.fsdecode(b"caf\xe9.py")
+    (root / "src" / name).write_text("pass\n")
+    subprocess.run(["git", "add", f"src/{name}"], cwd=root, check=True)
+    assert cli.main(["--staged", "--dry-run"]) == 1
+    err = capsys.readouterr().err
+    assert "caf\\udce9" in err
 
 
 VENDORED_STANDARD_SCRIPT = '''
