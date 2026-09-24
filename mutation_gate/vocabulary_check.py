@@ -434,8 +434,10 @@ def judge_type(dictionary: vocabulary.Dictionary,
     first = parts[0].lower()
     out: list[tuple[str, str, str]] = []
     if first in vocabulary_molds.MOLDS["predicate"].prefix and declared.written != "bool":
-        out.append((RULE_TYPE_BOOL,
-                    f"`{first}_` asks yes or no; its type is `{declared.written}`, not `bool`", ""))
+        detail = f"`{first}_` asks yes or no; its type is `{declared.written}`, not `bool`"
+        if declared.written in ("Optional[bool]", "bool | None"):
+            detail += "; a tri-state value needs a noun name"
+        out.append((RULE_TYPE_BOOL, detail, ""))
     if declared.kind in NOUN_KINDS:
         out += _judge_noun(dictionary, declared.name, parts, declared.written)
     if declared.kind in VERB_KINDS:

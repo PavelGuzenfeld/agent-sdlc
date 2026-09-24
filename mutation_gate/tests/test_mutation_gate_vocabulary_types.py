@@ -73,6 +73,32 @@ def test_staged_predicate_typed_int_blocks_naming_bool(tmp_path, monkeypatch, ca
             "its type is `int`, not `bool`") in err
 
 
+@pytest.mark.parametrize("name, written, source", [
+    ("is_ready", "Optional[bool]", "is_ready: Optional[bool] = None\n"),
+    ("is_ready", "bool | None", "is_ready: bool | None = None\n"),
+])
+def test_staged_predicate_typed_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys, name, written, source
+):
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": source})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert (f"pkg/a.py:1: variable `{name}` — `is_` asks yes or no; its type is `{written}`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_predicate_function_return_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys
+):
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "def is_ready() -> Optional[bool]:\n    pass\n"})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert ("pkg/a.py:1: function `is_ready` — `is_` asks yes or no; its type is `Optional[bool]`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
 def test_staged_plural_list_tail_bool_and_unannotated_names_pass(tmp_path, monkeypatch):
     text = ("frames: list[Frame] = []\nframes_per_second: float = 1.0\nis_ready: bool = True\n"
             "frame = []\nis_empty = 1\ndef read_frame():\n    x = compute()\n    return x\n")
@@ -244,6 +270,11 @@ def test_class_body_field_typed_as_a_collection_is_a_t2_finding(tmp_path):
 def test_function_is_ready_returning_int_is_a_t1_finding(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "def is_ready() -> int:\n    pass\n")
     assert [f.split(":")[:4] for f in found] == [["1", "function", "is_ready", "type_bool"]]
+
+
+def test_variable_is_ready_typed_optional_bool_is_a_t1_finding(tmp_path):
+    found = _findings(tmp_path, "pkg/a.py", "is_ready: Optional[bool] = None\n")
+    assert [f.split(":")[:4] for f in found] == [["1", "variable", "is_ready", "type_bool"]]
 
 
 def test_cpp_from_bytes_returning_another_type_blocks_naming_the_class(tmp_path):
