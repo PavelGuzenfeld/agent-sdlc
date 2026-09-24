@@ -251,9 +251,9 @@ def test_gdscript_comment_added_blocks_when_parser_is_ready(tmp_path, monkeypatc
 def test_gdscript_without_parser_skips_with_a_visible_reason_instead_of_blocking(
     tmp_path, monkeypatch, capsys
 ):
-    """--dry-run stays clear of coverage_map.blob_hashes and runner.baseline_green,
-    the two seams past this point that need real git — the same reason #201's own
-    gdscript cli.main slice tests use --dry-run rather than --no-adversary."""
+    """--dry-run stays clear of coverage_map.blob_hashes, the seam past this
+    point that needs real git — the same reason #201's own gdscript cli.main
+    slice tests use --dry-run rather than --no-adversary."""
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "func _ready():\n\tpass  # one\n"})
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(mutants, "changed_lines", lambda root, staged: {"game/a.gd": {2}})
@@ -291,12 +291,22 @@ def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
     no_comments.check(repo, {"game/a.gd": {1}, "pkg/a.py": {1}}, [], staged=True)
     gd_calls = [cmd for cmd in seen if any(a.endswith("a.gd") for a in cmd)]
     py_calls = [cmd for cmd in seen if any(a.endswith("a.py") for a in cmd)]
-    assert gd_calls and all(
-        cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in gd_calls
+    assert len(gd_calls) == 2, "expected one call for the added file, one for its pre-image copy"
+    assert all(cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in gd_calls)
+    assert len(py_calls) == 1
+    assert all(
+        cmd[:2] == ["ast-grep", "run"] and not any(a.startswith("--config") for a in cmd)
+        for cmd in py_calls
     )
-    assert py_calls and all(
-        cmd[:2] == ["ast-grep", "run"] and not any("config" in a for a in cmd) for cmd in py_calls
-    )
+
+
+def test_gdscript_preexisting_comment_on_an_edited_line_is_invisible(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\tvar health = 2  # one\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    pre = "func _ready():\n\tvar health = 1  # one\n"
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}, pre=pre) == []
 
 
 def test_gdscript_pragma_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch):
