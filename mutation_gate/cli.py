@@ -128,17 +128,65 @@ def _gate_file(
     return blocked, survivors, cands
 
 
-def _stop_hook_cwd() -> Path | None:
-    """The Stop hook's own process cwd is the session's launch directory, not
-    wherever a Bash `cd` took the shell (#68 item 1) — the real one is the
-    `cwd` field of the hook's JSON payload on stdin."""
+def _stop_hook_payload() -> dict:
+    """The Stop hook's JSON on stdin carries `cwd` (#68 item 1) and
+    `transcript_path` (#100) — read once, since stdin is a one-shot stream."""
     if sys.stdin.isatty():
+        return {}
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+SESSION_PROMPT_LIMIT = 4000
+
+SYNTHETIC_TURN_PREFIXES = (
+    "<system-reminder>",
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "<local-command-caveat>",
+    "<task-notification>",
+    "[Request interrupted by user]",
+    "This session is being continued from a previous conversation",
+)
+
+
+def _session_prompt(transcript_path: str | None) -> str | None:
+    """Latest real user turn in the transcript JSONL — never a tool result, a
+    reminder, or a harness-injected wrapper, since none is what the person typed (#100)."""
+    if not transcript_path:
         return None
     try:
-        cwd = json.loads(sys.stdin.read()).get("cwd")
-    except (json.JSONDecodeError, ValueError, AttributeError):
+        lines = Path(transcript_path).read_text(encoding="utf-8").splitlines()
+    except OSError:
         return None
-    return Path(cwd) if cwd else None
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+            if entry.get("type") != "user" or entry.get("isMeta"):
+                continue
+            text = _user_turn_text(entry.get("message", {}).get("content"))
+        except (ValueError, AttributeError, TypeError):
+            continue
+        if text:
+            return text[:SESSION_PROMPT_LIMIT]
+    return None
+
+
+def _user_turn_text(content) -> str | None:
+    if isinstance(content, str):
+        blocks = [content]
+    elif isinstance(content, list):
+        blocks = [b.get("text", "") for b in content
+                  if isinstance(b, dict) and b.get("type") == "text"]
+    else:
+        blocks = []
+    kept = [b for b in (block.strip() for block in blocks)
+            if b and not b.startswith(SYNTHETIC_TURN_PREFIXES)]
+    return "\n".join(kept) if kept else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -168,8 +216,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     staged = args.staged or not args.worktree
 
+    payload = _stop_hook_payload() if args.worktree else {}
+    cwd = payload.get("cwd")
     try:
-        repo = discover(_stop_hook_cwd() if args.worktree else None)
+        repo = discover(Path(cwd) if cwd else None)
     except GateError as exc:
         if "not a git repository" in str(exc):
             _emit("mutation-gate skipped: not a git repository")
@@ -193,12 +243,12 @@ def main(argv: list[str] | None = None) -> int:
         _emit(f"mutation-gate refused: {exc}")
         return 2
     try:
-        return _run(repo, args, staged)
+        return _run(repo, args, staged, payload.get("transcript_path"))
     finally:
         lock.__exit__(None, None, None)
 
 
-def _run(repo, args, staged: bool) -> int:
+def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
     try:
         runner.guard_clean_start(repo)
         wvs = waivers.load(repo)
@@ -350,7 +400,9 @@ def _run(repo, args, staged: bool) -> int:
 
     _emit("mutation-gate: pass")
     if not args.no_adversary and all_cands:
-        intent = adversary.resolve_intent(repo, args.user_prompt)
+        intent = adversary.resolve_intent(
+            repo, args.user_prompt, _session_prompt(transcript_path)
+        )
         findings = adversary.run(sorted(set(all_cands)), intent, "")
         path = _write_report(repo, "adversary", findings)
         _emit("")

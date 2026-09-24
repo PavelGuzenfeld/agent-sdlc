@@ -52,6 +52,30 @@ def test_an_explicit_user_prompt_is_the_intent_even_when_a_ticket_is_inferrable(
     assert intent.text == "make overlap exclusive at the boundary"
 
 
+def test_a_session_prompt_is_the_intent_when_the_branch_has_no_ticket(on_branch, monkeypatch):
+    repo = on_branch("fix/utf-8-decode")
+    intent = adversary.resolve_intent(repo, None, "why the decode regressed")
+    assert intent is not None
+    assert intent.source == "session prompt"
+    assert intent.text == "why the decode regressed"
+
+
+def test_the_tickets_body_wins_over_a_session_prompt(on_branch, monkeypatch):
+    repo = on_branch("fix/153-the-deferred-fix")
+    monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: f"body of {n}")
+    intent = adversary.resolve_intent(repo, None, "unrelated chat text")
+    assert intent is not None
+    assert intent.source == "issue #153"
+
+
+def test_a_ticket_number_with_no_body_skips_even_with_a_session_prompt_present(
+    on_branch, monkeypatch
+):
+    repo = on_branch("fix/153-the-deferred-fix")
+    monkeypatch.setattr(adversary, "_issue_body", lambda *a: "")
+    assert adversary.resolve_intent(repo, None, "unrelated chat text") is None
+
+
 def test_the_ticket_is_the_branchs_issue_not_the_previous_commits(on_branch, monkeypatch):
     repo = on_branch("fix/153-the-deferred-fix")
     monkeypatch.setattr(adversary, "_issue_body", lambda _r, n: f"body of {n}")
