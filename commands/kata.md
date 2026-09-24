@@ -14,8 +14,9 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
 
 Read each ticket's `model:<name>` label before dispatch. A repo missing the
 `ready`/`model:*` labels, or a ticket missing one: create what's missing, then
-continue — this loop creates labels and repo config on demand, the way `/done`
-creates `follow-up`.
+continue — this loop creates labels and repo config on demand, the same way
+the labels `rules/tickets.md`'s Follow-ups section requires get created if
+missing. It never adds `ready` or `model:<name>` to an untriaged follow-up.
 
 ## Dispatch
 
@@ -70,10 +71,11 @@ Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
 removes the worktree, then deletes the branch. The merge closes the ticket
 through `Closes #N`.
 
-Then file the agent's follow-up candidates, run `/done`'s tail without its
-handoff step or its agent-checkpoint step, and move to the next ticket. That
-tail follows one ticket's own merge, not a session interrupt, and must never
-reach into another lane's live agents.
+Then file the agent's follow-up candidates — `rules/tickets.md`'s Follow-ups
+section requires the labels — run `/done`'s tail without its handoff step or its
+agent-checkpoint step, and move to the next ticket. That tail follows one
+ticket's own merge, not a session interrupt, and must never reach into
+another lane's live agents.
 
 ## Acceptance
 

@@ -186,6 +186,21 @@ def test_naming_rule_syncs_appears_in_agents_md_and_drift_fails_check(
     assert ".claude/rules/naming.md" in _named(capsys)
 
 
+def test_tickets_rule_names_the_follow_up_convention():
+    content = (Path(__file__).parents[2] / "rules" / "tickets.md").read_text()
+    for token in ("correctness", "clarity", "security", "performance", "scope", "size:tiny"):
+        assert f"`{token}`" in content
+    assert "never born with `ready` or `model:<name>`" in content
+
+
+@pytest.mark.parametrize("path", ["commands/done.md", "commands/kata.md", "commands/debrief-agent.md"])
+def test_follow_up_filers_point_to_the_tickets_rule_instead_of_naming_labels(path):
+    content = (Path(__file__).parents[2] / path).read_text()
+    for token in ("follow-up", "correctness", "clarity", "security", "performance", "scope", "size:tiny"):
+        assert f"`{token}`" not in content
+    assert "rules/tickets.md" in content
+
+
 def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
     core_words = set(vocabulary.load(Path("."), "").concepts)
     content = (rules.RULES_DIR / "naming.md").read_text()
