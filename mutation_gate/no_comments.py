@@ -23,7 +23,7 @@ CHECK = "no-comments"
 LANGUAGES = ("python", "cpp", "gdscript", "typescript", "tsx")
 # Directives a tool reads, not prose a human reads.
 PRAGMA_RE = re.compile(
-    r"^(?:#|//+|/\*)\s*(?:pyright:|noqa|type:|ruff:|NOLINT|clang-format|"
+    r"^(?:#|//+|/\*)\s*(?:pyright:|noqa|type:|ruff:|gdlint:|NOLINT|clang-format|"
     r"@ts-expect-error|@ts-ignore|eslint-disable|<reference|istanbul ignore)"
 )
 LICENSE_RE = re.compile(r"SPDX-|copyright|licen[cs]e", re.IGNORECASE)
