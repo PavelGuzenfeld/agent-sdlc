@@ -7,6 +7,7 @@ cannot be anchored by what the code happens to do. It reports; it never blocks.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -39,6 +40,7 @@ one line. Do not suggest refactors or style changes.
 class Intent:
     source: str
     text: str
+    model: str = ""
 
 
 def resolve_intent(
@@ -51,8 +53,8 @@ def resolve_intent(
         return Intent("user prompt", user_prompt)
     number = _branch_issue(repo)
     if number:
-        body = _issue_body(repo, number)
-        return Intent(f"issue #{number}", body) if body else None
+        body, model = _issue_body(repo, number)
+        return Intent(f"issue #{number}", body, model) if body else None
     if session_prompt:
         return Intent("session prompt", session_prompt)
     return None
@@ -69,13 +71,24 @@ def _branch_issue(repo: Repo) -> str:
     return match.group(1) if match else ""
 
 
-def _issue_body(repo: Repo, number: str) -> str:
+def _issue_body(repo: Repo, number: str) -> tuple[str, str]:
+    """Returns (body text, `model:<name>` label) from one `gh` call — the
+    adversary needs the ticket's declared model to run on it."""
     proc = subprocess.run(
-        ["gh", "issue", "view", number, "-R", _slug(repo), "--json", "title,body",
-         "-q", ".title + \"\\n\\n\" + .body"],
+        ["gh", "issue", "view", number, "-R", _slug(repo), "--json", "title,body,labels"],
         capture_output=True, text=True, check=False,
     )
-    return proc.stdout.strip() if proc.returncode == 0 else ""
+    if proc.returncode != 0:
+        return "", ""
+    data = json.loads(proc.stdout)
+    text = f"{data['title']}\n\n{data['body']}".strip()
+    model = next(
+        (label["name"].removeprefix("model:")
+         for label in data["labels"]
+         if label["name"].startswith("model:")),
+        "",
+    )
+    return text, model
 
 
 def _slug(repo: Repo) -> str:
@@ -103,7 +116,8 @@ def run(tests: list[Path], intent: Intent | None, results_note: str) -> str:
     with tempfile.TemporaryDirectory(prefix="mutation-gate-adv-") as tmp:
         work = Path(tmp)
         build_export(tests, intent, work)
-        findings = run_isolated("adversary", PROMPT, work)
+        extra = ("--model", intent.model) if intent.model else ()
+        findings = run_isolated("adversary", PROMPT, work, extra)
     return f"intent: {intent.source}\n\n{findings}"
 
 

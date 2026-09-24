@@ -132,6 +132,8 @@ the drafts and continues; the commit and the SHA report never depend on this ste
 
 ### 6. Handoff
 
+Kata's post-merge tail skips this step outright.
+
 Skip this step entirely when every commit this session landed, main's and every
 checkpointed agent's, is on a branch whose PR carries `Closes #N` — the ticket already
 holds the state. An agent branch with no PR open yet fails that test on its own, so a

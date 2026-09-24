@@ -38,27 +38,33 @@ agent:
 
 1. Writes the ticket's slice test first and confirms it fails.
 2. Implements to green.
-3. Runs the gate. A waiver is fine only when it is an equivalence waiver proved
-   by rebuild-and-diff — any other waiver stops the agent, which reports back
-   instead of pushing.
-4. Pushes, then waits for checks to go green on the pushed sha. No
-   `.github/workflows/` in the repo means no checks to wait for — skip
-   straight to opening the PR.
-5. Opens a PR with `Closes #N`, at most three plain sentences on what
-   changed, and a Human-testing section when the change is user-observable.
-   No how-it-works paragraph.
-6. Exits, reporting the PR number, the ticket number, and any follow-up
-   candidates noticed but not acted on.
+3. Runs the gate. Its adversary runs on the ticket's `model:<name>` label.
+   Findings get addressed each round; after 2 rounds still carrying findings,
+   the agent reports back instead of running a third gated commit. A waiver
+   is fine only when it is an equivalence waiver proved by rebuild-and-diff —
+   any other waiver stops the agent the same way.
+4. Pushes, then opens a PR with `Closes #N`, at most three plain sentences on
+   what changed, and a Human-testing section when the change is
+   user-observable. No how-it-works paragraph.
+5. Waits for CI with one blocking call — `gh pr checks <PR> --watch`, output
+   to a file — never polling turn by turn. No `.github/workflows/` in the
+   repo means no checks to wait for — skip straight to exit. Red: fix, push,
+   and watch again.
+6. Exits only once CI is green on the pushed sha, never before, reporting the
+   PR number, the ticket number, and any follow-up candidates noticed but not
+   acted on.
 
-`/verify-generated-diff` still applies to this diff like any other.
-
-At work: stop at PR-open. No self-merge, ever, regardless of LGTM.
+At work: stop once CI is green on the pushed sha, never sooner. No self-merge,
+ever, regardless of LGTM.
 
 ## Review loop
 
-Wait for a human `LGTM` on the PR. Anything else is feedback: respawn the same
-agent on the same branch with the comments — never open a second PR for the
-same ticket.
+Before asking for LGTM, the orchestrator runs `/verify-generated-diff` on the
+PR.
+
+Wait for a human `LGTM` typed at the terminal prompt — never a PR comment.
+Anything else is feedback: respawn the same agent on the same branch with the
+comments — never open a second PR for the same ticket.
 
 Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
 removes the worktree, then deletes the branch. The merge closes the ticket

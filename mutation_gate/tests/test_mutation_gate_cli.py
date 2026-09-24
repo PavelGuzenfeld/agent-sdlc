@@ -699,7 +699,7 @@ def test_worktree_still_prefers_the_branchs_ticket_over_the_transcripts_prompt(
     tmp_path, monkeypatch
 ):
     transcript = _write_transcript(tmp_path, "unrelated chat text about some other topic")
-    monkeypatch.setattr(cli.adversary, "_issue_body", lambda _r, n: f"body of {n}")
+    monkeypatch.setattr(cli.adversary, "_issue_body", lambda _r, n: (f"body of {n}", ""))
     intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "153-the-deferred-fix", transcript)
     assert intent is not None
     assert intent.source == "issue #153"
