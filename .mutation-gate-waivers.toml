@@ -601,3 +601,13 @@ column = 12
 old = """continue"""
 new = """break"""
 reason = "equivalent: this continue sits under `if is_last and ...`, so it only runs on the loop's last iteration (index == len(segments)) — there is no further segment for continue to skip to, and the loop has no for/else, so break and continue leave check() identical. Rebuilt the mutant and diffed vocabulary_path.check() over every exempt last-segment case the test file exercises (__init__.py/CMakeLists.txt/README.md, _version.py/_core.so, an ALL-CAPS .md, and a leading-underscore file right after it): byte-identical output both ways."
+
+# --- vocabulary_check.py leading_underscore path check, from #169 --------------
+
+[[waiver]]
+file = "mutation_gate/vocabulary_check.py"
+line = 556
+column = 16
+old = """continue"""
+new = """break"""
+reason = "equivalent: this continue sits under `if is_last and ...`, so it only runs on the loop's last iteration (index == last); there is no further segment for continue to skip to, and the loop has no for/else, so break and continue leave leading_underscore() identical. Rebuilt the mutant and ran the full test suite (1099 tests, including the new tool-dictated and dot-directory cases) against it: byte-identical output both ways."

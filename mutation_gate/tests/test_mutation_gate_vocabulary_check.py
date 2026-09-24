@@ -649,6 +649,36 @@ def test_leading_underscore_skips_a_missing_gdscript_parser_and_still_reaches_th
     assert vocabulary_check.GDSCRIPT_MISSING in err
 
 
+def test_leading_underscore_audit_skips_the_tool_dictated_path_list(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, "", {
+        "src/_version.py": "",
+        "pkg/_core.so": "",
+        "src/_impl.py": "def _parse_frame():\n    pass\n",
+    })
+    listing = "src/_version.py\0pkg/_core.so\0src/_impl.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    monkeypatch.setattr(vocabulary, "discover", lambda cwd=None: repo)
+    assert cli.main(["vocabulary", "audit", "--leading-underscore"]) == 0
+    out = capsys.readouterr().out
+    assert out == "src/_impl.py:1 _parse_frame parse_frame_\nsrc/_impl.py:0 _impl.py impl_.py\n"
+
+
+def test_leading_underscore_path_row_is_exempt_under_a_dot_directory(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, "", {".ci/_release.py": "def _parse_frame():\n    pass\n"})
+    listing = ".ci/_release.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    rows = vocabulary_check.leading_underscore(repo)
+    assert rows == [(".ci/_release.py", 1, "_parse_frame", "parse_frame_")]
+
+
+def test_leading_underscore_reaches_a_file_past_an_exempt_directory_segment(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, "", {"pkg/__pycache__/_frob.py": ""})
+    listing = "pkg/__pycache__/_frob.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    rows = vocabulary_check.leading_underscore(repo)
+    assert rows == [("pkg/__pycache__/_frob.py", 0, "_frob.py", "frob_.py")]
+
+
 def test_staged_tsx_component_passes_and_camel_case_function_blocks(tmp_path, monkeypatch, capsys):
     repo = _repo(tmp_path, OPTED_IN,
                  {"ui/a.tsx": "function FrameViewer() {}\nfunction renderStuff() {}\n"})

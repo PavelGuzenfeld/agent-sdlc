@@ -527,7 +527,10 @@ def audit(repo: Repo) -> list[Finding]:
 
 def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
     """(file, line, old, new) rows for #111 `--leading-underscore`: every declared
-    name and path segment decisions 34/35 would reject a leading `_` on."""
+    name and path segment decisions 34/35 would reject a leading `_` on, minus
+    #108's core [path] tool-dictated and exempt lists."""
+    from . import vocabulary_path
+
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
     gdscript_config = _gdscript_ready(repo.root)
     warned = False
@@ -546,8 +549,15 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
         segments = rel.split("/")
         last = len(segments) - 1
         for index, segment in enumerate(segments):
-            stem = segment if index != last else Path(segment).stem
-            suffix = "" if index != last else Path(segment).suffix
+            is_last = index == last
+            if not is_last and vocabulary_path.matches_any(segment, vocabulary_path.EXEMPT_PATH_PATTERNS):
+                break
+            if is_last and vocabulary_path.fully_exempt(segment):
+                continue
+            if vocabulary_path.matches_any(segment, vocabulary_path.EXEMPT_PATTERNS):
+                continue
+            stem = segment if not is_last else Path(segment).stem
+            suffix = "" if not is_last else Path(segment).suffix
             if stem.startswith("_") and not _exempt(dictionary, stem):
                 rows.append((rel, 0, segment, f"{stem.strip('_')}_{suffix}"))
     return rows
