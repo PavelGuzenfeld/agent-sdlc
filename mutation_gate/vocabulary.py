@@ -233,17 +233,18 @@ def describe(match: Match) -> str:
     return f"{head}\n  {match.detail}" if match.detail else head
 
 
+_WORD_IN_DETAIL = re.compile(r"^`([^`]+)`")
+
+
 def _unknown_words(findings) -> list[tuple[str, int, object]]:
     from . import vocabulary_check
 
-    pattern = re.compile(rf"^`(?P<word>[^`]+)` {re.escape(vocabulary_check.UNKNOWN_DETAIL)}$")
     counts: dict[str, int] = {}
     samples: dict[str, object] = {}
     for f in findings:
-        m = pattern.match(f.detail)
-        if not m:
+        if f.rule != vocabulary_check.RULE_UNKNOWN_WORD:
             continue
-        word = m.group("word").lower()
+        word = _WORD_IN_DETAIL.match(f.detail).group(1).lower()
         counts[word] = counts.get(word, 0) + 1
         samples.setdefault(word, f)
     return sorted(((w, n, samples[w]) for w, n in counts.items()), key=lambda row: (-row[1], row[0]))
@@ -252,7 +253,7 @@ def _unknown_words(findings) -> list[tuple[str, int, object]]:
 def _rule_counts(findings) -> dict[str, int]:
     counts: dict[str, int] = {}
     for f in findings:
-        counts[f.kind] = counts.get(f.kind, 0) + 1
+        counts[f.rule] = counts.get(f.rule, 0) + 1
     return dict(sorted(counts.items()))
 
 

@@ -90,6 +90,7 @@ class Finding:
     line: int
     kind: str
     name: str
+    rule: str
     detail: str
     suggestion: str
 
@@ -136,25 +137,36 @@ def _exempt(dictionary: vocabulary.Dictionary, name: str) -> bool:
     return name == "_" or dunder or name in dictionary.conventions
 
 
-def judge(dictionary: vocabulary.Dictionary, kind: str, name: str) -> list[tuple[str, str]]:
-    """(detail, suggested name or "") per fault in one declared name."""
+RULE_LEADING_UNDERSCORE = "leading_underscore"
+RULE_UNKNOWN_WORD = "unknown_word"
+RULE_VAGUE_WORD = "vague_word"
+RULE_REJECTED_SYNONYM = "rejected_synonym"
+RULE_FUNCTION_WORD = "function_word"
+RULE_SYMBOL_SCOPE = "symbol_scope"
+
+
+def judge(dictionary: vocabulary.Dictionary, kind: str, name: str) -> list[tuple[str, str, str]]:
+    """(rule, detail, suggested name or "") per fault in one declared name."""
     if _exempt(dictionary, name):
         return []
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str]] = []
     if name.startswith("_"):
-        out.append(("a leading `_` is not the private mark; private is a trailing `_`",
+        out.append((RULE_LEADING_UNDERSCORE,
+                    "a leading `_` is not the private mark; private is a trailing `_`",
                     f"{name.strip('_')}_"))
     for word in words(name):
         match = dictionary.resolve(word) or dictionary.resolve(word.lower())
         if match is None:
-            out.append((f"`{word}` {UNKNOWN_DETAIL}", ""))
+            out.append((RULE_UNKNOWN_WORD, f"`{word}` {UNKNOWN_DETAIL}", ""))
         elif match.kind == "vague":
-            out.append((f"`{word}` is vague — {match.detail}", ""))
+            out.append((RULE_VAGUE_WORD, f"`{word}` is vague — {match.detail}", ""))
         elif match.kind == "rejected":
+            rule = RULE_FUNCTION_WORD if match.pos == ("rejected",) else RULE_REJECTED_SYNONYM
             renamed = name.replace(word, _spelled_like(word, match.word))
-            out.append((f"`{word}`: {match.detail}", renamed if match.word != word.lower() else ""))
+            out.append((rule, f"`{word}`: {match.detail}",
+                        renamed if match.word != word.lower() else ""))
         elif match.kind == "symbol" and kind not in SYMBOL_KINDS:
-            out.append((f"`{word}`: {match.detail}", ""))
+            out.append((RULE_SYMBOL_SCOPE, f"`{word}`: {match.detail}", ""))
     return out
 
 
@@ -170,8 +182,8 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         for line, kind, name in declarations(repo.root / rel, lang):
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
-            for detail, suggestion in judge(dictionary, kind, name):
-                out.append(Finding(rel, line, kind, name, detail, suggestion))
+            for rule, detail, suggestion in judge(dictionary, kind, name):
+                out.append(Finding(rel, line, kind, name, rule, detail, suggestion))
     return out
 
 

@@ -359,9 +359,7 @@ def test_audit_lists_loc_at_frequency_three_with_a_sample_and_exits_zero_core_on
         "unknown words:\n"
         "  loc (3) — pkg/a.py:1: variable `loc` — `loc` is not in the dictionary\n"
         "per-rule counts:\n"
-        "  field: 1\n"
-        "  parameter: 1\n"
-        "  variable: 1\n"
+        "  unknown_word: 3\n"
     )
 
 
@@ -388,9 +386,8 @@ def test_audit_ranks_unknown_words_by_frequency_not_by_first_appearance(
         "  loc (2) — pkg/a.py:4: parameter `loc` — `loc` is not in the dictionary\n"
         "  frob (1) — pkg/a.py:3: variable `frob` — `frob` is not in the dictionary\n"
         "per-rule counts:\n"
-        "  parameter: 1\n"
-        "  type: 1\n"
-        "  variable: 2\n"
+        "  unknown_word: 3\n"
+        "  vague_word: 1\n"
     )
 
 
@@ -403,7 +400,7 @@ def test_audit_unknown_word_counts_aggregate_across_files(tmp_path, monkeypatch,
         "unknown words:\n"
         "  loc (3) — pkg/a.py:1: variable `loc` — `loc` is not in the dictionary\n"
         "per-rule counts:\n"
-        "  variable: 3\n"
+        "  unknown_word: 3\n"
     )
 
 
@@ -416,7 +413,7 @@ def test_audit_ignores_the_diff_and_scans_every_declaration(tmp_path, monkeypatc
     assert "  loc (3) —" in out
 
 
-def test_audit_domain_reject_of_loc_still_counts_the_declarations_by_rule(
+def test_audit_domain_reject_of_loc_is_counted_under_rejected_synonym_not_dropped(
     tmp_path, monkeypatch, capsys
 ):
     _audit_repo(tmp_path, monkeypatch, LOC_FRAME_FILES, OPTED_IN, '[reject]\nloc = "position"\n')
@@ -425,19 +422,40 @@ def test_audit_domain_reject_of_loc_still_counts_the_declarations_by_rule(
     assert out == (
         "unknown words:\n"
         "per-rule counts:\n"
-        "  field: 1\n"
-        "  parameter: 1\n"
-        "  variable: 1\n"
+        "  rejected_synonym: 3\n"
     )
 
 
-def test_audit_per_rule_counts_group_two_faults_on_one_declaration_by_kind(
+FUNCTION_WORD_FILES = {"pkg/a.py": "def read_and_test():\n    pass\nloc = 1\n"}
+
+
+def test_audit_rule_counts_separate_function_word_from_rejected_synonym(
+    tmp_path, monkeypatch, capsys
+):
+    _audit_repo(tmp_path, monkeypatch, FUNCTION_WORD_FILES, OPTED_IN, '[reject]\nloc = "position"\n')
+    code, out, _ = _audit([], capsys)
+    assert code == 0
+    assert out == (
+        "unknown words:\n"
+        "per-rule counts:\n"
+        "  function_word: 1\n"
+        "  rejected_synonym: 1\n"
+    )
+
+
+def test_audit_per_rule_counts_put_two_faults_on_one_declaration_under_separate_rules(
     tmp_path, monkeypatch, capsys
 ):
     _audit_repo(tmp_path, monkeypatch, {"pkg/a.py": "_frob = 1\n"})
     code, out, _ = _audit([], capsys)
     assert code == 0
-    assert "  variable: 2\n" in out
+    assert out == (
+        "unknown words:\n"
+        "  frob (1) — pkg/a.py:1: variable `_frob` — `frob` is not in the dictionary\n"
+        "per-rule counts:\n"
+        "  leading_underscore: 1\n"
+        "  unknown_word: 1\n"
+    )
 
 
 def test_audit_format_toml_stub_is_accepted_once_meaning_is_filled(tmp_path, monkeypatch, capsys):
