@@ -11,11 +11,21 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
-from .repo import DIFF_PREFIX_PIN_ARGS, GateError, git, post_image_path
+from .repo import (
+    BINARY_DIFFERS_RE,
+    DIFF_PREFIX_PIN_ARGS,
+    INDEX_SHA_RE,
+    GateError,
+    git,
+    git_bytes,
+    post_image_path,
+    text_or_none,
+)
 
 # Broad catalogue per decision 10. Retire an entry here when it keeps landing in
 # waiver files as an equivalent mutant — the waiver list is the tuning data.
@@ -166,8 +176,43 @@ def language_of(path: str) -> str | None:
     return SUFFIX_LANG.get(Path(path).suffix)
 
 
+def _hunk_range(raw: str) -> range | None:
+    m = re.search(r"\+(\d+)(?:,(\d+))?", raw)
+    if not m:
+        return None
+    start, count = int(m.group(1)), int(m.group(2) or 1)
+    return range(start, start + count)
+
+
+def _blob_diff_lines(root: Path, old_sha: str, new_sha: str) -> set[int]:
+    out = git("diff", "--text", "-U0", "--no-color", old_sha, new_sha, cwd=root)
+    lines: set[int] = set()
+    for raw in out.splitlines():
+        if raw.startswith("@@"):
+            rng = _hunk_range(raw)
+            if rng is not None:
+                lines.update(rng)
+    return lines
+
+
+def _emit(line: str) -> None:
+    print(line, file=sys.stderr)
+
+
+def _binary_entry_lines(root: Path, path: str, added: bool, old_sha: str, new_sha: str) -> set[int]:
+    text = text_or_none(git_bytes("cat-file", "-p", new_sha, cwd=root))
+    if text is None:
+        _emit(f"  {path}: binary — skipped, no mutants")
+        return set()
+    if added:
+        return set(range(1, len(text.splitlines()) + 1))
+    return _blob_diff_lines(root, old_sha, new_sha)
+
+
 def changed_lines(root: Path, staged: bool) -> dict[str, set[int]]:
-    """Post-image line numbers per file. staged=index (pre-commit), else worktree."""
+    """Post-image line numbers per file. staged=index (pre-commit), else worktree.
+    A gated file marked `-diff`/binary in .gitattributes hides its hunks behind
+    a `Binary files ... differ` line (#234); its blob is fetched by sha instead."""
     args = ["diff", "-U0", "--no-color", *DIFF_PREFIX_PIN_ARGS]
     if staged:
         args.append("--cached")
@@ -175,20 +220,35 @@ def changed_lines(root: Path, staged: bool) -> dict[str, set[int]]:
     result: dict[str, set[int]] = {}
     current: str | None = None
     in_hunk = False
+    pending_shas: tuple[str, str] | None = None
+    binary_entries: list[tuple[str, bool, str, str]] = []
     for raw in out.splitlines():
         if raw.startswith("diff --git "):
-            current, in_hunk = None, False
+            current, in_hunk, pending_shas = None, False, None
         elif not in_hunk and raw.startswith("+++ "):
             current = post_image_path(raw[4:])
             if current is not None:
                 result.setdefault(current, set())
+        elif not in_hunk and raw.startswith("index "):
+            m = INDEX_SHA_RE.match(raw)
+            if m:
+                pending_shas = (m.group(1), m.group(2))
         elif raw.startswith("@@"):
             in_hunk = True
             if current is not None:
-                m = re.search(r"\+(\d+)(?:,(\d+))?", raw)
-                if m:
-                    start, count = int(m.group(1)), int(m.group(2) or 1)
-                    result[current].update(range(start, start + count))
+                rng = _hunk_range(raw)
+                if rng is not None:
+                    result[current].update(rng)
+        elif not in_hunk:
+            m = BINARY_DIFFERS_RE.match(raw)
+            if m and pending_shas is not None:
+                path = post_image_path(m.group(2))
+                if path is not None and language_of(path):
+                    binary_entries.append((path, m.group(1) == "/dev/null", *pending_shas))
+    for path, added, old_sha, new_sha in binary_entries:
+        lines = _binary_entry_lines(root, path, added, old_sha, new_sha)
+        if lines:
+            result.setdefault(path, set()).update(lines)
     return {f: lines for f, lines in result.items() if lines}
 
 

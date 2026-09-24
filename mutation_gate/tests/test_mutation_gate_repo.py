@@ -15,6 +15,8 @@ import pytest
 
 from mutation_gate import repo as repo_module
 from mutation_gate.repo import (
+    BINARY_DIFFERS_RE,
+    INDEX_SHA_RE,
     OWN_NAMESPACES_ENV,
     Config,
     GateError,
@@ -23,6 +25,7 @@ from mutation_gate.repo import (
     git,
     git_bytes,
     post_image_path,
+    text_or_none,
 )
 
 
@@ -39,6 +42,14 @@ def _stub_subprocess_run(monkeypatch, returncode: int, stdout: bytes = b"", stde
     monkeypatch.setattr(repo_module.subprocess, "run", fake_run)
 
 
+def test_git_decodes_invalid_utf8_stdout_without_raising(tmp_path, monkeypatch):
+    fake_git = tmp_path / "git"
+    fake_git.write_text("#!/bin/sh\nprintf 'caf\\351.py\\n'\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert git("ls-files") == "caf\udce9.py\n"
+
+
 def test_git_bytes_returns_raw_stdout_on_success(monkeypatch):
     _stub_subprocess_run(monkeypatch, returncode=0, stdout=b"\x00binary")
     assert git_bytes("show", ":x") == b"\x00binary"
@@ -48,6 +59,29 @@ def test_git_bytes_raises_gate_error_with_decoded_stderr_on_nonzero_exit(monkeyp
     _stub_subprocess_run(monkeypatch, returncode=7, stderr=b"fatal: bad revision")
     with pytest.raises(GateError, match="fatal: bad revision"):
         git_bytes("show", ":missing")
+
+
+def test_text_or_none_decodes_a_blob_with_no_nul_byte():
+    assert text_or_none(b"def f(x):\n    return x <= 1\n") == "def f(x):\n    return x <= 1\n"
+
+
+def test_text_or_none_is_none_for_a_blob_carrying_a_nul_byte():
+    assert text_or_none(b"\x00\x01\x02binary") is None
+
+
+def test_index_sha_re_captures_both_the_old_and_the_new_blob_sha():
+    m = INDEX_SHA_RE.match("index 6d4d34b..58d7fb7 100644")
+    assert (m.group(1), m.group(2)) == ("6d4d34b", "58d7fb7")
+
+
+def test_binary_differs_re_matches_a_modified_file_and_names_both_sides():
+    m = BINARY_DIFFERS_RE.match("Binary files a/x.py and b/x.py differ")
+    assert (m.group(1), m.group(2)) == ("a/x.py", "b/x.py")
+
+
+def test_binary_differs_re_marks_the_added_side_as_dev_null():
+    m = BINARY_DIFFERS_RE.match("Binary files /dev/null and b/x.py differ")
+    assert m.group(1) == "/dev/null"
 
 
 def _write(tmp_path: Path, toml: str) -> Path:

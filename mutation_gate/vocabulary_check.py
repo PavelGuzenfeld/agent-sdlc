@@ -192,20 +192,46 @@ RULES["tsx"] = {
 
 _GD_GETTER = {"field": "setget", "kind": "setget", "has": {"field": "get", "kind": "get_body"}}
 _GD_CONSTRUCTOR_PARAMETERS = {"kind": "parameters", "inside": {"kind": "constructor_definition"}}
+_GD_SIGNAL_PARAMETERS = {"kind": "parameters", "inside": {"kind": "signal_statement"}}
+_GD_DEFAULT_WRAPPERS = ({"kind": "default_parameter"}, {"kind": "typed_default_parameter"})
+_GD_PARAMETER_WRAPPERS = [{"kind": "typed_parameter"}, *_GD_DEFAULT_WRAPPERS]
+
+
+def _gd_function_parameters(conventions: frozenset[str]) -> dict:
+    """A function's own name is the signal that its parameters are Godot-mandated
+    (#238): skip only that function's parameters, never widen the dictionary with
+    engine words like `delta`, which would then pass everywhere, not just there."""
+    names = "|".join(re.escape(name) for name in sorted(conventions))
+    return {"kind": "parameters", "inside": {
+        "kind": "function_definition", "not": {"has": {"field": "name", "regex": f"^(?:{names})$"}},
+    }}
+
+
+def _gd_parameter_rule(conventions: frozenset[str]) -> dict:
+    """A default's own reference (`= MAX_SPEED`) is also a direct child of the wrapper,
+    in its `value` field; excluded so a reference stays unscanned (module intent)."""
+    scopes = {"any": [_GD_CONSTRUCTOR_PARAMETERS, _gd_function_parameters(conventions),
+                       _GD_SIGNAL_PARAMETERS]}
+    return {"kind": "identifier", "any": [
+        {"inside": scopes},
+        {"all": [
+            {"inside": {"any": _GD_PARAMETER_WRAPPERS, "inside": scopes}},
+            {"not": {"any": [{"inside": {**wrapper, "field": "value"}}
+                              for wrapper in _GD_DEFAULT_WRAPPERS]}},
+        ]},
+    ]}
+
+
 RULES["gdscript"] = {
     "event": {"kind": "name", "inside": {"kind": "signal_statement", "field": "name"}},
     "function": {"kind": "name", "inside": {"kind": "function_definition", "field": "name"}},
-    "parameter": {"kind": "identifier", "any": [
-        {"inside": _GD_CONSTRUCTOR_PARAMETERS},
-        {"inside": {"any": [{"kind": "typed_parameter"}, {"kind": "default_parameter"},
-                             {"kind": "typed_default_parameter"}],
-                     "inside": _GD_CONSTRUCTOR_PARAMETERS}},
-    ]},
+    "parameter": _gd_parameter_rule(frozenset()),
     "property": {"kind": "name", "inside": {
         "kind": "variable_statement", "field": "name", "has": _GD_GETTER}},
     "variable": {"kind": "name", "inside": {
         "kind": "variable_statement", "field": "name", "not": {"has": _GD_GETTER}}},
 }
+
 
 _TYPED = {"has": {"field": "type", "pattern": "$TYPE"}}
 _NAMED = {"has": {"field": "name", "pattern": "$CLASS"}}
@@ -272,10 +298,10 @@ class Finding:
     suggestion: str
 
 
-def _inline_rules(lang: str) -> str:
+def _inline_rules(lang: str, overrides: dict[str, dict] | None = None) -> str:
+    rules = RULES[lang] | CAPTURES[lang] | (overrides or {})
     return "\n---\n".join(
-        json.dumps({"id": kind, "language": lang, "rule": rule})
-        for kind, rule in (RULES[lang] | CAPTURES[lang]).items()
+        json.dumps({"id": kind, "language": lang, "rule": rule}) for kind, rule in rules.items()
     )
 
 
@@ -299,17 +325,19 @@ def _declared(hits: list[dict], lang: str) -> list[Declared]:
     return sorted(out)
 
 
-def declarations(path: Path, lang: str, config: Path | None = None) -> list[Declared]:
+def declarations(path: Path, lang: str, config: Path | None = None,
+                  conventions: frozenset[str] = frozenset()) -> list[Declared]:
     """1-based lines, scanned from a copy carrying the language's own suffix: ast-grep
-    reads `.h` as C and would find nothing. A same-file alias resolves one level.
-    `config` points a custom language (GDScript) at its parser library."""
+    reads `.h` as C and would find nothing; a same-file alias resolves one level.
+    `config`/`conventions` point GDScript at its parser library and #170 virtual list."""
     with tempfile.TemporaryDirectory(prefix="mutation-gate-vocabulary-") as tmp:
         copy = Path(tmp, "source" + SUFFIX[lang])
         shutil.copyfile(path, copy)
         cmd = ["ast-grep", "scan"]
         if config is not None:
             cmd.append(f"--config={config}")
-        cmd += [f"--inline-rules={_inline_rules(lang)}", "--json=compact", copy.name]
+        overrides = {"parameter": _gd_parameter_rule(conventions)} if lang == "gdscript" else None
+        cmd += [f"--inline-rules={_inline_rules(lang, overrides)}", "--json=compact", copy.name]
         proc = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError(f"ast-grep scan failed on {path}: {mutants.render_error_line(proc)}")
@@ -493,7 +521,7 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
         if lang == "gdscript" and config is None:
             continue
         mutants.require_ast_grep()
-        for declared in declarations(repo.root / rel, lang, config):
+        for declared in declarations(repo.root / rel, lang, config, dictionary.conventions):
             line, kind, name = declared[:3]
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
@@ -558,7 +586,7 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
         config = _gdscript_ready(repo.root) if lang == "gdscript" else None
         if lang == "gdscript" and config is None:
             continue
-        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config):
+        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config, dictionary.conventions):
             if name.startswith("_") and not _exempt(dictionary, name):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
         segments = rel.split("/")

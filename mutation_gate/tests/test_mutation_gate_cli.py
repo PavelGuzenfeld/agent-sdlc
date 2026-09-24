@@ -950,3 +950,8 @@ def test_session_prompt_ignores_a_non_text_block_even_if_it_carries_a_text_field
         {"type": "text", "text": "the real block about the fix"},
     ]}}) + "\n")
     assert cli._session_prompt(str(path)) == "the real block about the fix"
+
+
+def test_emit_falls_back_to_backslashreplace_on_an_unencodable_surrogate(capsys):
+    cli._emit("caf\udce9.py")
+    assert capsys.readouterr().err == "caf\\udce9.py\n"

@@ -72,13 +72,13 @@ def _pre_existing_dirs(repo: Repo, staged: bool, added: frozenset[str]) -> froze
     """Directory prefixes tracked before this diff, `added` dropped first: `git
     add -N` seeds an index entry for the file itself and `ls-files` lists it too."""
     try:
-        out = git("ls-tree", "-r", "--name-only", "HEAD", cwd=repo.root) if staged \
-            else git("ls-files", cwd=repo.root)
+        out = git("ls-tree", "-r", "--name-only", "-z", "HEAD", cwd=repo.root) if staged \
+            else git("ls-files", "-z", cwd=repo.root)
     except GateError:
         return frozenset()
     dirs: set[str] = set()
     root = PurePosixPath(".")
-    for rel in out.splitlines():
+    for rel in out.split("\0"):
         if rel in added:
             continue
         for parent in PurePosixPath(rel).parents:

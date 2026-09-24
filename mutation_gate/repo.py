@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import re
 import subprocess
 import tomllib
 from collections.abc import Iterable
@@ -32,7 +33,8 @@ def git(*args: str, cwd: Path | None = None) -> str:
     # index being committed, which --staged must read. Test commands scrub it.
     try:
         out = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+            ["git", *args], cwd=cwd, capture_output=True, text=True,
+            errors="surrogateescape", check=False,
         )
     except FileNotFoundError as exc:
         raise GateError(f"git not found on PATH: {exc}") from exc
@@ -95,6 +97,23 @@ def post_image_path(field: str) -> str | None:
         .encode("latin-1")
         .decode("utf-8", errors="surrogateescape")
     )
+
+
+# A `-diff`/binary .gitattributes entry replaces a file's hunks with one
+# `Binary files a/<path> and b/<path> differ` line (#210, #234); the two
+# blob shas a parser needs sit on the preceding `index <old>..<new>` line.
+BINARY_DIFFERS_RE = re.compile(
+    r'^Binary files (/dev/null|"?a/.+) and ("?b/.+|/dev/null) differ$'
+)
+INDEX_SHA_RE = re.compile(r"^index ([0-9a-f]+)\.\.([0-9a-f]+)")
+
+
+def text_or_none(blob: bytes) -> str | None:
+    """A blob marked `-diff`/binary in .gitattributes may still hold text;
+    one carrying a NUL byte is genuinely binary."""
+    if b"\x00" in blob:
+        return None
+    return blob.decode("utf-8", errors="replace")
 
 
 @dataclass
