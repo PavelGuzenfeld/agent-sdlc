@@ -865,17 +865,57 @@ def test_gdscript_constructor_itself_passes_with_a_known_parameter(tmp_path):
 
 def test_gdscript_ordinary_function_parameter_with_unknown_word_blocks(tmp_path):
     _require_gdscript_parser()
-    text = "func move(frob):\n\tpass\n"
+    text = "func run(frob):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in {
-        (f.kind, f.rule, f.name) for f in found
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
+    ]
+
+
+def test_gdscript_ordinary_function_known_parameter_passes(tmp_path):
+    _require_gdscript_parser()
+    text = "func run(health):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_ordinary_function_typed_and_default_parameters_are_checked(tmp_path):
+    _require_gdscript_parser()
+    text = "func run(frobtype: int, frobdefault = 1, frobboth: int = 1):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert {(f.kind, f.rule, f.name) for f in found} == {
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobtype"),
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobdefault"),
+        ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frobboth"),
     }
 
 
-def test_gdscript_engine_virtual_function_parameter_is_exempt(tmp_path):
+def test_gdscript_non_virtual_underscore_function_parameter_still_blocks(tmp_path):
     _require_gdscript_parser()
-    text = "func _process(delta):\n\tpass\n"
+    text = "func _run(frob):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in [
+        (f.line, f.kind, f.rule, f.name) for f in found
+    ]
+
+
+def test_gdscript_autoconnect_handler_parameter_still_blocks(tmp_path):
+    _require_gdscript_parser()
+    text = "func _on_button_pressed(frob):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in [
+        (f.line, f.kind, f.rule, f.name) for f in found
+    ]
+
+
+@pytest.mark.parametrize("name,parameter", [("_process", "delta"), ("_notification", "what")])
+def test_gdscript_engine_virtual_function_parameter_is_exempt(tmp_path, name, parameter):
+    _require_gdscript_parser()
+    text = f"func {name}({parameter}):\n\tpass\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
 
@@ -893,14 +933,21 @@ def test_gdscript_engine_virtual_parameter_exemption_is_read_from_the_dictionary
     }
 
 
+def test_gdscript_ready_convention_parameter_is_exempt_with_the_real_dictionary(tmp_path):
+    _require_gdscript_parser()
+    text = "func _ready(delta):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
 def test_gdscript_signal_parameter_with_unknown_word_blocks(tmp_path):
     _require_gdscript_parser()
-    text = "signal ticked(frob)\n"
+    text = "signal value_changed(frob)\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert ("parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob") in {
-        (f.kind, f.rule, f.name) for f in found
-    }
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
+    ]
 
 
 def test_gdscript_signal_parameter_with_known_word_passes(tmp_path):
@@ -910,9 +957,18 @@ def test_gdscript_signal_parameter_with_known_word_passes(tmp_path):
     assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
 
 
-def test_gdscript_default_parameter_value_reference_is_not_scanned_as_a_parameter(tmp_path):
+def test_gdscript_signal_typed_parameter_is_checked(tmp_path):
     _require_gdscript_parser()
-    text = "func f(count = MAX_SPEED):\n\tpass\n"
+    text = "signal value_changed(frob: int)\n"
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
-    assert "MAX_SPEED" not in {f.name for f in found}
+    assert [(f.line, f.kind, f.rule, f.name) for f in found] == [
+        (1, "parameter", vocabulary_check.RULE_UNKNOWN_WORD, "frob")
+    ]
+
+
+def test_gdscript_default_parameter_value_reference_is_not_scanned_as_a_parameter(tmp_path):
+    _require_gdscript_parser()
+    text = "func run(count = MAX_SPEED):\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
