@@ -114,6 +114,7 @@ def _findings_for(
     wvs: list[waivers.Waiver],
 ) -> list[Finding]:
     segments = rel.split("/")
+    lang = mutants.language_of(rel) or ""
     out: list[Finding] = []
     prefix_parts: list[str] = []
     for index, segment in enumerate(segments, start=1):
@@ -133,7 +134,7 @@ def _findings_for(
         stem = Path(segment).stem if is_last else segment
         suffix = Path(segment).suffix if is_last else ""
         kind = _kind_for_file(repo, rel, stem) if is_last else "namespace"
-        faults = vocabulary_check.judge(dictionary, kind, stem, catalogue)
+        faults = vocabulary_check.judge(dictionary, kind, stem, catalogue, lang)
         if any(rule in _WORD_FAULT_RULES for rule, _, _ in faults):
             resolved = [w for w in vocabulary_check.words(stem)
                        if vocabulary_molds.tags(dictionary, w)]

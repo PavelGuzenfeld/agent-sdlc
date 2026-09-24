@@ -972,12 +972,15 @@ pair = ["find", "detect"]
 [collection]
 types = ["list", "set", "dict", "tuple", "deque", "std::vector", "std::array", "std::map", "std::set"]
 
-[convention]
-names = [
-  "main", "argc", "argv", "self", "cls", "args", "kwargs",
+[convention.names]
+python = [
+  "main", "argv", "self", "cls", "args", "kwargs",
   "setUp", "tearDown", "setUpClass", "tearDownClass",
   "tmp_path", "tmp_path_factory", "tmpdir", "monkeypatch", "capsys", "capfd", "caplog",
   "request", "recwarn", "pytestconfig",
+]
+cpp = ["main", "argc", "argv"]
+gdscript = [
   "_init", "_get", "_set", "_get_property_list", "_to_string", "_notification",
   "_iter_get", "_iter_init", "_iter_next", "_property_can_revert", "_property_get_revert",
   "_validate_property",
@@ -990,7 +993,9 @@ names = [
   "_make_custom_tooltip", "_structured_text_parser", "_accessibility_get_contextual_info",
   "_get_accessibility_container_name", "_get_tooltip_auto_translate_mode_at",
 ]
-prefixes = ["_on_"]
+
+[convention.prefixes]
+gdscript = ["_on_"]
 
 [function_words]
 preposition = ["to", "from", "per", "of", "since", "by", "at", "in", "for", "with", "on", "into"]

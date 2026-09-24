@@ -121,6 +121,18 @@ def test_unknown_word_and_wrong_shape_block_on_the_mold_word(tmp_path, monkeypat
     ]
 
 
+def test_python_file_stem_matching_a_cpp_only_convention_still_blocks(tmp_path, monkeypatch):
+    """#250: `argc` is a C++ `main` convention, not a Python one; a Python
+    file stem named for it must still be checked, not waved through by the
+    no-file-language union other callers fall back to."""
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"src/argc.py": "pass\n"}, existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.file, f.kind, f.name, f.detail) for f in found] == [
+        ("src/argc.py", "namespace", "argc", "`argc` is not in the dictionary"),
+    ]
+
+
 def test_the_same_stem_blocks_purely_on_the_mold_once_the_word_is_known(tmp_path, monkeypatch):
     domain = '[[concept]]\nword = "stuff"\nmeaning = "generic material"\npos = ["noun"]\n'
     repo = _repo(tmp_path, domain)

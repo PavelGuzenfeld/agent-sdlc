@@ -17,9 +17,9 @@ from mutation_gate.repo import discover, git  # noqa: E402
 _UNSUPPORTED_LANGUAGES = frozenset({"gdscript"})
 
 
-def _own_name(dictionary: vocabulary.Dictionary, name: str) -> bool:
+def _own_name(dictionary: vocabulary.Dictionary, name: str, lang: str) -> bool:
     dunder = name.startswith("__") and name.endswith("__")
-    return name == "_" or dunder or name in dictionary.conventions
+    return name == "_" or dunder or name in dictionary.convention_for(lang).names
 
 
 def mine_repo(root: Path) -> tuple[str, dict[str, int]]:
@@ -33,7 +33,7 @@ def mine_repo(root: Path) -> tuple[str, dict[str, int]]:
             continue
         for declared in vocabulary_check.declarations(root / rel, lang):
             name = declared[2]
-            if _own_name(dictionary, name):
+            if _own_name(dictionary, name, lang):
                 continue
             for word in vocabulary_check.words(name):
                 key = word.lower()

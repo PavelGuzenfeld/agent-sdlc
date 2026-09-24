@@ -596,7 +596,7 @@ reason = "stop and start are text.index() hits for AGENTS_BEGIN and AGENTS_END, 
 
 [[waiver]]
 file = "mutation_gate/vocabulary_path.py"
-line = 128
+line = 129
 column = 12
 old = """continue"""
 new = """break"""
@@ -606,7 +606,7 @@ reason = "equivalent: this continue sits under `if is_last and ...`, so it only 
 
 [[waiver]]
 file = "mutation_gate/vocabulary_check.py"
-line = 603
+line = 609
 column = 16
 old = """continue"""
 new = """break"""

@@ -352,10 +352,11 @@ def _spelled_like(word: str, canonical: str) -> str:
     return canonical.capitalize() if word[0].isupper() else canonical
 
 
-def _exempt(dictionary: vocabulary.Dictionary, name: str) -> bool:
+def _exempt(dictionary: vocabulary.Dictionary, name: str, lang: str = "") -> bool:
     dunder = name.startswith("__") and name.endswith("__")
-    prefixed = any(name.startswith(p) for p in dictionary.convention_prefixes)
-    return name == "_" or dunder or name in dictionary.conventions or prefixed
+    convention = dictionary.convention_for(lang)
+    prefixed = any(name.startswith(p) for p in convention.prefixes)
+    return name == "_" or dunder or name in convention.names or prefixed
 
 
 RULE_LEADING_UNDERSCORE = "leading_underscore"
@@ -382,19 +383,21 @@ def _symbol_scope_suggestion(dictionary: vocabulary.Dictionary, detail: str) -> 
     return SYMBOL_SCOPE_HINT
 
 
-def private_trailing(dictionary: vocabulary.Dictionary, name: str) -> list[tuple[str, str, str]]:
+def private_trailing(dictionary: vocabulary.Dictionary, name: str,
+                     lang: str = "") -> list[tuple[str, str, str]]:
     """Decision 34 for TS `private`/`#` members: the marker is syntax, not the
     identifier's own spelling, so a bare or leading-`_` name still needs a trailing `_`."""
-    if _exempt(dictionary, name) or name.startswith("_") or name.endswith("_"):
+    if _exempt(dictionary, name, lang) or name.startswith("_") or name.endswith("_"):
         return []
     return [(RULE_PRIVATE_TRAILING, "a private member takes a trailing `_`", f"{name}_")]
 
 
 def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
-          catalogue: dict[str, tuple[str, ...]] = vocabulary_molds.KINDS) -> list[tuple[str, str, str]]:
+          catalogue: dict[str, tuple[str, ...]] = vocabulary_molds.KINDS,
+          lang: str = "") -> list[tuple[str, str, str]]:
     """(rule, detail, suggested name or "") per fault in one declared name; the
     mold is judged only once every word resolved."""
-    if _exempt(dictionary, name):
+    if _exempt(dictionary, name, lang):
         return []
     out: list[tuple[str, str, str]] = []
     if name.startswith("_"):
@@ -482,10 +485,10 @@ _TRI_STATE_BOOL = re.compile(
 )
 
 
-def judge_type(dictionary: vocabulary.Dictionary,
-               declared: Declared) -> list[tuple[str, str, str]]:
+def judge_type(dictionary: vocabulary.Dictionary, declared: Declared,
+               lang: str = "") -> list[tuple[str, str, str]]:
     """T1 to T3 of decision 9 on the written type alone; an unwritten one is skipped."""
-    if declared.written in UNWRITTEN or _exempt(dictionary, declared.name):
+    if declared.written in UNWRITTEN or _exempt(dictionary, declared.name, lang):
         return []
     parts = words(declared.name)
     first = parts[0].lower()
@@ -520,15 +523,17 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
             continue
         mutants.require_ast_grep()
         config = gdscript_config if lang == "gdscript" else None
-        for declared in declarations(repo.root / rel, lang, config, dictionary.conventions):
+        conventions = dictionary.convention_for(lang).names
+        for declared in declarations(repo.root / rel, lang, config, conventions):
             line, kind, name = declared[:3]
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
             if kind in (RULE_FIELD_PRIVATE, RULE_METHOD_PRIVATE):
-                faults = private_trailing(dictionary, name)
+                faults = private_trailing(dictionary, name, lang)
                 reported_kind = "field" if kind == RULE_FIELD_PRIVATE else "method"
             else:
-                faults = judge(dictionary, kind, name, catalogue) + judge_type(dictionary, declared)
+                faults = (judge(dictionary, kind, name, catalogue, lang)
+                          + judge_type(dictionary, declared, lang))
                 reported_kind = kind
             for rule, detail, suggestion in faults:
                 out.append(Finding(rel, line, reported_kind, name, rule, detail, suggestion))
@@ -590,8 +595,9 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
                 warned = True
             continue
         config = gdscript_config if lang == "gdscript" else None
-        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config, dictionary.conventions):
-            if name.startswith("_") and not _exempt(dictionary, name):
+        conventions = dictionary.convention_for(lang).names
+        for line, _kind, name, *_ in declarations(repo.root / rel, lang, config, conventions):
+            if name.startswith("_") and not _exempt(dictionary, name, lang):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
         segments = rel.split("/")
         last = len(segments) - 1
@@ -605,6 +611,6 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
                 continue
             stem = segment if not is_last else Path(segment).stem
             suffix = "" if not is_last else Path(segment).suffix
-            if stem.startswith("_") and not _exempt(dictionary, stem):
+            if stem.startswith("_") and not _exempt(dictionary, stem, lang):
                 rows.append((rel, 0, segment, f"{stem.strip('_')}_{suffix}"))
     return rows
