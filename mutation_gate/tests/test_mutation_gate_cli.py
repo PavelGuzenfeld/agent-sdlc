@@ -205,8 +205,9 @@ def test_write_report_saves_to_cache_root_keyed_by_repo(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
 
     def _git(*args, **kwargs):
-        assert args[0] == "write-tree"
-        return "deadbeef\n"
+        if args == ("write-tree",):
+            return "deadbeef\n"
+        raise AssertionError(f"unexpected git call: {args}")
 
     monkeypatch.setattr(cli, "CACHE_ROOT", cache)
     monkeypatch.setattr(cli, "git", _git, raising=False)
@@ -224,9 +225,9 @@ def test_report_header_names_head_and_dirty_state_for_worktree_mode(tmp_path, mo
     repo = _repo(tmp_path)
 
     def _git(*args, **kwargs):
-        if args[0] == "rev-parse":
+        if args == ("rev-parse", "HEAD"):
             return "abc123\n"
-        if args[0] == "status":
+        if args == ("status", "--porcelain"):
             return " M foo.py\n"
         raise AssertionError(f"unexpected git call: {args}")
 
@@ -242,9 +243,9 @@ def test_report_header_names_head_with_no_dirty_marker_when_worktree_is_clean(
     repo = _repo(tmp_path)
 
     def _git(*args, **kwargs):
-        if args[0] == "rev-parse":
+        if args == ("rev-parse", "HEAD"):
             return "abc123\n"
-        if args[0] == "status":
+        if args == ("status", "--porcelain"):
             return ""
         raise AssertionError(f"unexpected git call: {args}")
 
@@ -263,8 +264,20 @@ def test_staged_adversary_report_is_headed_by_the_reviewed_tree_and_rewritten_on
     trees = ["treehasha", "treehashb"]
 
     def _git(*args, **kwargs):
-        assert args[0] == "write-tree"
-        return trees.pop(0) + "\n"
+        if args == ("write-tree",):
+            return trees.pop(0) + "\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    stamps = [
+        datetime(2026, 9, 24, 7, 30, 0, tzinfo=timezone.utc),
+        datetime(2026, 9, 24, 7, 31, 0, tzinfo=timezone.utc),
+    ]
+
+    class _AdvancingClock:
+        @staticmethod
+        def now(tz):
+            assert tz is timezone.utc
+            return stamps.pop(0)
 
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
@@ -277,7 +290,7 @@ def test_staged_adversary_report_is_headed_by_the_reviewed_tree_and_rewritten_on
     monkeypatch.setattr(cli.adversary, "resolve_intent", lambda repo, prompt, session_prompt=None: None)
     monkeypatch.setattr(cli.adversary, "run", lambda tests, intent, note: "findings\n")
     monkeypatch.setattr(cli, "git", _git, raising=False)
-    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    monkeypatch.setattr(cli, "datetime", _AdvancingClock, raising=False)
 
     report = cache / repo.key / "reports" / "adversary.md"
 
@@ -287,7 +300,7 @@ def test_staged_adversary_report_is_headed_by_the_reviewed_tree_and_rewritten_on
 
     assert cli.main(["--staged"]) == 0
     second = report.read_text()
-    assert second == "reviewed: staged tree treehashb at 2026-09-24T07:30:00Z\nfindings\n"
+    assert second == "reviewed: staged tree treehashb at 2026-09-24T07:31:00Z\nfindings\n"
     assert second != first
 
 
@@ -297,9 +310,9 @@ def test_worktree_adversary_report_is_headed_by_head_and_dirty_state(tmp_path, m
     cache = tmp_path / "cache"
 
     def _git(*args, **kwargs):
-        if args[0] == "rev-parse":
+        if args == ("rev-parse", "HEAD"):
             return "abc123\n"
-        if args[0] == "status":
+        if args == ("status", "--porcelain"):
             return " M foo.py\n"
         raise AssertionError(f"unexpected git call: {args}")
 
@@ -354,7 +367,13 @@ def _stub_gate_to_pass(monkeypatch, tmp_path, cands):
     monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
     monkeypatch.setattr(cli.token, "is_valid", lambda *a: True)
     monkeypatch.setattr(cli, "CACHE_ROOT", tmp_path / "cache")
-    monkeypatch.setattr(cli, "git", lambda *a, **kw: "", raising=False)
+
+    def _git(*args, **kwargs):
+        if args in (("rev-parse", "HEAD"), ("status", "--porcelain")):
+            return ""
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "git", _git, raising=False)
 
 
 def _run_worktree_with_hook_stdin(monkeypatch, tmp_path, branch, transcript):
