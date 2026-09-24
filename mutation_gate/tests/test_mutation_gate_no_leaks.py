@@ -431,20 +431,48 @@ def test_a_gitattributes_marked_binary_file_with_no_nul_byte_is_scanned_as_text(
     _stub_git_bytes(monkeypatch, f"plain one\nplain two\n{EMAIL}\n".encode())
     assert _local(monkeypatch, tmp_path) == 1
     err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
     assert "fixture.bin:3" in err
     assert EMAIL not in err
+
+
+def test_a_gitattributes_marked_binary_file_with_clean_content_passes(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, b"plain one\nplain two\n")
+    assert _local(monkeypatch, tmp_path) == 0
 
 
 def test_a_modified_binary_marked_file_with_no_nul_byte_is_scanned_as_text(monkeypatch, tmp_path, capsys):
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
     _stub_git_bytes(monkeypatch, EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 1
-    assert "fixture.bin:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "fixture.bin:1" in err
+
+
+def test_a_modified_real_binary_file_with_a_nul_byte_is_skipped(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_the_range_form_skips_a_real_binary_file_with_a_nul_byte(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _range(monkeypatch, tmp_path) == 0
 
 
 def test_a_real_binary_file_with_a_nul_byte_anywhere_in_the_blob_is_skipped(monkeypatch, tmp_path):
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_nul_byte_past_a_long_prefix_still_marks_the_blob_binary(monkeypatch, tmp_path):
+    padding = b"a" * 9000
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, padding + b"\x00" + EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 0
 
 
@@ -473,7 +501,9 @@ def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(mo
     _stub_git(monkeypatch, diff=diff)
     _stub_git_bytes(monkeypatch, EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 1
-    assert "caf\\303\\251.bin:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "caf\\303\\251.bin:1" in err
 
 
 def test_the_range_form_blocks_a_leak_in_a_binary_marked_file_with_no_nul_byte(monkeypatch, tmp_path, capsys):
