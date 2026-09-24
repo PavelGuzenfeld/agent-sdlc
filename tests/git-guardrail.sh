@@ -63,6 +63,60 @@ run_case_table() {
 
 run_case_table "$repo_script" "repo"
 
+run_delete_branch_head_cases() {
+    label="repo-delete-head"
+    tmp=$(mktemp -d)
+    (
+        unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+        cd "$tmp"
+        git init -q -b main
+        git -c user.name=t -c user.email=nobody commit -q --allow-empty -m base
+        git -c user.name=t -c user.email=nobody commit -q --allow-empty -m pr-head
+        git rev-parse HEAD >pr-head-sha
+        git -c user.name=t -c user.email=nobody branch merged-ok HEAD
+        git -c user.name=t -c user.email=nobody commit -q --allow-empty -m local-extra
+        git -c user.name=t -c user.email=nobody branch one-past HEAD
+    ) >/dev/null 2>&1
+    pr_head_sha=$(cat "$tmp/pr-head-sha")
+
+    stub_dir=$(mktemp -d)
+    cat >"$stub_dir/gh" <<STUB
+#!/bin/sh
+state_ok=0
+head_branch=""
+prev=""
+for a in "\$@"; do
+    if [ "\$prev" = "--state" ] && [ "\$a" = "merged" ]; then state_ok=1; fi
+    if [ "\$prev" = "--head" ]; then head_branch=\$a; fi
+    prev=\$a
+done
+if [ "\$state_ok" -eq 1 ] && [ -n "\$head_branch" ]; then
+    printf '[{"headRefOid":"%s"}]' "$pr_head_sha"
+else
+    printf '[]'
+fi
+STUB
+    chmod +x "$stub_dir/gh"
+
+    orig_path=$PATH
+    export PATH="$stub_dir:$orig_path"
+    expect_allow "$repo_script" "$label" "tip equals merged PR head"       "git -C $tmp branch -D merged-ok"
+    expect_block "$repo_script" "$label" "tip one commit past merged head" "git -C $tmp branch -D one-past"
+    export PATH="/usr/bin:/bin"
+    expect_block "$repo_script" "$label" "no gh on PATH"                  "git -C $tmp branch -D merged-ok"
+    export PATH="$orig_path"
+
+    expect_allow "$repo_script" "$label" "quoted text mentioning it is not a real invocation" \
+        'echo "see: git branch -D old-branch for cleanup"'
+    expect_allow "$repo_script" "$label" "heredoc body inside a quoted substitution is not a real invocation" \
+        "git commit -m \"\$(cat <<'EOF'
+git branch -D old-branch
+EOF
+)\""
+}
+
+run_delete_branch_head_cases
+
 if [ -f "$home_script" ]; then
     run_case_table "$home_script" "installed"
 else

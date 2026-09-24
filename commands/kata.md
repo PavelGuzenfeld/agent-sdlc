@@ -82,8 +82,9 @@ Anything else is feedback: respawn the same agent on the same branch with the
 comments — never open a second PR for the same ticket or batch.
 
 Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
-removes the worktree, then deletes the branch. The merge closes every ticket
-still in it through its own `Closes #N` line.
+removes the worktree, then deletes the branch with `git branch -D`, which the
+guardrail allows once the branch's tip is that merged PR's head. The merge
+closes every ticket still in it through its own `Closes #N` line.
 
 Then file the agent's follow-up candidates — `rules/tickets.md`'s Follow-ups
 section requires the labels — run `/done`'s tail without its handoff step or its
