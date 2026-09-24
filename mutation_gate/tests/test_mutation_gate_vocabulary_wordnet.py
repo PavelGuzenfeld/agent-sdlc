@@ -22,12 +22,13 @@ from mutation_gate.repo import Config, GateError, Repo
 
 DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
+BLOCK_MODE = OPTED_IN + 'vocabulary_synonyms = "block"\n'
 REPORT_MODE = OPTED_IN + 'vocabulary_synonyms = "report"\n'
 
 LOCUS = '[[concept]]\nword = "locus"\nmeaning = "a site"\npos = ["noun"]\n'
 GIZMO = '[[concept]]\nword = "gizmo"\nmeaning = "an unnamed device"\npos = ["noun"]\n'
 CUSHION = '[[concept]]\nword = "cushion"\nmeaning = "something that softens"\npos = ["noun", "verb"]\n'
-BUFFER = '[[concept]]\nword = "buffer"\nmeaning = "something that softens contact"\npos = ["noun", "verb"]\n'
+WOBBLE = '[[concept]]\nword = "wobble"\nmeaning = "something that softens contact"\npos = ["noun", "verb"]\n'
 FOO_VERB = '[[concept]]\nword = "foo"\nmeaning = "to do a thing"\npos = ["verb"]\n'
 
 
@@ -75,7 +76,7 @@ def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
 
 
 def test_locus_added_beside_position_blocks_naming_both(tmp_path, monkeypatch, capsys):
-    repo = _repo(tmp_path, OPTED_IN, LOCUS)
+    repo = _repo(tmp_path, BLOCK_MODE, LOCUS)
     synsets = _fake_synsets({
         ("locus", "noun"): frozenset({"s1"}),
         ("position", "noun"): frozenset({"s1", "s2"}),
@@ -92,7 +93,7 @@ def test_noun_concept_is_never_matched_against_an_existing_verb_only_word(
 ):
     pre_domain = '[[concept]]\nword = "vroom"\nmeaning = "to go fast"\npos = ["verb"]\n'
     post_domain = pre_domain + GIZMO
-    repo = _repo(tmp_path, OPTED_IN, post_domain)
+    repo = _repo(tmp_path, BLOCK_MODE, post_domain)
     synsets = _fake_synsets({
         ("gizmo", "noun"): frozenset({"s1"}),
         ("vroom", "noun"): frozenset({"s1"}),
@@ -101,12 +102,12 @@ def test_noun_concept_is_never_matched_against_an_existing_verb_only_word(
     assert code == 0
 
 
-def test_buffer_beside_cushion_passes_when_the_pair_is_distinct(tmp_path, monkeypatch, capsys):
+def test_wobble_beside_cushion_passes_when_the_pair_is_distinct(tmp_path, monkeypatch, capsys):
     pre_domain = CUSHION
-    post_domain = CUSHION + BUFFER + '[[distinct]]\npair = ["buffer", "cushion"]\n'
+    post_domain = CUSHION + WOBBLE + '[[distinct]]\npair = ["wobble", "cushion"]\n'
     repo = _repo(tmp_path, OPTED_IN, post_domain)
     synsets = _fake_synsets({
-        ("buffer", "verb"): frozenset({"v1"}),
+        ("wobble", "verb"): frozenset({"v1"}),
         ("cushion", "verb"): frozenset({"v1"}),
     })
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {5}}, {DOMAIN: pre_domain}, synsets)
@@ -115,22 +116,22 @@ def test_buffer_beside_cushion_passes_when_the_pair_is_distinct(tmp_path, monkey
     assert "shares a WordNet sense" not in err
 
 
-def test_buffer_beside_cushion_blocks_without_a_distinct_entry(tmp_path, monkeypatch, capsys):
+def test_wobble_beside_cushion_blocks_without_a_distinct_entry(tmp_path, monkeypatch, capsys):
     pre_domain = CUSHION
-    post_domain = CUSHION + BUFFER
-    repo = _repo(tmp_path, OPTED_IN, post_domain)
+    post_domain = CUSHION + WOBBLE
+    repo = _repo(tmp_path, BLOCK_MODE, post_domain)
     synsets = _fake_synsets({
-        ("buffer", "verb"): frozenset({"v1"}),
+        ("wobble", "verb"): frozenset({"v1"}),
         ("cushion", "verb"): frozenset({"v1"}),
     })
     code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {5}}, {DOMAIN: pre_domain}, synsets)
     err = capsys.readouterr().err
     assert code == 1
-    assert "`buffer` shares a WordNet sense with `cushion`" in err
+    assert "`wobble` shares a WordNet sense with `cushion`" in err
 
 
 def test_verb_concept_is_never_matched_against_noun_senses(tmp_path, monkeypatch, capsys):
-    repo = _repo(tmp_path, OPTED_IN, FOO_VERB)
+    repo = _repo(tmp_path, BLOCK_MODE, FOO_VERB)
     synsets = _fake_synsets({
         ("foo", "verb"): frozenset({"shared"}),
         ("position", "noun"): frozenset({"shared"}),
@@ -158,6 +159,18 @@ def test_removed_concept_prints_under_the_dictionary_heading(tmp_path, monkeypat
 
 def test_report_mode_prints_the_collision_and_does_not_block(tmp_path, monkeypatch, capsys):
     repo = _repo(tmp_path, REPORT_MODE, LOCUS)
+    synsets = _fake_synsets({
+        ("locus", "noun"): frozenset({"s1"}),
+        ("position", "noun"): frozenset({"s1"}),
+    })
+    code = _gate(monkeypatch, tmp_path, repo, {DOMAIN: {2}}, {}, synsets)
+    err = capsys.readouterr().err
+    assert code == 0
+    assert "`locus` shares a WordNet sense with `position`" in err
+
+
+def test_default_synonyms_mode_is_report_not_block(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, LOCUS)
     synsets = _fake_synsets({
         ("locus", "noun"): frozenset({"s1"}),
         ("position", "noun"): frozenset({"s1"}),

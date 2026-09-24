@@ -4,15 +4,28 @@ dotfiles#62 — a report a green pre-commit hook would swallow must still land
 on disk. dotfiles#68 item 1 — the Stop hook's process cwd is the session's
 launch directory, not wherever a Bash `cd` took the shell; --worktree must
 read the real one from the hook's JSON payload on stdin, and --staged must
-never touch stdin at all."""
+never touch stdin at all. #181 — the saved report is headed by what was
+reviewed (the staged tree, or HEAD plus a dirty marker) and a UTC timestamp,
+so a report left over from an earlier commit can't pass as fresh, and a
+rerun overwrites the header rather than appending to it."""
 
 import contextlib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 from mutation_gate import cli
 from mutation_gate.repo import Config, GateError, Repo
+
+
+class _FrozenClock:
+    @staticmethod
+    def now(tz):
+        assert tz is timezone.utc
+        return datetime(2026, 9, 24, 7, 30, 0, tzinfo=tz)
 
 
 def _repo(tmp_path: Path) -> Repo:
@@ -190,8 +203,343 @@ def test_staged_never_reads_stdin_for_a_cwd(tmp_path, monkeypatch):
 
 def test_write_report_saves_to_cache_root_keyed_by_repo(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
+
+    def _git(*args, **kwargs):
+        assert args[0] == "write-tree"
+        return "deadbeef\n"
+
     monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
     repo = _repo(tmp_path / "repo")
-    path = cli._write_report(repo, "adversary", "findings text\n")
+    path = cli._write_report(repo, "adversary", "findings text\n", staged=True)
     assert path == cache / repo.key / "reports" / "adversary.md"
-    assert path.read_text() == "findings text\n"
+    assert path.read_text() == (
+        "reviewed: staged tree deadbeef at 2026-09-24T07:30:00Z\n"
+        "findings text\n"
+    )
+
+
+def test_report_header_names_head_and_dirty_state_for_worktree_mode(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+
+    def _git(*args, **kwargs):
+        if args[0] == "rev-parse":
+            return "abc123\n"
+        if args[0] == "status":
+            return " M foo.py\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    header = cli._report_header(repo, staged=False)
+    assert header == "reviewed: abc123 +dirty at 2026-09-24T07:30:00Z\n"
+
+
+def test_report_header_names_head_with_no_dirty_marker_when_worktree_is_clean(
+    tmp_path, monkeypatch
+):
+    repo = _repo(tmp_path)
+
+    def _git(*args, **kwargs):
+        if args[0] == "rev-parse":
+            return "abc123\n"
+        if args[0] == "status":
+            return ""
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    header = cli._report_header(repo, staged=False)
+    assert header == "reviewed: abc123 at 2026-09-24T07:30:00Z\n"
+
+
+def test_staged_adversary_report_is_headed_by_the_reviewed_tree_and_rewritten_on_rerun(
+    tmp_path, monkeypatch
+):
+    repo = _repo(tmp_path / "repo")
+    (tmp_path / "repo").mkdir()
+    cache = tmp_path / "cache"
+    trees = ["treehasha", "treehashb"]
+
+    def _git(*args, **kwargs):
+        assert args[0] == "write-tree"
+        return trees.pop(0) + "\n"
+
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], [Path("tests/x.py")]))
+    monkeypatch.setattr(cli.adversary, "resolve_intent", lambda repo, prompt, session_prompt=None: None)
+    monkeypatch.setattr(cli.adversary, "run", lambda tests, intent, note: "findings\n")
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+
+    report = cache / repo.key / "reports" / "adversary.md"
+
+    assert cli.main(["--staged"]) == 0
+    first = report.read_text()
+    assert first == "reviewed: staged tree treehasha at 2026-09-24T07:30:00Z\nfindings\n"
+
+    assert cli.main(["--staged"]) == 0
+    second = report.read_text()
+    assert second == "reviewed: staged tree treehashb at 2026-09-24T07:30:00Z\nfindings\n"
+    assert second != first
+
+
+def test_worktree_adversary_report_is_headed_by_head_and_dirty_state(tmp_path, monkeypatch):
+    repo = _repo(tmp_path / "repo")
+    (tmp_path / "repo").mkdir()
+    cache = tmp_path / "cache"
+
+    def _git(*args, **kwargs):
+        if args[0] == "rev-parse":
+            return "abc123\n"
+        if args[0] == "status":
+            return " M foo.py\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], [Path("tests/x.py")]))
+    monkeypatch.setattr(cli.adversary, "resolve_intent", lambda repo, prompt, session_prompt=None: None)
+    monkeypatch.setattr(cli.adversary, "run", lambda tests, intent, note: "findings\n")
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+
+    assert cli.main(["--worktree"]) == 0
+    report = cache / repo.key / "reports" / "adversary.md"
+    assert report.read_text() == "reviewed: abc123 +dirty at 2026-09-24T07:30:00Z\nfindings\n"
+
+
+def _write_transcript(tmp_path: Path, prompt: str) -> Path:
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": prompt}},
+        {"type": "assistant", "message": {"role": "assistant",
+                                           "content": [{"type": "text", "text": "on it"}]}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": [{"type": "tool_result",
+                                                   "tool_use_id": "t1", "content": "ok"}]}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": [{"type": "text",
+                                                   "text": "[Request interrupted by user]"}]}},
+        {"type": "user", "message": {"role": "user", "content":
+            "<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}},
+        {"type": "assistant", "message": {"role": "assistant",
+                                           "content": [{"type": "text", "text": "done"}]}},
+    ]) + "\n")
+    return path
+
+
+def _stub_gate_to_pass(monkeypatch, tmp_path, cands):
+    monkeypatch.setattr(cli.runner, "guard_clean_start", lambda repo: None)
+    monkeypatch.setattr(cli.waivers, "load", lambda repo: [])
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"src/x.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "check", lambda *a: [])
+    monkeypatch.setattr(cli.model_vv, "model_changed", lambda *a: False)
+    monkeypatch.setattr(cli.mutants, "language_of", lambda f: "python")
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.coverage_map, "candidates", lambda *a: cands)
+    monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
+    monkeypatch.setattr(cli.token, "is_valid", lambda *a: True)
+    monkeypatch.setattr(cli, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(cli, "git", lambda *a, **kw: "", raising=False)
+
+
+def _run_worktree_with_hook_stdin(monkeypatch, tmp_path, branch, transcript):
+    seen = {}
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps(
+        {"cwd": str(tmp_path), "transcript_path": str(transcript)}))
+    monkeypatch.setattr(cli.adversary, "git", lambda *a, cwd=None: branch + "\n")
+
+    def _capture_run(cands, intent, summary):
+        seen["intent"] = intent
+        return "no gaps found"
+
+    monkeypatch.setattr(cli.adversary, "run", _capture_run)
+    _stub_gate_to_pass(monkeypatch, tmp_path, [tmp_path / "t.py"])
+    assert cli.main(["--worktree"]) == 0
+    return seen["intent"]
+
+
+def test_worktree_uses_the_transcripts_last_user_prompt_as_intent_on_a_non_ticket_branch(
+    tmp_path, monkeypatch
+):
+    transcript = _write_transcript(tmp_path, "why is the decode failing at the boundary")
+    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "fix/utf-8-decode", transcript)
+    assert intent is not None
+    assert intent.source == "session prompt"
+    assert intent.text == "why is the decode failing at the boundary"
+
+
+def test_worktree_still_prefers_the_branchs_ticket_over_the_transcripts_prompt(
+    tmp_path, monkeypatch
+):
+    transcript = _write_transcript(tmp_path, "unrelated chat text")
+    monkeypatch.setattr(cli.adversary, "_issue_body", lambda _r, n: f"body of {n}")
+    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "153-the-deferred-fix", transcript)
+    assert intent is not None
+    assert intent.source == "issue #153"
+    assert intent.text == "body of 153"
+
+
+def test_worktree_user_prompt_flag_wins_over_ticket_and_session_prompt(tmp_path, monkeypatch):
+    seen = {}
+    repo = _repo(tmp_path)
+    transcript = _write_transcript(tmp_path, "unrelated chat text")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps(
+        {"cwd": str(tmp_path), "transcript_path": str(transcript)}))
+    monkeypatch.setattr(cli.adversary, "git", lambda *a, cwd=None: "153-the-deferred-fix\n")
+    monkeypatch.setattr(cli.adversary, "_issue_body", lambda *a: pytest.fail(
+        "looked up a ticket instead of using the explicit --user-prompt flag"))
+
+    def _capture_run(cands, intent, summary):
+        seen["intent"] = intent
+        return "no gaps found"
+
+    monkeypatch.setattr(cli.adversary, "run", _capture_run)
+    _stub_gate_to_pass(monkeypatch, tmp_path, [tmp_path / "t.py"])
+    assert cli.main(["--worktree", "--user-prompt", "explicit override"]) == 0
+    assert seen["intent"].source == "user prompt"
+    assert seen["intent"].text == "explicit override"
+
+
+def test_worktree_skips_the_adversary_cleanly_with_no_transcript_and_no_ticket(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps({"cwd": str(tmp_path)}))
+    monkeypatch.setattr(cli.adversary, "git", lambda *a, cwd=None: "fix/utf-8-decode\n")
+    _stub_gate_to_pass(monkeypatch, tmp_path, [tmp_path / "t.py"])
+    assert cli.main(["--worktree"]) == 0
+    assert "adversary skipped" in capsys.readouterr().err
+
+
+def test_session_prompt_skips_tool_results_and_returns_the_real_user_text(tmp_path):
+    transcript = _write_transcript(tmp_path, "the actual prompt")
+    assert cli._session_prompt(str(transcript)) == "the actual prompt"
+
+
+def test_session_prompt_is_none_without_a_transcript_path():
+    assert cli._session_prompt(None) is None
+
+
+def test_session_prompt_is_none_when_the_file_is_missing(tmp_path):
+    assert cli._session_prompt(str(tmp_path / "missing.jsonl")) is None
+
+
+def test_session_prompt_skips_a_bad_json_line_and_keeps_reading(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(
+        json.dumps({"type": "user", "message": {"role": "user", "content": "earlier prompt"}})
+        + "\n{not json\n"
+    )
+    assert cli._session_prompt(str(path)) == "earlier prompt"
+
+
+def test_session_prompt_is_none_when_every_user_entry_is_meta_or_a_tool_result(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "isMeta": True, "message": {"role": "user", "content": "Caveat: background summary"}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": [{"type": "tool_result", "content": "ok"}]}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) is None
+
+
+def test_session_prompt_uses_the_later_of_two_real_prompts(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": "first prompt"}},
+        {"type": "user", "message": {"role": "user", "content": "second prompt"}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "second prompt"
+
+
+def test_session_prompt_joins_multiple_text_blocks_in_one_turn(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": [
+        {"type": "text", "text": "line one"}, {"type": "text", "text": "line two"},
+    ]}}) + "\n")
+    assert cli._session_prompt(str(path)) == "line one\nline two"
+
+
+def test_session_prompt_skips_a_transcript_line_that_is_not_a_json_object(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join([
+        json.dumps(["not", "a", "dict"]),
+        json.dumps({"type": "user", "message": {"role": "user", "content": "earlier prompt"}}),
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "earlier prompt"
+
+
+def test_stop_hook_payload_ignores_a_non_dict_json_body(monkeypatch):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(sys.stdin, "read", lambda: "[]")
+    assert cli._stop_hook_payload() == {}
+
+
+@pytest.mark.parametrize("wrapper", [
+    "<system-reminder>x</system-reminder>",
+    "<command-name>/exit</command-name>",
+    "<command-message>cleanup</command-message>",
+    "<local-command-stdout>Goodbye!</local-command-stdout>",
+    "<local-command-caveat>Caveat: earlier messages were generated by a slash command",
+    "<task-notification>\n<task-id>abc</task-id>\n</task-notification>",
+    "[Request interrupted by user]",
+    "This session is being continued from a previous conversation that ran out of context.",
+])
+def test_session_prompt_skips_every_known_harness_wrapper(tmp_path, wrapper):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": "the real prompt"}},
+        {"type": "user", "message": {"role": "user", "content": wrapper}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "the real prompt"
+
+
+def test_session_prompt_at_the_cap_is_kept_whole(tmp_path):
+    prompt = "a" * 4000
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": prompt}}) + "\n")
+    assert cli._session_prompt(str(path)) == prompt
+
+
+def test_session_prompt_one_over_the_cap_is_truncated(tmp_path):
+    prompt = "a" * 4001
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": prompt}}) + "\n")
+    assert cli._session_prompt(str(path)) == "a" * 4000
+
+
+def test_session_prompt_ignores_a_non_text_block_even_if_it_carries_a_text_field(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": [
+        {"type": "tool_use", "text": "should not leak"},
+        {"type": "text", "text": "the real block"},
+    ]}}) + "\n")
+    assert cli._session_prompt(str(path)) == "the real block"

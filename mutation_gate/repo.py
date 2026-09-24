@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import os
 import subprocess
@@ -43,7 +44,23 @@ def git(*args: str, cwd: Path | None = None) -> str:
 # Forces `git diff`'s post-image header back to `b/<path>` regardless of
 # diff.noprefix or diff.mnemonicPrefix, so every `+++ ` line parser in this
 # package can assume one shape (#151, #159).
-DIFF_PREFIX_PIN_ARGS = ("--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+DIFF_PREFIX_PIN_ARGS = ("--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
+
+
+def _matches_parts(parts: tuple[str, ...], pattern: tuple[str, ...]) -> bool:
+    if not pattern:
+        return not parts
+    head, rest = pattern[0], pattern[1:]
+    if head == "**":
+        return any(_matches_parts(parts[i:], rest) for i in range(len(parts)))
+    return bool(parts) and fnmatch.fnmatchcase(parts[0], head) and _matches_parts(parts[1:], rest)
+
+
+def _matches(rel: str, pattern: str) -> bool:
+    """fnmatch per path segment, never fnmatch's whole-string form — same
+    reasoning as Repo._expand. A trailing bare `**` matches only directories,
+    so it never matches a file, matching Path.glob + is_file()."""
+    return _matches_parts(tuple(rel.split("/")), tuple(pattern.split("/")))
 
 
 def post_image_path(field: str) -> str | None:
@@ -151,7 +168,7 @@ class Config:
     no_comments: bool = False
     vocabulary: str = ""
     vocabulary_molds: dict[str, list[str]] = field(default_factory=dict)
-    vocabulary_synonyms: str = "block"
+    vocabulary_synonyms: str = "report"
     own_namespaces: list[str] = field(default_factory=list)
     doc_allow: list[DocAllow] = field(default_factory=list)
     banned_names_file: str = ""
@@ -277,11 +294,12 @@ class Repo:
         cfg = self.config
         if any(rel.startswith(f"{tp}/") for tp in cfg.test_prefixes()):
             return True
-        return rel in self._expand(cfg.glob_patterns())
+        return any(_matches(rel, pat) for pat in cfg.glob_patterns())
 
     def _expand(self, patterns: Iterable[str]) -> set[str]:
-        """Path.glob, never fnmatch: discovery and is_test must agree on what a
-        pattern means, and fnmatch's `*` crosses directories where glob's does not."""
+        """Path.glob, never fnmatch: glob_tests's on-disk discovery and is_test's
+        `_matches` must agree on what a pattern means, and fnmatch's `*` crosses
+        directories where glob's does not."""
         return {
             str(p.relative_to(self.root))
             for pat in patterns

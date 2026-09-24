@@ -55,14 +55,14 @@ def _diff(path: str, *lines: str, start: int = 1) -> str:
 
 
 def test_the_pinned_args_are_the_literal_flags_that_defeat_diff_prefix_config():
-    assert DIFF_PREFIX_PIN_ARGS == ("--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+    assert DIFF_PREFIX_PIN_ARGS == ("--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
 
 
 def test_the_staged_diff_invocation_is_pinned_and_is_the_only_git_call(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch, diff="")
     mutants.changed_lines(tmp_path, staged=True)
     assert calls == [
-        ("diff", "-U0", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", "--cached")
+        ("diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", "--cached")
     ]
 
 
@@ -70,7 +70,7 @@ def test_the_worktree_diff_invocation_is_pinned_and_is_the_only_git_call(monkeyp
     calls = _stub_git(monkeypatch, diff="")
     mutants.changed_lines(tmp_path, staged=False)
     assert calls == [
-        ("diff", "-U0", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+        ("diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
     ]
 
 

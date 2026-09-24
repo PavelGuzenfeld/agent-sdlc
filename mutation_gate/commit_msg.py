@@ -93,14 +93,19 @@ def _comment_patterns(comment_char: str) -> tuple[re.Pattern, re.Pattern]:
     return scissors, line
 
 
-def _strip_editor_cruft(message: str, comment_char: str | None = "#") -> str:
+def _strip_editor_cruft(
+    message: str, comment_char: str | None = "#", strip_comments: bool = True
+) -> str:
     """A raw commit-msg hook file still carries the comment-char-prefixed status
     lines and, under `commit -v`, the scissors-delimited diff below them — git
-    strips both only after the hook runs, so a diff line must not read as the message."""
+    cuts the scissors diff unconditionally but only strips the comment lines
+    themselves under a cleanup mode that does (#140)."""
     if comment_char is None:
         return message
     scissors_re, comment_line_re = _comment_patterns(comment_char)
     message = scissors_re.sub("", message)
+    if not strip_comments:
+        return message
     return comment_line_re.sub("", message)
 
 
@@ -132,6 +137,22 @@ def _resolve_comment_char(message: str, cwd: Path | None = None) -> str | None:
         return configured
     match = _AUTO_COMMENT_HINT_RE.search(message)
     return match.group(1) if match else None
+
+
+_STRIPS_COMMENTS_CLEANUP_MODES = frozenset({"", "default", "strip"})
+
+
+def _configured_cleanup_mode(cwd: Path | None = None) -> str:
+    try:
+        return git("config", "--get", "commit.cleanup", cwd=cwd).strip()
+    except (GateError, OSError):
+        return ""
+
+
+def _strips_comments(cleanup_mode: str) -> bool:
+    """The hook can't see a --cleanup flag or whether an editor ran, so an
+    unset/default mode conservatively keeps today's strip behaviour (#140)."""
+    return cleanup_mode in _STRIPS_COMMENTS_CLEANUP_MODES
 
 
 def check_message(message: str, words: list[str]) -> list[Finding]:
@@ -211,7 +232,10 @@ def main(argv: list[str]) -> int:
         return 2
 
     comment_char = _resolve_comment_char(message)
-    findings = check_message(_strip_editor_cruft(message, comment_char), words)
+    strip_comments = _strips_comments(_configured_cleanup_mode())
+    findings = check_message(
+        _strip_editor_cruft(message, comment_char, strip_comments), words
+    )
     if findings:
         _emit(f"commit-msg: {args.msgfile}")
         _report(findings)

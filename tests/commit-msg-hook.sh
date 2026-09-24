@@ -129,6 +129,22 @@ check_editor_message \
     "$(printf 'we should leverage this\n\n; template hint line\n')" \
     1 'banned word "leverage"'
 
+git -C "$consumer" config commit.cleanup whitespace
+
+check_editor_message \
+    "a banned word confined to a ';'-prefixed comment line under commit.cleanup=whitespace" \
+    "$(printf 'fix a plain thing\n\n; we should leverage this template hint\n')" \
+    1 'banned word "leverage"'
+
+git -C "$consumer" config commit.cleanup strip
+
+check_editor_message \
+    "a banned word confined to a ';'-prefixed comment line under commit.cleanup=strip" \
+    "$(printf 'fix a plain thing\n\n; we should leverage this template hint\n')" \
+    0 ""
+
+git -C "$consumer" config --unset commit.cleanup
+
 git -C "$consumer" config core.commentString '//'
 
 check_editor_message \

@@ -41,18 +41,20 @@ class Intent:
     text: str
 
 
-def resolve_intent(repo: Repo, user_prompt: str | None) -> Intent | None:
-    """Decision 24, amended in dotfiles#75: explicit intent beats an inferred
-    ticket, and the ticket is read off the branch. No commit message describes
-    the change being gated — COMMIT_EDITMSG during pre-commit and `git log -1`
-    are both the previous commit. The agent's own summary is never used."""
+def resolve_intent(
+    repo: Repo, user_prompt: str | None, session_prompt: str | None = None
+) -> Intent | None:
+    """Priority: an explicit prompt, then the branch's ticket, then the Stop
+    hook's session prompt (#100). A ticket number with an empty body still
+    skips rather than falling back — an unreachable `gh` must not review blind."""
     if user_prompt:
         return Intent("user prompt", user_prompt)
     number = _branch_issue(repo)
     if number:
         body = _issue_body(repo, number)
-        if body:
-            return Intent(f"issue #{number}", body)
+        return Intent(f"issue #{number}", body) if body else None
+    if session_prompt:
+        return Intent("session prompt", session_prompt)
     return None
 
 
