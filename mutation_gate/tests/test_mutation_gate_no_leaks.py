@@ -330,7 +330,7 @@ def test_an_unset_banned_names_file_still_blocks_the_generic_scan(monkeypatch, t
     assert _local(monkeypatch, tmp_path) == 1
 
 
-_DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/")
+_DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/")
 
 
 def test_local_form_uses_the_staged_index(monkeypatch, tmp_path):
