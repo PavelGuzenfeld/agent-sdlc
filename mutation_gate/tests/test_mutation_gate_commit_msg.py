@@ -27,6 +27,15 @@ def _at(local: str, domain: str) -> str:
     return f"{local}@{domain}"
 
 
+def _stub_comment_config(output: str):
+    def fake_git(*args, cwd=None):
+        if args[:2] == ("config", "--get-regexp"):
+            return output
+        raise GateError("commit.cleanup not set")
+
+    return fake_git
+
+
 def test_banned_words_pins_the_parse_of_the_bundled_voice_md():
     assert commit_msg.banned_words(commit_msg._voice_text()) == EXPECTED_BANNED_WORDS
     assert "leverage" in EXPECTED_BANNED_WORDS
@@ -247,6 +256,59 @@ def test_strip_editor_cruft_is_a_no_op_when_comment_char_is_none():
     assert commit_msg._strip_editor_cruft(message, None) == message
 
 
+def test_strip_editor_cruft_keeps_comment_lines_but_still_cuts_the_scissors_diff_when_strip_comments_is_false():
+    message = (
+        "fix a plain thing\n"
+        "\n"
+        "# a template comment above scissors\n"
+        "\n"
+        "# ------------------------ >8 ------------------------\n"
+        "diff --git a/x.py b/x.py\n"
+        "+we should leverage this\n"
+    )
+    stripped = commit_msg._strip_editor_cruft(message, "#", strip_comments=False)
+    assert "a template comment above scissors" in stripped
+    assert "leverage" not in stripped
+
+
+@pytest.mark.parametrize("mode", ["", "default", "strip"])
+def test_strips_comments_is_true_for_the_modes_git_actually_strips_comments_under(mode):
+    assert commit_msg._strips_comments(mode) is True
+
+
+@pytest.mark.parametrize("mode", ["whitespace", "verbatim", "scissors"])
+def test_strips_comments_is_false_for_the_modes_git_keeps_comment_lines_under(mode):
+    assert commit_msg._strips_comments(mode) is False
+
+
+def test_configured_cleanup_mode_reads_commit_cleanup(monkeypatch):
+    seen = {}
+
+    def fake_git(*args, cwd=None):
+        seen["args"] = args
+        return "whitespace\n"
+
+    monkeypatch.setattr(commit_msg, "git", fake_git)
+    assert commit_msg._configured_cleanup_mode() == "whitespace"
+    assert seen["args"] == ("config", "--get", "commit.cleanup")
+
+
+def test_configured_cleanup_mode_defaults_to_empty_when_commit_cleanup_is_unset(monkeypatch):
+    def boom(*a, cwd=None):
+        raise GateError("key not set")
+
+    monkeypatch.setattr(commit_msg, "git", boom)
+    assert commit_msg._configured_cleanup_mode() == ""
+
+
+def test_configured_cleanup_mode_defaults_to_empty_when_git_binary_is_missing(monkeypatch):
+    def boom(*a, cwd=None):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(commit_msg, "git", boom)
+    assert commit_msg._configured_cleanup_mode() == ""
+
+
 def test_resolve_comment_char_returns_the_literal_configured_value(monkeypatch):
     monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
     assert commit_msg._resolve_comment_char("anything") == ";"
@@ -365,7 +427,7 @@ def test_cli_rejects_a_signed_off_by_trailer(tmp_path, capsys):
 def test_cli_under_semicolon_comment_char_trips_on_the_body_word_not_the_template_line(
     tmp_path, monkeypatch, capsys
 ):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
+    monkeypatch.setattr(commit_msg, "git", _stub_comment_config("core.commentchar ;\n"))
     message = (
         "we should leverage this\n"
         "\n"
@@ -382,7 +444,7 @@ def test_cli_under_semicolon_comment_char_trips_on_the_body_word_not_the_templat
 def test_cli_under_semicolon_comment_char_accepts_a_banned_word_confined_to_the_template_line(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar ;\n")
+    monkeypatch.setattr(commit_msg, "git", _stub_comment_config("core.commentchar ;\n"))
     message = "fix a plain thing\n\n; we should leverage this template hint\n"
     msgfile = _msgfile(tmp_path, message)
     assert cli.main(["commit-msg", msgfile]) == 0
@@ -391,7 +453,7 @@ def test_cli_under_semicolon_comment_char_accepts_a_banned_word_confined_to_the_
 def test_cli_under_a_multi_char_commentstring_trips_on_the_body_word_not_the_template_line(
     tmp_path, monkeypatch, capsys
 ):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentstring ;;\n")
+    monkeypatch.setattr(commit_msg, "git", _stub_comment_config("core.commentstring ;;\n"))
     message = (
         "we should leverage this\n"
         "\n"
@@ -407,7 +469,9 @@ def test_cli_under_a_multi_char_commentstring_trips_on_the_body_word_not_the_tem
 
 def test_cli_commentstring_wins_over_an_earlier_commentchar(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        commit_msg, "git", lambda *a, cwd=None: "core.commentchar @\ncore.commentstring ;;\n"
+        commit_msg,
+        "git",
+        _stub_comment_config("core.commentchar @\ncore.commentstring ;;\n"),
     )
     message = "fix a plain thing\n\n;; we should leverage this template hint\n"
     msgfile = _msgfile(tmp_path, message)
@@ -415,7 +479,7 @@ def test_cli_commentstring_wins_over_an_earlier_commentchar(tmp_path, monkeypatc
 
 
 def test_cli_under_auto_comment_char_strips_using_the_char_git_actually_used(tmp_path, monkeypatch):
-    monkeypatch.setattr(commit_msg, "git", lambda *a, cwd=None: "core.commentchar auto\n")
+    monkeypatch.setattr(commit_msg, "git", _stub_comment_config("core.commentchar auto\n"))
     message = (
         "fix a plain thing\n"
         "\n"
@@ -423,6 +487,46 @@ def test_cli_under_auto_comment_char_strips_using_the_char_git_actually_used(tmp
         "@ with '@' will be ignored, and an empty message aborts the commit.\n"
         "@ we should leverage this hint\n"
     )
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 0
+
+
+def _fake_git_for_cleanup_mode(mode: str):
+    def fake_git(*args, cwd=None):
+        if args[:2] == ("config", "--get-regexp"):
+            raise GateError("core.comment(char|string) not set")
+        if args == ("config", "--get", "commit.cleanup"):
+            return f"{mode}\n"
+        raise AssertionError(args)
+
+    return fake_git
+
+
+def test_cli_under_commit_cleanup_whitespace_checks_a_banned_word_confined_to_a_comment_line(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(commit_msg, "git", _fake_git_for_cleanup_mode("whitespace"))
+    message = "fix a plain thing\n\n# we should leverage this\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 1
+    assert 'banned word "leverage"' in capsys.readouterr().err
+
+
+def test_cli_under_commit_cleanup_strip_ignores_a_banned_word_confined_to_a_comment_line(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(commit_msg, "git", _fake_git_for_cleanup_mode("strip"))
+    message = "fix a plain thing\n\n# we should leverage this\n"
+    msgfile = _msgfile(tmp_path, message)
+    assert cli.main(["commit-msg", msgfile]) == 0
+
+
+def test_cli_with_commit_cleanup_unset_keeps_todays_strip_behavior(tmp_path, monkeypatch):
+    def boom(*a, cwd=None):
+        raise GateError("key not set")
+
+    monkeypatch.setattr(commit_msg, "git", boom)
+    message = "fix a plain thing\n\n# we should leverage this\n"
     msgfile = _msgfile(tmp_path, message)
     assert cli.main(["commit-msg", msgfile]) == 0
 
