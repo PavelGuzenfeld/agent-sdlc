@@ -143,7 +143,7 @@ def test_a_quoted_post_image_header_still_attributes_the_line(monkeypatch, tmp_p
         "+x = 1\n"
     )
     _stub_git(monkeypatch, diff=diff)
-    assert mutants.changed_lines(tmp_path, staged=True) == {"caf\\303\\251.py": {1}}
+    assert mutants.changed_lines(tmp_path, staged=True) == {"café.py": {1}}
 
 
 def test_an_unparseable_noprefix_post_image_header_refuses(monkeypatch, tmp_path):
