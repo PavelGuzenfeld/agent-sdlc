@@ -37,6 +37,25 @@ def test_the_prompt_sends_the_adversary_to_the_export_files_in_its_cwd(tmp_path,
     assert "tests/" in prompt
 
 
+def test_run_exports_the_real_intent_and_test_content_before_reviewing(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        work = Path(kwargs["cwd"])
+        seen["intent_md"] = (work / "INTENT.md").read_text()
+        seen["test_file"] = (work / "tests" / "test_thing.py").read_text()
+        return sp.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    test_file = tmp_path / "test_thing.py"
+    test_file.write_text("def test_thing():\n    assert True\n")
+    intent = adversary.Intent("issue #268", "the stated intent body")
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run([test_file], intent, "")
+    assert "the stated intent body" in seen["intent_md"]
+    assert seen["test_file"] == test_file.read_text()
+
+
 def _repo(root):
     return repo_mod.Repo(
         root=root,
