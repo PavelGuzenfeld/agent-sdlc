@@ -149,8 +149,7 @@ def test_five_word_segment_blocks_on_the_word_cap(tmp_path, monkeypatch):
 
 
 def test_four_word_segment_of_known_nouns_passes(tmp_path, monkeypatch):
-    domain = '[[concept]]\nword = "buffer"\nmeaning = "a holding area"\npos = ["noun"]\n'
-    repo = _repo(tmp_path, domain)
+    repo = _repo(tmp_path)
     _added(monkeypatch, repo, {"src/frame_frame_frame_buffer.py": "pass\n"},
            existing=["src/existing.py"])
     assert vocabulary_path.check(repo, True, []) == []
