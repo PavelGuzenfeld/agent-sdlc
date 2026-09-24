@@ -498,9 +498,41 @@ def test_worktree_skips_the_adversary_cleanly_with_no_transcript_and_no_ticket(
     assert "adversary skipped" in capsys.readouterr().err
 
 
+def _write_terse_latest_transcript(tmp_path: Path) -> Path:
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user",
+                                      "content": "why is the decode failing at the boundary"}},
+        {"type": "assistant", "message": {"role": "assistant",
+                                           "content": [{"type": "text", "text": "fixed it"}]}},
+        {"type": "user", "message": {"role": "user", "content": "LGTM"}},
+    ]) + "\n")
+    return path
+
+
+def test_worktree_uses_the_earlier_substantive_turn_when_the_latest_one_is_terse(
+    tmp_path, monkeypatch
+):
+    transcript = _write_terse_latest_transcript(tmp_path)
+    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "fix/utf-8-decode", transcript)
+    assert intent is not None
+    assert intent.source == "session prompt"
+    assert intent.text == "why is the decode failing at the boundary"
+
+
+def test_worktree_finds_no_intent_when_every_turn_is_terse(tmp_path, monkeypatch):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": "sure"}},
+        {"type": "user", "message": {"role": "user", "content": "LGTM"}},
+    ]) + "\n")
+    intent = _run_worktree_with_hook_stdin(monkeypatch, tmp_path, "fix/utf-8-decode", path)
+    assert intent is None
+
+
 def test_session_prompt_skips_tool_results_and_returns_the_real_user_text(tmp_path):
-    transcript = _write_transcript(tmp_path, "the actual prompt")
-    assert cli._session_prompt(str(transcript)) == "the actual prompt"
+    transcript = _write_transcript(tmp_path, "the actual prompt about the failing boundary")
+    assert cli._session_prompt(str(transcript)) == "the actual prompt about the failing boundary"
 
 
 def test_session_prompt_is_none_without_a_transcript_path():
@@ -514,16 +546,18 @@ def test_session_prompt_is_none_when_the_file_is_missing(tmp_path):
 def test_session_prompt_skips_a_bad_json_line_and_keeps_reading(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text(
-        json.dumps({"type": "user", "message": {"role": "user", "content": "earlier prompt"}})
+        json.dumps({"type": "user", "message": {"role": "user",
+                                                  "content": "earlier prompt about the missing fix"}})
         + "\n{not json\n"
     )
-    assert cli._session_prompt(str(path)) == "earlier prompt"
+    assert cli._session_prompt(str(path)) == "earlier prompt about the missing fix"
 
 
 def test_session_prompt_is_none_when_every_user_entry_is_meta_or_a_tool_result(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text("\n".join(json.dumps(e) for e in [
-        {"type": "user", "isMeta": True, "message": {"role": "user", "content": "Caveat: background summary"}},
+        {"type": "user", "isMeta": True, "message": {"role": "user",
+         "content": "Caveat: background summary of the previous session"}},
         {"type": "user", "message": {"role": "user",
                                       "content": [{"type": "tool_result", "content": "ok"}]}},
     ]) + "\n")
@@ -533,27 +567,93 @@ def test_session_prompt_is_none_when_every_user_entry_is_meta_or_a_tool_result(t
 def test_session_prompt_uses_the_later_of_two_real_prompts(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text("\n".join(json.dumps(e) for e in [
-        {"type": "user", "message": {"role": "user", "content": "first prompt"}},
-        {"type": "user", "message": {"role": "user", "content": "second prompt"}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": "first prompt about the initial failing task"}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": "second prompt about the later failing task"}},
     ]) + "\n")
-    assert cli._session_prompt(str(path)) == "second prompt"
+    assert cli._session_prompt(str(path)) == "second prompt about the later failing task"
 
 
-def test_session_prompt_joins_multiple_text_blocks_in_one_turn(tmp_path):
+def test_session_prompt_word_count_applies_to_the_joined_turn_not_each_block(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": [
-        {"type": "text", "text": "line one"}, {"type": "text", "text": "line two"},
+        {"type": "text", "text": "line one about the fix"},
+        {"type": "text", "text": "line two about the test"},
     ]}}) + "\n")
-    assert cli._session_prompt(str(path)) == "line one\nline two"
+    assert (cli._session_prompt(str(path))
+            == "line one about the fix\nline two about the test")
 
 
 def test_session_prompt_skips_a_transcript_line_that_is_not_a_json_object(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text("\n".join([
         json.dumps(["not", "a", "dict"]),
-        json.dumps({"type": "user", "message": {"role": "user", "content": "earlier prompt"}}),
+        json.dumps({"type": "user", "message": {"role": "user",
+                                                  "content": "earlier prompt about the missing fix"}}),
     ]) + "\n")
-    assert cli._session_prompt(str(path)) == "earlier prompt"
+    assert cli._session_prompt(str(path)) == "earlier prompt about the missing fix"
+
+
+def test_session_prompt_skips_a_terse_latest_turn_and_uses_the_substantive_earlier_one(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user",
+                                      "content": "why is the decode failing at the boundary"}},
+        {"type": "user", "message": {"role": "user", "content": "LGTM"}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "why is the decode failing at the boundary"
+
+
+def test_session_prompt_is_none_when_every_real_turn_is_terse(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": "sure"}},
+        {"type": "user", "message": {"role": "user", "content": "what's left?"}},
+        {"type": "user", "message": {"role": "user", "content": "LGTM"}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) is None
+
+
+def test_session_prompt_five_words_is_too_terse(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps(
+        {"type": "user", "message": {"role": "user", "content": "one two three four five"}}
+    ) + "\n")
+    assert cli._session_prompt(str(path)) is None
+
+
+def test_session_prompt_six_words_is_substantive_enough(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text(json.dumps(
+        {"type": "user", "message": {"role": "user", "content": "one two three four five six"}}
+    ) + "\n")
+    assert cli._session_prompt(str(path)) == "one two three four five six"
+
+
+def test_session_prompt_stops_at_a_compaction_boundary_rather_than_reading_through_it(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user",
+                                      "content": "why is the decode failing at the boundary"}},
+        {"type": "user", "isCompactSummary": True, "message": {"role": "user", "content":
+            "This session is being continued from a previous conversation that ran out of context."}},
+        {"type": "user", "message": {"role": "user", "content": "LGTM"}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) is None
+
+
+def test_session_prompt_reaches_a_substantive_turn_newer_than_the_compaction_boundary(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user",
+                                      "content": "why is the decode failing at the boundary"}},
+        {"type": "user", "isCompactSummary": True, "message": {"role": "user", "content":
+            "This session is being continued from a previous conversation that ran out of context."}},
+        {"type": "user", "message": {"role": "user",
+                                      "content": "now the retry also fails at the same spot"}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "now the retry also fails at the same spot"
 
 
 def test_stop_hook_payload_ignores_a_non_dict_json_body(monkeypatch):
@@ -563,42 +663,55 @@ def test_stop_hook_payload_ignores_a_non_dict_json_body(monkeypatch):
 
 
 @pytest.mark.parametrize("wrapper", [
-    "<system-reminder>x</system-reminder>",
-    "<command-name>/exit</command-name>",
-    "<command-message>cleanup</command-message>",
-    "<local-command-stdout>Goodbye!</local-command-stdout>",
-    "<local-command-caveat>Caveat: earlier messages were generated by a slash command",
-    "<task-notification>\n<task-id>abc</task-id>\n</task-notification>",
+    "<system-reminder>context injected by the harness itself</system-reminder>",
+    "<command-name>/clear the conversation history now</command-name>",
+    "<command-message>clearing the conversation history now</command-message>",
+    "<local-command-stdout>listing files in the working directory</local-command-stdout>",
+    "<local-command-caveat>Caveat: earlier messages were generated by a slash command</local-command-caveat>",
+    "<task-notification>\n<task-id>abc123</task-id>\n<status>completed just now</status>\n</task-notification>",
+    "<bash-input>ls -la the current working directory</bash-input>",
+    "<bash-stdout>total 42 files listed just now</bash-stdout>",
     "[Request interrupted by user]",
-    "This session is being continued from a previous conversation that ran out of context.",
+    "[Request interrupted by user for tool use]",
 ])
 def test_session_prompt_skips_every_known_harness_wrapper(tmp_path, wrapper):
     path = tmp_path / "transcript.jsonl"
     path.write_text("\n".join(json.dumps(e) for e in [
-        {"type": "user", "message": {"role": "user", "content": "the real prompt"}},
+        {"type": "user", "message": {"role": "user", "content": "the real prompt about the fix"}},
         {"type": "user", "message": {"role": "user", "content": wrapper}},
     ]) + "\n")
-    assert cli._session_prompt(str(path)) == "the real prompt"
+    assert cli._session_prompt(str(path)) == "the real prompt about the fix"
+
+
+def test_session_prompt_skips_a_harness_wrapper_carried_as_a_text_block(tmp_path):
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in [
+        {"type": "user", "message": {"role": "user", "content": "the real prompt about the fix"}},
+        {"type": "user", "message": {"role": "user", "content": [
+            {"type": "text", "text": "<system-reminder>context injected by the harness</system-reminder>"},
+        ]}},
+    ]) + "\n")
+    assert cli._session_prompt(str(path)) == "the real prompt about the fix"
 
 
 def test_session_prompt_at_the_cap_is_kept_whole(tmp_path):
-    prompt = "a" * 4000
+    prompt = "a" * 3990 + " b c d e f"
     path = tmp_path / "transcript.jsonl"
     path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": prompt}}) + "\n")
     assert cli._session_prompt(str(path)) == prompt
 
 
 def test_session_prompt_one_over_the_cap_is_truncated(tmp_path):
-    prompt = "a" * 4001
+    prompt = "a" * 3991 + " b c d e f"
     path = tmp_path / "transcript.jsonl"
     path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": prompt}}) + "\n")
-    assert cli._session_prompt(str(path)) == "a" * 4000
+    assert cli._session_prompt(str(path)) == prompt[:4000]
 
 
 def test_session_prompt_ignores_a_non_text_block_even_if_it_carries_a_text_field(tmp_path):
     path = tmp_path / "transcript.jsonl"
     path.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": [
         {"type": "tool_use", "text": "should not leak"},
-        {"type": "text", "text": "the real block"},
+        {"type": "text", "text": "the real block about the fix"},
     ]}}) + "\n")
-    assert cli._session_prompt(str(path)) == "the real block"
+    assert cli._session_prompt(str(path)) == "the real block about the fix"
