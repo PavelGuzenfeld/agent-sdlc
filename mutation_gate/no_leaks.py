@@ -93,12 +93,18 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
-def _post_image_rev(repo: Repo, diff_args: tuple[str, ...]) -> str:
+def _post_image_rev(diff_args: tuple[str, ...]) -> str:
+    """The tip `git show` reads a path at — `git diff`'s post-image side for
+    both `A..B` and `A...B`, so a plain string split settles it without
+    trusting `git rev-parse`'s per-form line order."""
     if diff_args and diff_args[0] == "--cached":
         return ""
-    out = git("rev-parse", diff_args[0], cwd=repo.root)
-    revs = [line for line in out.splitlines() if not line.startswith("^")]
-    return revs[-1] if revs else diff_args[0]
+    rev_range = diff_args[0]
+    if "..." in rev_range:
+        return rev_range.rpartition("...")[2]
+    if ".." in rev_range:
+        return rev_range.rpartition("..")[2]
+    return rev_range
 
 
 def _binary_marked_text_hits(repo: Repo, rev: str, path: str) -> list[tuple[str, int, str]]:
@@ -142,7 +148,7 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
                 if path is not None:
                     binary_paths.append(path)
     if binary_paths:
-        rev = _post_image_rev(repo, diff_args)
+        rev = _post_image_rev(diff_args)
         for path in binary_paths:
             hits.extend(_binary_marked_text_hits(repo, rev, path))
     return hits

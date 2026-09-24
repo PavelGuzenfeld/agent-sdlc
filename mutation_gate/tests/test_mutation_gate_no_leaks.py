@@ -477,7 +477,7 @@ def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(mo
 
 
 def test_the_range_form_blocks_a_leak_in_a_binary_marked_file_with_no_nul_byte(monkeypatch, tmp_path, capsys):
-    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"), rev_parse="deadbeef\n^cafebabe\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _stub_git_bytes(monkeypatch, EMAIL.encode())
     assert _range(monkeypatch, tmp_path) == 1
     err = capsys.readouterr().err
@@ -501,15 +501,21 @@ def test_the_cached_form_reads_the_staged_blob_by_path(monkeypatch, tmp_path):
 
 def test_the_range_form_reads_the_post_image_blob_at_the_ranges_tip(monkeypatch, tmp_path):
     calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
-    diff_calls = _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"), rev_parse="deadbeef\n^cafebabe\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _range(monkeypatch, tmp_path)
-    assert calls == [("show", "deadbeef:fixture.bin")]
-    assert ("rev-parse", "base..HEAD") in diff_calls
+    assert calls == [("show", "HEAD:fixture.bin")]
 
 
-def test_a_diff_with_no_binary_entry_never_calls_rev_parse_or_show(monkeypatch, tmp_path):
+def test_a_three_dot_ranges_post_image_blob_is_read_at_its_right_hand_tip(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    monkeypatch.setattr(no_leaks, "discover", lambda: _repo(tmp_path))
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    no_leaks.main(["--range", "base...HEAD"])
+    assert calls == [("show", "HEAD:fixture.bin")]
+
+
+def test_a_diff_with_no_binary_entry_never_calls_show(monkeypatch, tmp_path):
     show_calls = _stub_git_bytes(monkeypatch, b"")
-    diff_calls = _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
+    _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
     _local(monkeypatch, tmp_path)
     assert show_calls == []
-    assert all(call[0] != "rev-parse" for call in diff_calls)
