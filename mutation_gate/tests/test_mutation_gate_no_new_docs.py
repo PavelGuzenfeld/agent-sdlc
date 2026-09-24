@@ -237,6 +237,21 @@ def test_matching_added_paths_does_not_walk_the_filesystem(monkeypatch, tmp_path
     assert "docs/y.md" not in err
 
 
+def test_a_test_glob_match_clears_no_new_docs_without_walking_the_filesystem(
+    monkeypatch, tmp_path
+):
+    def boom(*args, **kwargs):
+        raise AssertionError("no-new-docs must not walk the filesystem")
+
+    monkeypatch.setattr(Path, "glob", boom)
+    monkeypatch.setattr(Path, "iterdir", boom)
+    monkeypatch.setattr(os, "scandir", boom)
+    monkeypatch.setattr(os, "listdir", boom)
+    config = Config(test_globs=["webapp/lib/*.md"])
+    _stub_git(monkeypatch, added=_added(["webapp/lib/notes.md"]))
+    assert _local(monkeypatch, tmp_path, config=config) == 0
+
+
 _PATTERN_SHAPES = [
     ("**/README*", "README.md", True),
     ("**/README*", "pkg/README.md", True),
