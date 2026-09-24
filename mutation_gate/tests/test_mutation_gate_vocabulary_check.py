@@ -395,8 +395,20 @@ def test_tsx_hook_with_an_unknown_word_blocks_as_a_function_not_a_type(tmp_path)
     assert found == ["1:function:useFrob:`Frob` is not in the dictionary:"]
 
 
+def test_tsx_hook_declared_with_function_keyword_and_an_unknown_word_blocks(tmp_path):
+    found = _findings(tmp_path, "ui/a.tsx", "function useFrob() {}\n", {1})
+    assert found == ["1:function:useFrob:`Frob` is not in the dictionary:"]
+
+
 def test_tsx_pascal_case_function_that_passes_is_checked_on_the_type_mold(tmp_path):
     assert _findings(tmp_path, "ui/a.tsx", "function FrameViewer() {}\n", {1}) == []
+
+
+def test_tsx_pascal_case_arrow_function_is_checked_as_a_type(tmp_path):
+    found = _findings(tmp_path, "ui/a.tsx", "const FrameManager = () => {};\n", {1})
+    assert found == [
+        "1:type:FrameManager:`Manager` is vague — name what it does: scheduler, registry, pool, cache:"
+    ]
 
 
 def test_ts_pascal_case_function_stays_on_the_function_mold_outside_tsx(tmp_path):
@@ -477,6 +489,15 @@ def test_ts_getter_with_an_unknown_word_blocks(tmp_path):
     assert found == ["2:property:frob:`frob` is not in the dictionary:"]
 
 
+def test_ts_getter_with_a_misordered_head_noun_blocks_on_the_property_mold(tmp_path):
+    text = "class Frame {\n  get countTarget(): number { return 1; }\n}\n"
+    found = _findings(tmp_path, "ui/a.ts", text, {2})
+    assert found == [
+        "2:property:countTarget:`count` is a head noun: last in its noun phrase, or last "
+        "before a prepositional tail:targetCount"
+    ]
+
+
 def test_ts_setter_with_an_unknown_word_is_still_exempt(tmp_path):
     text = "class Frame {\n  get count(): number { return 1; }\n  set frob(v: number) {}\n}\n"
     assert _findings(tmp_path, "ui/a.ts", text, {2, 3}) == []
@@ -484,6 +505,38 @@ def test_ts_setter_with_an_unknown_word_is_still_exempt(tmp_path):
 
 def test_on_prefix_is_exempt_via_the_core_convention_list(tmp_path):
     assert _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1}) == []
+
+
+def _without_gdscript_conventions(monkeypatch, keep_prefixes=True, keep_ready=True):
+    real_load = vocabulary.load
+
+    def _loaded(root, domain):
+        d = real_load(root, domain)
+        prefixes = d.convention_prefixes if keep_prefixes else frozenset()
+        conventions = d.conventions if keep_ready else d.conventions - {"_ready"}
+        return vocabulary.Dictionary(d.concepts, d.matches, d.collections, d.distinct,
+                                     conventions, prefixes)
+
+    monkeypatch.setattr(vocabulary_check.vocabulary, "load", _loaded)
+
+
+def test_on_prefix_exemption_is_read_from_the_dictionary_not_hardcoded(tmp_path, monkeypatch):
+    _without_gdscript_conventions(monkeypatch, keep_prefixes=False)
+    assert _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1}) != []
+
+
+def test_ready_convention_name_exemption_is_read_from_the_dictionary_not_hardcoded(
+    tmp_path, monkeypatch
+):
+    _without_gdscript_conventions(monkeypatch, keep_ready=False)
+    assert _findings(tmp_path, "pkg/a.py", "_ready = 1\n", {1}) != []
+
+
+def test_gdscript_missing_message_names_the_install_script(tmp_path, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "signal change_health\n"})
+    vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    err = capsys.readouterr().err
+    assert "bin/install-gdscript-parser" in err
 
 
 def test_gdscript_readiness_short_circuits_without_a_sgconfig_file(tmp_path, monkeypatch):
