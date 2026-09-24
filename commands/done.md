@@ -28,8 +28,9 @@ skip to survey.
 
 Send each live agent a checkpoint request: stop at a clean point, commit WIP on its own
 branch, never push, and report back its branch, worktree, SHA, next step, and any
-follow-up candidates noticed but not acted on. The commit this causes is one `/done`
-makes happen, not one it pushes — "never push" still holds.
+follow-up candidates — only what it saw fail or deferred out loud this session,
+"None" the normal answer. The commit this causes is one `/done` makes happen,
+not one it pushes — "never push" still holds.
 
 Wait for every reply. An agent that never replies is named in the report and the
 handoff with no branch or SHA to give. Nothing to commit: the agent says so and no
