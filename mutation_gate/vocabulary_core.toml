@@ -157,6 +157,705 @@ meaning = "employ or apply"
 pos = ["verb"]
 forms = ["-s", "-ed", "-ing", "-er"]
 
+[[concept]]
+word = "result"
+meaning = "the value or outcome an operation produces"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "value"
+meaning = "the data a name or expression holds"
+pos = ["noun"]
+reject = ["val"]
+forms = ["plural"]
+
+[[concept]]
+word = "path"
+meaning = "a location in a file system or a URL, as a sequence of segments"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "name"
+meaning = "the word or phrase that identifies a thing"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "type"
+meaning = "the kind of value or structure a name declares"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "config"
+meaning = "the settings a program or test is configured with"
+pos = ["noun"]
+reject = ["cfg"]
+forms = ["plural"]
+
+[[concept]]
+word = "entry"
+meaning = "one row or item added to a collection or a log"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "default"
+meaning = "the value used when none is given"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "output"
+meaning = "what an operation produces to be read or consumed"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "header"
+meaning = "the leading part of a message, file or table that describes what follows"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "sample"
+meaning = "one value drawn from a larger population or stream"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "list"
+meaning = "an ordered sequence of items"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "array"
+meaning = "a fixed-size ordered sequence of elements"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "point"
+meaning = "a location given by its coordinates"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "unit"
+meaning = "one measure a quantity is expressed in, or one smallest testable piece of code"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "label"
+meaning = "text that names or classifies something for display"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "number"
+meaning = "a count or measured quantity"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "status"
+meaning = "the current state of a thing, reported as a short value"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "version"
+meaning = "one numbered revision of a thing"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "text"
+meaning = "a sequence of characters meant to be read"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "source"
+meaning = "where a value comes from, or the origin file"
+pos = ["noun"]
+reject = ["src"]
+forms = ["plural"]
+
+[[concept]]
+word = "file"
+meaning = "a named unit of stored data"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "buffer"
+meaning = "a block of memory holding data temporarily"
+pos = ["noun"]
+reject = ["buf"]
+forms = ["plural"]
+
+[[concept]]
+word = "size"
+meaning = "how large a thing is, in its own unit"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "state"
+meaning = "the current condition of a thing, as data"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "line"
+meaning = "one row of text in a file or output"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "image"
+meaning = "a two-dimensional array of pixels"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "row"
+meaning = "one horizontal record in a table"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "error"
+meaning = "a condition that stops normal execution"
+pos = ["noun"]
+reject = ["err"]
+forms = ["plural"]
+
+[[concept]]
+word = "width"
+meaning = "how wide a thing is, in its own unit"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "code"
+meaning = "source text, or a short value that classifies an outcome"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "key"
+meaning = "the value a mapping looks an entry up by"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "time"
+meaning = "a point on, or a span of, a clock"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "range"
+meaning = "the span between a lower and an upper bound"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "body"
+meaning = "the payload of a message or request, after its header"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "mode"
+meaning = "one of a fixed set of ways a thing can operate"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "map"
+meaning = "a mapping from keys to values"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "item"
+meaning = "one element of a collection"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "threshold"
+meaning = "the value a comparison is measured against"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "report"
+meaning = "a summary an operation prints or returns"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "table"
+meaning = "rows of data arranged in columns"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "stream"
+meaning = "an ordered, possibly unbounded sequence of values"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "content"
+meaning = "the data a container holds, without its wrapper"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "pattern"
+meaning = "a shape a value or a name is matched against"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "string"
+meaning = "a sequence of characters"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "limit"
+meaning = "the largest or smallest value a thing may take"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "pair"
+meaning = "two related values held together"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "object"
+meaning = "an instance of a type, holding its own state"
+pos = ["noun"]
+reject = ["obj"]
+forms = ["plural"]
+
+[[concept]]
+word = "handler"
+meaning = "code that runs in response to an event"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "generic"
+meaning = "not specific to one case"
+pos = ["adjective"]
+
+[[concept]]
+word = "thread"
+meaning = "an independent sequence of execution within a process"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "event"
+meaning = "something that happened, reported once it is over"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "token"
+meaning = "one unit a text or a protocol is split into"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "process"
+meaning = "a running instance of a program"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "spec"
+meaning = "a written statement of what a thing must do"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "block"
+meaning = "a contiguous run of code, memory or data"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "memory"
+meaning = "the storage a running program reads and writes"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "node"
+meaning = "one element of a tree or graph"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "shape"
+meaning = "the sizes of an array's dimensions"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "cache"
+meaning = "a store that keeps a value to avoid recomputing it"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "input"
+meaning = "a value a function or program is given to work on"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "message"
+meaning = "text or data sent from one party to another"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "device"
+meaning = "a piece of hardware code runs on or talks to"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "client"
+meaning = "the side of a connection that starts a request"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "server"
+meaning = "the side of a connection that answers a request"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "owner"
+meaning = "who or what is responsible for releasing a resource"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "ratio"
+meaning = "one quantity divided by another"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "class"
+meaning = "a type's declaration in an object-oriented language"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "id"
+meaning = "a value that names one instance among many"
+pos = ["noun"]
+reject = ["identifier"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "format"
+meaning = "the layout data is written or read in"
+pos = ["noun"]
+reject = ["fmt"]
+forms = ["plural"]
+
+[[concept]]
+word = "directory"
+meaning = "a folder in a file system"
+pos = ["noun"]
+reject = ["dir"]
+forms = ["plural"]
+
+[[concept]]
+word = "reference"
+meaning = "an indirect link to another value or object"
+pos = ["noun"]
+reject = ["ref"]
+forms = ["plural"]
+
+[[concept]]
+word = "environment"
+meaning = "the variables and settings a process runs under"
+pos = ["noun"]
+reject = ["env"]
+forms = ["plural"]
+
+[[concept]]
+word = "payload"
+meaning = "the data a message carries, apart from its framing"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "suffix"
+meaning = "the trailing part of a name or a path segment"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "flag"
+meaning = "a boolean switch that turns a behaviour on or off"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "span"
+meaning = "a bounded stretch between two positions"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "window"
+meaning = "a bounded span of a stream, in time or in count"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "side"
+meaning = "one of two comparable positions in a relation"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "package"
+meaning = "a distributable unit of code"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "budget"
+meaning = "the amount of a resource allotted before a limit is hit"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "case"
+meaning = "one input and its expected outcome, in a test"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "base"
+meaning = "the starting point a thing is measured or built from"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "total"
+meaning = "the sum of a set of amounts"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "tag"
+meaning = "a short label attached to a thing for lookup or grouping"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "template"
+meaning = "a pattern a concrete thing is generated from"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "mask"
+meaning = "a value that selects which bits or elements apply"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "gate"
+meaning = "a check that must pass before a change proceeds"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "project"
+meaning = "a body of code and its own build and test setup"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "view"
+meaning = "a read-only window onto another value's data"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "scalar"
+meaning = "a single numeric value, as opposed to a vector or array"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "dst"
+meaning = "the destination a value is copied or written to"
+pos = ["noun"]
+
+[[concept]]
+word = "raw"
+meaning = "not yet processed or validated"
+pos = ["adjective"]
+
+[[concept]]
+word = "new"
+meaning = "created or added most recently"
+pos = ["adjective"]
+
+[[concept]]
+word = "current"
+meaning = "in effect right now"
+pos = ["adjective"]
+
+[[concept]]
+word = "valid"
+meaning = "meeting the rules that define correctness"
+pos = ["adjective"]
+
+[[concept]]
+word = "real"
+meaning = "measured from an actual run, not simulated or estimated"
+pos = ["adjective"]
+
+[[concept]]
+word = "ready"
+meaning = "able to start or proceed immediately"
+pos = ["adjective"]
+
+[[concept]]
+word = "single"
+meaning = "exactly one, as opposed to several"
+pos = ["adjective"]
+
+[[concept]]
+word = "stable"
+meaning = "not changing between repeated runs"
+pos = ["adjective"]
+
+[[concept]]
+word = "add"
+meaning = "put a new element into a collection, or a new term into a sum"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "make"
+meaning = "construct or produce"
+pos = ["verb"]
+reject = ["create", "creates", "created"]
+forms = ["-s", "-ed", "-ing"]
+irregular = { "-ed" = "made" }
+
+[[concept]]
+word = "check"
+meaning = "look at a thing to confirm it meets a condition, or the confirmation itself"
+pos = ["verb", "noun"]
+forms = ["-s", "-ed", "-ing", "plural"]
+
+[[concept]]
+word = "get"
+meaning = "obtain or retrieve a value"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+irregular = { "-ed" = "got" }
+
+[[concept]]
+word = "copy"
+meaning = "duplicate a value or a range of memory"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "find"
+meaning = "search for something now present"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+irregular = { "-ed" = "found" }
+
+[[concept]]
+word = "detect"
+meaning = "notice that a condition is present"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "push"
+meaning = "add an element at one end of a sequence"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "resolve"
+meaning = "work out, or connect to, what a reference points to"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "compute"
+meaning = "work out a result from its inputs"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "load"
+meaning = "bring data from storage into memory or into a running program"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "record"
+meaning = "keep a value for later reading, or the value kept"
+pos = ["verb", "noun"]
+forms = ["-s", "-ed", "-ing", "plural"]
+
+[[concept]]
+word = "send"
+meaning = "transmit a value to another party"
+pos = ["verb"]
+forms = ["-s", "-ing"]
+irregular = { "-ed" = "sent" }
+
+[[concept]]
+word = "set"
+meaning = "assign a value to a name or a field"
+pos = ["verb"]
+forms = ["-s", "-ing"]
+irregular = { "-ed" = "set" }
+
 [[symbol]]
 word = "i"
 meaning = "loop index"
@@ -172,6 +871,10 @@ meaning = "first axis coordinate"
 [[symbol]]
 word = "y"
 meaning = "second axis coordinate"
+
+[[symbol]]
+word = "z"
+meaning = "third axis coordinate"
 
 [[vague]]
 word = "manager"
@@ -192,6 +895,79 @@ hint = "name the kind of data: frame, sample, record"
 [[vague]]
 word = "info"
 hint = "name what is known: version, status, size"
+
+[[vague]]
+word = "tmp"
+hint = "name what it is even while temporary: draft, staging, scratch"
+
+[[distinct]]
+pair = ["position", "status"]
+
+[[distinct]]
+pair = ["position", "side"]
+
+[[distinct]]
+pair = ["position", "view"]
+
+[[distinct]]
+pair = ["frame", "shape"]
+
+[[distinct]]
+pair = ["read", "record"]
+
+[[distinct]]
+pair = ["target", "object"]
+
+[[distinct]]
+pair = ["heading", "header"]
+
+[[distinct]]
+pair = ["press", "push"]
+
+[[distinct]]
+pair = ["result", "event"]
+
+[[distinct]]
+pair = ["type", "case"]
+
+[[distinct]]
+pair = ["point", "item"]
+
+[[distinct]]
+pair = ["source", "reference"]
+
+[[distinct]]
+pair = ["image", "range"]
+
+[[distinct]]
+pair = ["item", "token"]
+
+[[distinct]]
+pair = ["content", "message"]
+
+[[distinct]]
+pair = ["pattern", "shape"]
+
+[[distinct]]
+pair = ["pair", "span"]
+
+[[distinct]]
+pair = ["event", "case"]
+
+[[distinct]]
+pair = ["node", "client"]
+
+[[distinct]]
+pair = ["raw", "new"]
+
+[[distinct]]
+pair = ["make", "get"]
+
+[[distinct]]
+pair = ["get", "find"]
+
+[[distinct]]
+pair = ["find", "detect"]
 
 [collection]
 types = ["list", "set", "dict", "tuple", "deque", "std::vector", "std::array", "std::map", "std::set"]

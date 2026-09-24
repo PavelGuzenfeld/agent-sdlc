@@ -220,9 +220,12 @@ def blob_hashes(repo: Repo, paths: list[Path]) -> list[str]:
     return sorted(out.split())
 
 
+_CACHE_VERSION = "2"
+
+
 def _cache_path(repo: Repo, target: str, fingerprint: str) -> Path:
     safe = target.replace("/", "__")
-    return CACHE_ROOT / repo.key / "coverage" / f"{safe}.{fingerprint}.json"
+    return CACHE_ROOT / repo.key / "coverage" / f"{safe}.{_CACHE_VERSION}.{fingerprint}.json"
 
 
 def _cov_scope(target: str) -> str:
@@ -249,11 +252,12 @@ def covering_tests(
     cmd = lang_cfg.coverage_command.format(file=_cov_scope(target), tests=rels)
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
     # Overrunning leaves no contexts, which widens selection to the whole suite.
-    runner.run_capped(repo, cmd, repo.config.baseline_timeout)
+    verdict = runner.run_capped(repo, cmd, repo.config.baseline_timeout)
 
     mapping = _read_contexts(repo, target, lang_cfg.coverage_data_file)
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({str(k): v for k, v in mapping.items()}))
+    if mapping and verdict != runner.TIMED_OUT:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps({str(k): v for k, v in mapping.items()}))
     return mapping
 
 

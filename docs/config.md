@@ -9,19 +9,19 @@ load time.
 | `language` | `"python"` | Language the flat fields below describe. |
 | `test_paths` | `["tests"]` | Repo-root-relative directories; everything under them counts as a test. |
 | `test_globs` | `[]` | `Path.glob` patterns for tests that sit beside their sources, not under `test_paths`. |
-| `test_command` | `"pytest -q {tests}"` | Shell command that runs the suite; `{tests}` expands to the discovered test files. |
-| `coverage_command` | `"pytest -q --cov={file} --cov-context=test --cov-report= {tests}"` | Shell command that runs the candidate tests under coverage for one mutated `{file}`. |
+| `test_command` | `"pytest -q {tests}"` | Shell command that runs the tests; `{tests}` is the full candidate set for the baseline run, or the covering test ids per mutant, falling back to the full set. |
+| `coverage_command` | `"pytest -q --cov={file} --cov-context=test --cov-report= {tests}"` | Shell command that runs the candidate tests under coverage; `{file}` is the mutated file's containing directory, not the file itself. |
 | `coverage_data_file` | `".coverage"` | Where the coverage command writes its data; read per line to map which tests cover the mutated file. |
 | `languages` | `{}` | `[languages.<name>]` tables, each a `test_paths`/`test_globs`/`test_command`/`coverage_command`/`coverage_data_file` override, for a repo gating more than one language. |
 | `exclude_paths` | `[]` | Path prefixes the gate never touches; announced on every skip. |
 | `model_paths` | `[]` | Path prefixes in scope for model V&V, declared, never inferred; `rules sync` also builds `model-vv.md`'s `paths:` frontmatter from this. |
 | `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live: a repo-relative file, or `issue:N` for a GitHub issue. |
 | `model_test_paths` | `[]` | Test paths that must cite an `MS-n` spec line. |
-| `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a `model_paths` probe hit that isn't model code. |
+| `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a keyword-probe hit outside `model_paths` that isn't model code. |
 | `golden` | `[]` | `[[golden]]` entries, each a `source` and an `artifact`: a generated F/Q artefact and the SymPy source its hash is checked against. |
 | `pass_pattern` | `""` | Regex the test output must contain to count as green; empty trusts the exit code. |
 | `force_gate` | `false` | Gates a fork or an out-of-namespace checkout anyway. |
-| `baseline_timeout` | `900.0` | Seconds allowed for the unmutated baseline run. |
+| `baseline_timeout` | `900.0` | Seconds allowed for the unmutated baseline run, and for the coverage run that maps tests to lines. |
 | `mutant_timeout` | none (derived from the baseline) | Seconds allowed per mutant, when the derived cap is wrong. |
 | `closure_depth` | `1` | Import hops from a test to the mutated file that still count as covering it. |
 | `import_roots` | `[]` | Extra repo-root-relative import roots for a src layout with no `sys.path.insert` in the test files. |

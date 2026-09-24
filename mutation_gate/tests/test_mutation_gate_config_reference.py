@@ -1,8 +1,6 @@
-"""Intent: #185 — every key `Config.load` accepts, and every field of the
-languages/model_exclude/golden/doc_allow sub-tables it dispatches to, must
-have a line in the docs config reference. Keys are read from the dataclasses
-the loader already trusts, not a hardcoded list, so a field added later
-fails here until the reference catches up."""
+"""Intent: #185 — every key `Config.load` accepts, including its nested
+tables' fields, has a row in docs/config.md. Keys come from the dataclasses,
+so a field added later fails here until the reference names it."""
 
 from dataclasses import fields
 from pathlib import Path
