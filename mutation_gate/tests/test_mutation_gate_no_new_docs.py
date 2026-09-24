@@ -220,20 +220,21 @@ def test_hook_refuses_loudly_on_a_reasonless_doc_allow_entry(monkeypatch, tmp_pa
 
 
 def test_matching_added_paths_does_not_walk_the_filesystem(monkeypatch, tmp_path, capsys):
-    def boom_glob(*args, **kwargs):
+    def boom(*args, **kwargs):
         raise AssertionError("no-new-docs must not walk the filesystem")
 
-    def boom_scandir(*args, **kwargs):
-        raise AssertionError("no-new-docs must not walk the filesystem")
-
-    monkeypatch.setattr(Path, "glob", boom_glob)
-    monkeypatch.setattr(os, "scandir", boom_scandir)
-    _stub_git(monkeypatch, added=_added(["README.md", "pkg/README.md", "design.md"]))
-    assert _local(monkeypatch, tmp_path) == 1
+    monkeypatch.setattr(Path, "glob", boom)
+    monkeypatch.setattr(Path, "iterdir", boom)
+    monkeypatch.setattr(os, "scandir", boom)
+    monkeypatch.setattr(os, "listdir", boom)
+    config = Config(doc_allow=[DocAllow(glob="docs/**/*", reason="design notes")])
+    _stub_git(monkeypatch, added=_added(["README.md", "pkg/README.md", "docs/y.md", "design.md"]))
+    assert _local(monkeypatch, tmp_path, config=config) == 1
     err = capsys.readouterr().err
     assert "design.md" in err
     assert "README.md" not in err
     assert "pkg/README.md" not in err
+    assert "docs/y.md" not in err
 
 
 _PATTERN_SHAPES = [
@@ -258,6 +259,8 @@ _PATTERN_SHAPES = [
     ("docs/**/*", "docs/y.md", True),
     ("docs/**/*", "docs/sub/y.md", True),
     ("docs/**/*", "notes.md", False),
+    ("docs/*", "docs/y.md", True),
+    ("docs/*", "docs/sub/y.md", False),
     ("skills/**/*", "skills/sol-budget/SKILL.md", True),
     ("commands/**/*", "commands/kata.md", True),
     ("rules/**/*", "rules/voice.md", True),
