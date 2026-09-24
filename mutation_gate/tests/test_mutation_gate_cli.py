@@ -77,6 +77,24 @@ def test_staged_skips_ast_grep_check_when_no_gated_file_changed(tmp_path, monkey
     assert "ast-grep" not in capsys.readouterr().err
 
 
+def test_staged_says_the_adversary_did_not_run_on_a_test_only_change(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"tests/foo_test.sh": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError("adversary must not run on a test-only change")
+
+    monkeypatch.setattr(cli.adversary, "run", _must_not_run)
+    _no_ast_grep_on_path(monkeypatch)
+    assert cli.main(["--staged"]) == 0
+    err = capsys.readouterr().err
+    assert ("mutation-gate: no gated source files in this change — "
+            "no mutants, so no adversary review") in err.splitlines()
+
+
 def test_staged_still_requires_ast_grep_when_a_gated_file_is_mixed_with_a_docs_file(
     tmp_path, monkeypatch, capsys
 ):
