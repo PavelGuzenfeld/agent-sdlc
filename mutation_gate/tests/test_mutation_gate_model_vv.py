@@ -304,6 +304,11 @@ def test_no_model_paths_leaves_the_default_file_model_spec_unrefused(tmp_path):
     assert Config.load(tmp_path).model_spec == SPEC
 
 
+def test_no_model_paths_permits_an_explicit_file_model_spec(tmp_path):
+    _write(tmp_path, ".mutation-gate.toml", 'model_spec = "docs/other-spec.md"\n')
+    assert Config.load(tmp_path).model_spec == "docs/other-spec.md"
+
+
 def test_untagged_line_in_the_spec_issue_passes(tmp_path, monkeypatch):
     repo = _issue_repo(tmp_path, monkeypatch, "Spec\n\n- MS-3: convex.\n")
     assert model_vv.check(repo, {"tests/test_imm.py": _all_lines(tmp_path, "tests/test_imm.py")}, [], staged=False) == []
