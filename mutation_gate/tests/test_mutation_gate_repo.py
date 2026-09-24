@@ -7,6 +7,7 @@ without ungating those sources. dotfiles#66.
 Also: the namespaces a checkout may gate under come from the environment, then
 the repo's config, and an unconfigured checkout gates its own origin. agent-sdlc#8."""
 
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -48,6 +49,14 @@ def test_git_decodes_invalid_utf8_stdout_without_raising(tmp_path, monkeypatch):
     fake_git.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))
     assert git("ls-files") == "caf\udce9.py\n"
+
+
+def test_repo_key_hashes_a_non_utf8_root_without_raising(tmp_path):
+    """#249: `.encode()`'s strict UTF-8 raised on a root path holding a
+    surrogate-escaped byte; `os.fsencode` hashes the real bytes instead."""
+    root = tmp_path / os.fsdecode(b"caf\xe9")
+    repo = Repo(root=root, origin="", remotes=(), config=Config())
+    assert repo.key == hashlib.sha256(os.fsencode(root)).hexdigest()[:16]
 
 
 def test_git_bytes_returns_raw_stdout_on_success(monkeypatch):

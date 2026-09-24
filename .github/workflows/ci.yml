@@ -108,6 +108,7 @@ jobs:
           sh tests/mutants-diff-prefix.sh
           sh tests/mutants-unescape-quoted-paths.sh
           sh tests/mutants-binary-entries.sh
+          sh tests/mutants-non-utf8-argv.sh
 
   docs:
     runs-on: ubuntu-latest

@@ -327,7 +327,7 @@ class Repo:
 
     @property
     def key(self) -> str:
-        return hashlib.sha256(str(self.root).encode()).hexdigest()[:16]
+        return hashlib.sha256(os.fsencode(self.root)).hexdigest()[:16]
 
     def glob_tests(self, language: str) -> set[str]:
         return self._expand(self.config.for_language(language).test_globs)
