@@ -41,6 +41,26 @@ cgit commit -q -m "add readme"
 (cd "$consumer" && mutation-gate no-new-docs --range "main..HEAD") \
     || fail "--range should pass a newly added README.md"
 
+cgit checkout -q -b nested-readme main
+mkdir -p "$consumer/pkg"
+: > "$consumer/pkg/README.md"
+cgit add pkg/README.md
+cgit commit -q -m "add pkg/README.md"
+(cd "$consumer" && mutation-gate no-new-docs --range "main..HEAD") \
+    || fail "--range should pass a newly added pkg/README.md (any depth)"
+
+cgit checkout -q -b nested-design main
+mkdir -p "$consumer/pkg"
+: > "$consumer/pkg/design.md"
+cgit add pkg/design.md
+cgit commit -q -m "add pkg/design.md"
+set +e
+nested_out=$(cd "$consumer" && mutation-gate no-new-docs --range "main..HEAD" 2>&1)
+nested_code=$?
+set -e
+[ "$nested_code" -eq 1 ] || fail "--range should block a newly added pkg/design.md (got $nested_code)" "$nested_out"
+printf '%s' "$nested_out" | grep -qF "pkg/design.md" || fail "--range block did not name pkg/design.md" "$nested_out"
+
 cgit checkout -q -b add-github-doc main
 mkdir -p "$consumer/.github"
 : > "$consumer/.github/x.md"
