@@ -375,6 +375,27 @@ def test_failed_scan_refuses_instead_of_passing(tmp_path, monkeypatch):
         vocabulary_check.declarations(tmp_path / "a.py", "python")
 
 
+def test_target_error_reads_first_line_of_error_output(tmp_path, monkeypatch):
+    """#202: vocabulary_check.declarations put the whole stderr in the refusal
+    instead of its first line, so a multi-line ast-grep error gave a
+    multi-line refusal."""
+    (tmp_path / "a.py").write_text("frame = 1\n")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 8, stdout="", stderr="Cannot parse rule\nsee --help"))
+    with pytest.raises(GateError) as excinfo:
+        vocabulary_check.declarations(tmp_path / "a.py", "python")
+    assert str(excinfo.value).splitlines() == [str(excinfo.value)]
+    assert "Cannot parse rule" in str(excinfo.value)
+
+
+def test_target_error_uses_status_code_for_empty_output(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("frame = 1\n")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 8, stdout="", stderr=""))
+    with pytest.raises(GateError, match=r"exit 8$"):
+        vocabulary_check.declarations(tmp_path / "a.py", "python")
+
+
 @pytest.mark.parametrize("name, expected", [
     ("parse_frame_", ["parse", "frame"]),
     ("frame__", ["frame"]),

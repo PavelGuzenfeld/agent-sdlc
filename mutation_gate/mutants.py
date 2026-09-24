@@ -212,9 +212,7 @@ def _ast_grep(
         ]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode not in (0, 1):
-        raise GateError(
-            f"ast-grep failed on pattern {pattern!r}: {proc.stderr.strip()[:200]}"
-        )
+        raise GateError(f"ast-grep failed on pattern {pattern!r}: {render_error_line(proc)}")
     if not proc.stdout.strip():
         return []
     try:
@@ -259,8 +257,7 @@ def kind_hits(path: Path, lang: str, kind: str, config: Path | None = None) -> l
         cmd = ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode not in (0, 1):
-        detail = proc.stderr.strip().partition("\n")[0]
-        raise GateError(f"ast-grep run failed on {path}: {detail or f'exit {proc.returncode}'}")
+        raise GateError(f"ast-grep run failed on {path}: {render_error_line(proc)}")
     if not proc.stdout.strip():
         return []
     try:
@@ -387,6 +384,10 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
                 )
         out.extend(_literal_mutants(rel, data, lines, spans))
     return sorted(out, key=lambda m: (m.file, m.line, m.start, m.new))
+
+
+def render_error_line(result: subprocess.CompletedProcess) -> str:
+    return result.stderr.strip().partition("\n")[0] or f"exit {result.returncode}"
 
 
 def require_ast_grep() -> None:

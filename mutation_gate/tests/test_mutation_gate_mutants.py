@@ -217,6 +217,47 @@ def test_kind_hits_raises_gate_error_on_a_crashed_ast_grep_scan(monkeypatch, tmp
         mutants.kind_hits(fixture, "python", "comment")
 
 
+def test_path_error_uses_status_code_for_empty_output(monkeypatch, tmp_path):
+    """#202: no stderr at all still needs a one-line refusal."""
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 9, stdout="", stderr="")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    with pytest.raises(GateError, match=r"exit 9$"):
+        mutants.kind_hits(fixture, "python", "comment")
+
+
+def test_pattern_error_reads_first_line_of_error_output(monkeypatch, tmp_path):
+    """#202: mutants._ast_grep truncated at 200 chars instead of the first
+    line, so a multi-line ast-grep error gave a multi-line refusal."""
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="bad pattern\nsee --help")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    with pytest.raises(GateError) as excinfo:
+        mutants._ast_grep(fixture, "python", "$A", "$A", None)
+    assert str(excinfo.value).splitlines() == [str(excinfo.value)]
+    assert "bad pattern" in str(excinfo.value)
+
+
+def test_pattern_error_uses_status_code_for_empty_output(monkeypatch, tmp_path):
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    with pytest.raises(GateError, match=r"exit 8$"):
+        mutants._ast_grep(fixture, "python", "$A", "$A", None)
+
+
 def test_ast_grep_routes_gdscript_through_scan_with_the_custom_language_config(tmp_path):
     """#201: `ast-grep run -l gdscript` rejects gdscript outright ("gdscript is
     not supported"); the custom language only loads through `scan --config`."""
