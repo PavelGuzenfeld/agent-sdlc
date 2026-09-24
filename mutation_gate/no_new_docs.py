@@ -13,13 +13,13 @@ from .repo import GateError, Repo, discover, git
 from .rules import AGENTS_PATH, TARGET as SYNCED_RULES
 
 DEFAULT_ALLOW = (
-    "README*",
-    "LICENSE*",
-    "CONTRIBUTING*",
-    "CODE_OF_CONDUCT*",
-    "SECURITY*",
-    "NOTICE*",
-    "CHANGELOG*",
+    "**/README*",
+    "**/LICENSE*",
+    "**/CONTRIBUTING*",
+    "**/CODE_OF_CONDUCT*",
+    "**/SECURITY*",
+    "**/NOTICE*",
+    "**/CHANGELOG*",
     ".github/**/*",
     str(AGENTS_PATH),
     f"{SYNCED_RULES}/**/*",
