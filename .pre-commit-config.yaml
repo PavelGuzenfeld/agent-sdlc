@@ -26,6 +26,7 @@ repos:
           exec bin/mutation-gate --staged'
         language: system
         files: ^(mutation_gate|skills/sol-budget/scripts)/.*\.py$
+        verbose: true
         pass_filenames: false
       - id: commit-msg
         name: commit message check (voice.md banned words, attribution, sign-off)

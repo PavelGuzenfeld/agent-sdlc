@@ -99,6 +99,15 @@ def test_leading_underscore_file_blocks_suggesting_trailing_form(tmp_path, monke
     assert [(f.name, f.suggestion) for f in found] == [("_impl", "impl_.py")]
 
 
+def test_vague_word_file_segment_suggests_the_hint_with_no_suffix(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"src/manager.py": "pass\n"}, existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.rule, f.suggestion) for f in found if f.rule == "vague_word"] == [
+        ("vague_word", "name what it does: scheduler, registry, pool, cache")
+    ]
+
+
 def test_init_cmakelists_and_readme_pass(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     _added(monkeypatch, repo, {"__init__.py": "", "CMakeLists.txt": "", "README.md": ""})

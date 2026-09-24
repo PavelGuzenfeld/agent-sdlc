@@ -104,12 +104,23 @@ def _strip_editor_cruft(message: str, comment_char: str | None = "#") -> str:
     return comment_line_re.sub("", message)
 
 
+_COMMENT_CONFIG_PATTERN = r"^core\.comment(char|string)$"
+
+
 def _configured_comment_char(cwd: Path | None = None) -> str:
+    """core.commentChar and core.commentString (git 2.45+) share one slot;
+    whichever key `--get-regexp` lists last is the one git's own file-scan
+    precedence picked."""
     try:
-        value = git("config", "--get", "core.commentChar", cwd=cwd).strip()
+        out = git("config", "--get-regexp", _COMMENT_CONFIG_PATTERN, cwd=cwd)
     except (GateError, OSError):
         return "#"
-    return value or "#"
+    value = "#"
+    for line in out.splitlines():
+        _, _, rest = line.partition(" ")
+        if rest:
+            value = rest
+    return value
 
 
 def _resolve_comment_char(message: str, cwd: Path | None = None) -> str | None:
