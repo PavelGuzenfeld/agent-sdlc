@@ -92,6 +92,8 @@ def _gate_file(
         return False, [], cands
 
     cover = coverage_map.covering_tests(repo, rel, cands, fp)
+    if not cover and rel.endswith(".py"):
+        _emit(f"  {rel}: coverage came back empty — every mutant runs against all candidate tests")
     all_tests = [str(p.relative_to(repo.root)) for p in cands]
 
     baseline = runner.baseline_green(repo, all_tests, lang_cfg.test_command)
