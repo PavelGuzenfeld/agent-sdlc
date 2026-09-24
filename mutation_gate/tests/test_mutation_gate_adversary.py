@@ -22,6 +22,21 @@ def test_run_isolated_does_not_write_prompt_into_the_work_dir(tmp_path, monkeypa
     assert "PROMPT.md" not in seen["cwd_contents"]
 
 
+def test_the_prompt_sends_the_adversary_to_the_export_files_in_its_cwd(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["argv"] = argv
+        return sp.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run_isolated("adversary", adversary.PROMPT, tmp_path)
+    prompt = seen["argv"][2]
+    assert "INTENT.md" in prompt
+    assert "tests/" in prompt
+
+
 def _repo(root):
     return repo_mod.Repo(
         root=root,
