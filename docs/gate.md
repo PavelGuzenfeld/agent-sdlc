@@ -53,4 +53,15 @@ tests, never the implementation — checks whether the tests actually assert
 the requirement or just match what the code happens to do. It reports into
 the session; it never blocks.
 
+Consuming repos opt in with `mutation-gate rules sync` and catch drift from
+it with `mutation-gate rules check`, wired in as the `rules-check`
+pre-commit hook.
+
+A docker-based `test_command` or `coverage_command` in `.mutation-gate.toml`
+should pass `-u "$(id -u):$(id -g)"` to its inner `docker run`, as this
+repo's own [`.mutation-gate.toml`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/.mutation-gate.toml)
+does; the gate doesn't add the flag itself, since some images need root, and
+without it `coverage_data_file` and other outputs land root-owned in your
+tree.
+
 Source: [`rules/testing.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/testing.md), [`rules/model-vv.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/rules/model-vv.md), [`mutation_gate/`](https://github.com/PavelGuzenfeld/agent-sdlc/tree/main/mutation_gate).
