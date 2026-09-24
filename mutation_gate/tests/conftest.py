@@ -5,6 +5,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from mutation_gate import mutants  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _clear_ast_grep_ready_cache():
+    mutants._ast_grep_ready.cache_clear()
+
 GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
 GDSCRIPT_SGCONFIG = (
     "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +

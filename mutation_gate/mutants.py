@@ -444,7 +444,7 @@ def _ast_grep_ready() -> None:
     proc = subprocess.run(["ast-grep", "--version"], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
-    installed = proc.stdout.strip().split()[-1]
+    installed = proc.stdout.strip().rpartition(" ")[2]
     if installed != PINNED_AST_GREP_VERSION:
         _emit(f"mutation-gate: ast-grep {installed} on PATH, pinned to {PINNED_AST_GREP_VERSION} — "
               "the mutant catalogue and waivers were pinned against that version")

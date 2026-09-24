@@ -688,6 +688,20 @@ def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
     assert capsys.readouterr().err == ""
 
 
+def test_require_ast_grep_warns_instead_of_crashing_on_unparseable_version_output(
+    monkeypatch, capsys
+):
+    mutants._ast_grep_ready.cache_clear()
+    stubbed = subprocess.CompletedProcess(["ast-grep", "--version"], 0, stdout="", stderr="")
+    monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
+    mutants.require_ast_grep()
+    assert capsys.readouterr().err == (
+        "mutation-gate: ast-grep  on PATH, pinned to "
+        f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
+        "waivers were pinned against that version\n"
+    )
+
+
 def test_cli_dry_run_surfaces_the_ast_grep_version_warning_on_a_real_gate_run(
     tmp_path, monkeypatch, capsys
 ):
