@@ -226,3 +226,103 @@ def test_covering_tests_collects_a_real_per_test_context_for_the_target(tmp_path
 
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
     assert coverage_map._numbits_to_lines(b"\x02\x04") == [1, 10]
+
+
+def test_covering_tests_ignores_a_stale_version_cache_entry(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    pass\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    stale = tmp_path / "cache" / repo.key / "coverage" / "pkg__mod.py.fp.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text('{"1": ["stale::test"]}')
+    monkeypatch.setattr(
+        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.PASSED
+    )
+    monkeypatch.setattr(
+        coverage_map, "_read_contexts",
+        lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
+    )
+
+    mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    assert mapping == {2: ["tests/test_mod.py::test_f"]}
+
+
+def test_covering_tests_does_not_persist_an_empty_mapping(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    pass\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(
+        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.PASSED
+    )
+    monkeypatch.setattr(coverage_map, "_read_contexts", lambda repo, target, data_file: {})
+
+    mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    assert mapping == {}
+    cache_dir = tmp_path / "cache" / repo.key / "coverage"
+    assert not cache_dir.exists() or not any(cache_dir.iterdir())
+
+
+def test_covering_tests_does_not_persist_a_timed_out_run(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    pass\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(
+        coverage_map.runner, "run_capped", lambda repo, cmd, timeout: coverage_map.runner.TIMED_OUT
+    )
+    monkeypatch.setattr(
+        coverage_map, "_read_contexts",
+        lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
+    )
+
+    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    cache_dir = tmp_path / "cache" / repo.key / "coverage"
+    assert not cache_dir.exists() or not any(cache_dir.iterdir())
+
+
+def test_covering_tests_hits_the_cache_on_a_repeat_call(tmp_path, monkeypatch):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    pass\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    calls = []
+    monkeypatch.setattr(
+        coverage_map.runner,
+        "run_capped",
+        lambda repo, cmd, timeout: calls.append(1) or coverage_map.runner.PASSED,
+    )
+    monkeypatch.setattr(
+        coverage_map, "_read_contexts",
+        lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
+    )
+
+    first = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    second = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+    assert first == second == {2: ["tests/test_mod.py::test_f"]}
+    assert len(calls) == 1
