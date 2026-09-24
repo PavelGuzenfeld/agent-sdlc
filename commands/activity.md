@@ -5,8 +5,8 @@ description: Monthly activity report from Claude Code transcripts — per-day wo
 # Activity
 
 Build a per-day activity report for one month from the local Claude Code transcripts
-under `~/.claude/projects/`, split work vs personal, and write it to
-`~/workspace/<YYYY-MM>-activity.md`.
+under `~/.claude/projects/`, split work vs personal, and write it to the path the
+script's `###REPORT###` block prints (`ACTIVITY_OUT`, default: the current directory).
 
 ## Input
 
@@ -20,7 +20,7 @@ else rather than guessing.
    argument. It takes ~10 s over ~130 transcripts and ~30 repos. Do not reimplement it
    inline — the gap-capping, midnight-splitting and DST handling are already tested.
 
-2. **Read its output.** Four TSV blocks on stdout:
+2. **Read its output.** Five TSV blocks on stdout:
    - Day metrics: `date, space, start, end, active_h, span_h`. Three rows per calendar
      day — `work`, `personal`, `all`. `all` is recomputed, not summed.
    - `###SESSIONS###` — one row per **session-day**:
@@ -29,6 +29,7 @@ else rather than guessing.
      referenced a path under that repo. This is the honest signal for what was worked on.
    - `###COMMITS###` — `date, space, repo_identity, subject`: your own commits that day
      across every repo in both spaces, deduped by SHA across worktrees.
+   - `###REPORT###` — one line: the absolute path to write the report to.
 
 3. **Write one sentence per non-empty (day, space) cell — from `###REPOS###` and
    `###COMMITS###`, not from the titles.** The `title` field is the session's *first
@@ -48,14 +49,14 @@ else rather than guessing.
    | | personal | — | — | 0.00 | 0.00 | — |
    | | **day** | **00:01** | **23:59** | **11.36** | **23.96** | |
 
-5. **Write** the table to `~/workspace/<YYYY-MM>-activity.md` with `Totals`, `Method`
+5. **Write** the table to the path from `###REPORT###` with `Totals`, `Method`
    and `Caveats` sections, and print the table in the terminal too. Totals should include
    the busiest repos by touch count and the commit count per repo.
 
 6. **End your reply with the link to the file you wrote** — the absolute path on its own
    line so it is clickable in the terminal:
 
-   `Report: ~/workspace/<YYYY-MM>-activity.md`
+   `Report: <path from ###REPORT###>`
 
    Never publish it as an Artifact or to any other external surface: the report names
    internal repos and hosts, which the banned-name list at the `banned_names_file`
@@ -64,7 +65,9 @@ else rather than guessing.
 
 ## Definitions — keep these stable so months stay comparable
 
-- **Timezone:** `Asia/Jerusalem`, DST-correct. Days split at local midnight.
+- **Timezone:** the system timezone, DST-correct (override with `ACTIVITY_TZ`). Days
+  split at local midnight.
+- **Output:** written under `ACTIVITY_OUT` (default: the current directory).
 - **Active:** union of each session's engaged intervals, where a gap between
   consecutive events counts as `min(gap, 30 min)`. Union, not sum, so concurrent
   sessions never double-count — this matters: a naive sum reports 23.21 h for
@@ -106,7 +109,8 @@ else rather than guessing.
 set -eu
 
 MONTH="${1:-$(date +%Y-%m)}"
-export TZ="${ACTIVITY_TZ:-Asia/Jerusalem}"
+[ -n "${ACTIVITY_TZ:-}" ] && export TZ="$ACTIVITY_TZ"
+OUT_DIR="${ACTIVITY_OUT:-$PWD}"
 CAP="${ACTIVITY_GAP_CAP:-1800}"
 PROJECTS="$HOME/.claude/projects"
 PERSONAL_DIRS="${ACTIVITY_PERSONAL_DIRS:-personalspace}"
@@ -334,4 +338,7 @@ if [ -n "$AUTHOR" ]; then
 fi
 sort -u "$work/craw" | gawk -F'\t' -v M="$MONTH" '!seen[$1]++ && $2 ~ "^" M' \
   | grep -v $'\t\(index on\|On \|untracked files on\|WIP on\)' | cut -f2- | sort
+
+echo "###REPORT###"
+printf '%s\n' "$OUT_DIR/$MONTH-activity.md"
 ```
