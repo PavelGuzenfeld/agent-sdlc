@@ -221,6 +221,18 @@ def test_follow_up_filers_point_to_the_tickets_rule_instead_of_naming_labels(pat
     assert "rules/tickets.md" in content
 
 
+def test_kata_narrows_pins_and_routes_the_222_leftover_decisions():
+    """Intent: #280 (decisions 6, 7 and 8 of #222)."""
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "saw fail or deferred out loud this session" in normalized
+    assert '"None" is the normal answer' in normalized
+    assert "noticed but not acted on" not in normalized
+    assert "works the queue as it stood when it started" in normalized
+    assert "its step 5 files the agent's candidates" in normalized
+    assert "Then file the agent's follow-up candidates" not in normalized
+
+
 def test_kata_batches_confirmed_tiny_tickets_onto_one_batch_branch():
     content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
     normalized = " ".join(content.split())
