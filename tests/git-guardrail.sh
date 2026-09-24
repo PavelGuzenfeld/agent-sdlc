@@ -92,10 +92,10 @@ run_delete_branch_head_cases() {
         git -c user.name=t -c user.email=nobody branch behind-local HEAD
         git -c user.name=t -c user.email=nobody branch behind-fetch HEAD
         git -c user.name=t -c user.email=nobody branch unfetchable HEAD
-        git -c user.name=t -c user.email=nobody branch two-pr HEAD
         git -c user.name=t -c user.email=nobody commit -q --allow-empty -m pr-head
         git rev-parse HEAD >pr-head-sha
         git -c user.name=t -c user.email=nobody branch merged-ok HEAD
+        git -c user.name=t -c user.email=nobody branch two-pr HEAD
         git -c user.name=t -c user.email=nobody commit -q --allow-empty -m local-extra
         git -c user.name=t -c user.email=nobody branch one-past HEAD
         git -c user.name=t -c user.email=nobody checkout -q -b diverged "$(cat base-sha)"
@@ -125,8 +125,8 @@ run_delete_branch_head_cases() {
     printf '[{"number":7,"headRefOid":"%s"}]' "$fetch_head_sha" >"$prs_dir/behind-fetch"
     printf '[{"number":99,"headRefOid":"%s"}]' "$unreachable_head_sha" >"$prs_dir/unfetchable"
     printf '[{"number":1,"headRefOid":"%s"}]' "$pr_head_sha" >"$prs_dir/diverged"
-    printf '[{"number":1,"headRefOid":"%s"},{"number":99,"headRefOid":"%s"}]' \
-        "$pr_head_sha" "$unreachable_head_sha" >"$prs_dir/two-pr"
+    printf '[{"number":99,"headRefOid":"%s"},{"number":1,"headRefOid":"%s"}]' \
+        "$unreachable_head_sha" "$pr_head_sha" >"$prs_dir/two-pr"
 
     stub_dir=$(mktemp -d)
     cat >"$stub_dir/gh" <<STUB
@@ -179,10 +179,14 @@ STUB
     expect_block_reason "$repo_script" "$label" "tip diverged from merged PR head" "not an ancestor" \
         "git -C $tmp branch -D diverged"
     expect_allow "$repo_script" "$label" \
-        "ancestor check short-circuits before an unrelated later PR entry" \
+        "exact-match short-circuit skips an unfetchable earlier PR entry" \
         "git -C $tmp branch -D two-pr"
     expect_allow "$repo_script" "$label" "trailing redirect and pipe are not branch names" \
         "git -C $tmp branch -D merged-ok 2>&1 | tail -3"
+    expect_allow "$repo_script" "$label" "bare redirect operator consumes only its own target word" \
+        "git -C $tmp branch -D merged-ok > /dev/null"
+    expect_allow "$repo_script" "$label" "redirect ahead of the branch name is skipped, not treated as a branch" \
+        "git -C $tmp branch -D 2>/dev/null merged-ok"
 
     export PATH="$minimal_bin"
     expect_block_reason "$repo_script" "$label" "no gh on PATH" "no gh on PATH" \

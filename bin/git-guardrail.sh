@@ -28,6 +28,7 @@ check_delete_branch_head() {
         [ "$gh_status" -eq 0 ] || { printf 'gh failed listing merged PRs for %s' "$b"; exit 1; }
         count=$(printf '%s' "$json" | jq 'length' 2>/dev/null) || count=""
         [ "$count" != "0" ] && [ -n "$count" ] || { printf 'no merged PR found for %s' "$b"; exit 1; }
+        printf '%s' "$json" | jq -e --arg t "$tip" 'any(.[]; .headRefOid == $t)' >/dev/null 2>&1 && exit 0
         for pr in $(printf '%s' "$json" | jq -r '.[] | "\(.number):\(.headRefOid)"'); do
             pr_head=${pr#*:}
             pr_number=${pr%%:*}
