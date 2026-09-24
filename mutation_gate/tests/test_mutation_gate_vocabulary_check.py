@@ -20,7 +20,6 @@ from mutation_gate.waivers import Waiver
 DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
 LOC = '[reject]\nloc = "position"\n'
-PARSE = '[[concept]]\nword = "parse"\nmeaning = "turn text into a structure"\npos = ["verb"]\n'
 Q_SYMBOL = '[[symbol]]\nword = "Q"\nmeaning = "process noise covariance"\n'
 
 
@@ -91,7 +90,7 @@ def test_cpp_local_named_q_passes_with_q_in_symbol(tmp_path, monkeypatch):
 def test_python_leading_underscore_def_blocks_suggesting_trailing_form(
     tmp_path, monkeypatch, capsys
 ):
-    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": "def _parse_frame():\n    pass\n"}, PARSE)
+    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": "def _parse_frame():\n    pass\n"})
     code = _gate(monkeypatch, tmp_path, repo, {"pkg/a.py": {1, 2}})
     err = capsys.readouterr().err
     assert code == 1
@@ -101,7 +100,7 @@ def test_python_leading_underscore_def_blocks_suggesting_trailing_form(
 
 def test_python_trailing_underscore_def_and_dunder_pass(tmp_path, monkeypatch):
     text = "class Frame:\n    def __init__(self):\n        pass\n\n    def parse_frame_(self):\n        pass\n"
-    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": text}, PARSE)
+    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": text})
     assert _gate(monkeypatch, tmp_path, repo, {"pkg/a.py": {1, 2, 3, 4, 5, 6}}) == 0
 
 
@@ -115,7 +114,7 @@ def test_cpp_leading_underscore_member_blocks_suggesting_count_(tmp_path, monkey
 
 
 def test_staged_test_function_of_core_words_passes(tmp_path, monkeypatch):
-    repo = _repo(tmp_path, OPTED_IN, {"tests/test_a.py": "def test_read_frame():\n    pass\n"})
+    repo = _repo(tmp_path, OPTED_IN, {"tests/test_a.py": "def test_empty_frame_reads():\n    pass\n"})
     assert _gate(monkeypatch, tmp_path, repo, {"tests/test_a.py": {1, 2}}) == 0
 
 
@@ -188,7 +187,7 @@ def test_vague_word_blocks_with_its_hint(tmp_path):
 
 
 def test_rejected_function_word_blocks_with_its_hint_and_no_rename(tmp_path):
-    found = _findings(tmp_path, "pkg/a.py", "def read_and_parse():\n    pass\n", {1}, PARSE)
+    found = _findings(tmp_path, "pkg/a.py", "def read_and_parse():\n    pass\n", {1})
     assert found == ["1:function:read_and_parse:`and`: one action per name: split the function, "
                      "or name the combined step:"]
 
