@@ -210,7 +210,7 @@ def test_a_quoted_post_image_header_for_a_non_ascii_name_still_attributes_the_li
     )
     _stub_git(monkeypatch, diff=diff)
     assert _local(monkeypatch, tmp_path) == 1
-    assert "caf\\303\\251.txt:1" in capsys.readouterr().err
+    assert "café.txt:1" in capsys.readouterr().err
 
 
 def test_a_post_image_header_with_a_trailing_tab_for_a_spaced_name_still_attributes_the_line(monkeypatch, tmp_path, capsys):
@@ -541,7 +541,7 @@ def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(mo
     assert _local(monkeypatch, tmp_path) == 1
     err = capsys.readouterr().err
     assert "no-leaks: BLOCKED — 1 finding(s)." in err
-    assert "caf\\303\\251.bin:1" in err
+    assert "café.bin:1" in err
     assert EMAIL not in err
 
 

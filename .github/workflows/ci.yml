@@ -88,6 +88,7 @@ jobs:
           sh tests/worktree-shim-hook.sh
           sh tests/hook-stages.sh
           sh tests/mutants-diff-prefix.sh
+          sh tests/mutants-unescape-quoted-paths.sh
 
   docs:
     runs-on: ubuntu-latest

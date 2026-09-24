@@ -75,14 +75,26 @@ def _matches(rel: str, pattern: str) -> bool:
 
 
 def post_image_path(field: str) -> str | None:
+    """git's quote_c_style (quote.c) emits only `\\ooo` octal, `\\a`-`\\v`, `\\\\`
+    and `\\"`, all readable by `unicode_escape`; latin-1 replays the decoded
+    bytes for the UTF-8 decode."""
     field = field.removesuffix("\t")
-    if field.startswith('"') and field.endswith('"'):
+    quoted = field.startswith('"') and field.endswith('"')
+    if quoted:
         field = field[1:-1]
     if field == "/dev/null":
         return None
     if not field.startswith("b/"):
         raise GateError("a diff post-image header did not parse")
-    return field[2:]
+    rel = field[2:]
+    if not quoted:
+        return rel
+    return (
+        rel.encode("utf-8", errors="surrogateescape")
+        .decode("unicode_escape")
+        .encode("latin-1")
+        .decode("utf-8", errors="surrogateescape")
+    )
 
 
 @dataclass

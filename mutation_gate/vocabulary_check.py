@@ -185,9 +185,16 @@ RULES["tsx"] = {
 }
 
 _GD_GETTER = {"field": "setget", "kind": "setget", "has": {"field": "get", "kind": "get_body"}}
+_GD_CONSTRUCTOR_PARAMETERS = {"kind": "parameters", "inside": {"kind": "constructor_definition"}}
 RULES["gdscript"] = {
     "event": {"kind": "name", "inside": {"kind": "signal_statement", "field": "name"}},
     "function": {"kind": "name", "inside": {"kind": "function_definition", "field": "name"}},
+    "parameter": {"kind": "identifier", "any": [
+        {"inside": _GD_CONSTRUCTOR_PARAMETERS},
+        {"inside": {"any": [{"kind": "typed_parameter"}, {"kind": "default_parameter"},
+                             {"kind": "typed_default_parameter"}],
+                     "inside": _GD_CONSTRUCTOR_PARAMETERS}},
+    ]},
     "property": {"kind": "name", "inside": {
         "kind": "variable_statement", "field": "name", "has": _GD_GETTER}},
     "variable": {"kind": "name", "inside": {
