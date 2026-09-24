@@ -32,7 +32,9 @@ off that.
 
 Spawn a fresh implementation agent per ticket, with the ticket's number and
 body, its `model:<name>` label as the agent's model override, and the
-worktree's path. The agent:
+worktree's path. The agent works from that body and does not loop
+`gh issue view` over linked issues unless the ticket names one it needs. The
+agent:
 
 1. Writes the ticket's slice test first and confirms it fails.
 2. Implements to green.
@@ -42,8 +44,9 @@ worktree's path. The agent:
 4. Pushes, then waits for checks to go green on the pushed sha. No
    `.github/workflows/` in the repo means no checks to wait for — skip
    straight to opening the PR.
-5. Opens a PR with `Closes #N` in the body, and a Human-testing section when
-   the change is user-observable.
+5. Opens a PR with `Closes #N`, at most three plain sentences on what
+   changed, and a Human-testing section when the change is user-observable.
+   No how-it-works paragraph.
 6. Exits, reporting the PR number, the ticket number, and any follow-up
    candidates noticed but not acted on.
 
