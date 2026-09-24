@@ -11,8 +11,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import GDSCRIPT_SGCONFIG, require_gdscript_parser as _require_gdscript_parser
 
-from mutation_gate import cli, mutants, no_comments, runner, token
+from mutation_gate import cli, mutants, no_comments, runner, token, vocabulary_check
 from mutation_gate.repo import Config, GateError, Repo
 from mutation_gate.waivers import Waiver, finding_waived
 
@@ -20,16 +21,6 @@ OPTED_IN = "no_comments = true\n"
 FILE = "tests/test_a.py"
 TS_FILE = "tests/test_a.ts"
 TSX_FILE = "tests/test_a.tsx"
-GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
-GDSCRIPT_SGCONFIG = (
-    "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
-    "\n    extensions: [gd]\n    expandoChar: _\n"
-)
-
-
-def _require_gdscript_parser() -> None:
-    if not GDSCRIPT_LIB.exists():
-        pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -116,7 +107,7 @@ def test_a_multi_file_run_prints_the_ast_grep_version_warning_only_once(
     """Issue #244: no_comments.check calls require_ast_grep per gated file, and
     cli.main calls it again afterwards — one gate run must still warn once."""
     repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1\n", TS_FILE: "y = 1;\n"})
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     real_run = mutants.subprocess.run
 
     def fake_run(cmd, *args, **kwargs):
@@ -129,6 +120,7 @@ def test_a_multi_file_run_prints_the_ast_grep_version_warning_only_once(
     err = capsys.readouterr().err
     assert code == 0
     assert err.count("mutation-gate: ast-grep 0.44.1 on PATH") == 1
+    assert mutants._ast_grep_ready.cache_info().misses == 1
 
 
 def test_pragma_comment_is_not_flagged(tmp_path, monkeypatch):
@@ -288,12 +280,7 @@ def test_gdscript_without_parser_skips_with_a_visible_reason_instead_of_blocking
     code = cli.main(["--staged", "--dry-run"])
     err = capsys.readouterr().err
     assert code == 0
-    assert no_comments.GDSCRIPT_MISSING in err
-
-
-def test_gdscript_comments_skip_gives_the_same_reason_as_the_mutation_skip():
-    assert (no_comments.GDSCRIPT_MISSING.partition(": ")[2]
-            == mutants.GDSCRIPT_MUTATION_SKIPPED.partition(": ")[2])
+    assert vocabulary_check.GDSCRIPT_MISSING in err
 
 
 def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
@@ -499,4 +486,4 @@ def test_gdscript_missing_parser_message_prints_once_for_two_files(tmp_path, mon
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "pass  # one\n", "game/b.gd": "pass  # two\n"})
     _stub_git(monkeypatch, {})
     no_comments.check(repo, {"game/a.gd": {1}, "game/b.gd": {1}}, [], staged=True)
-    assert capsys.readouterr().err.count(no_comments.GDSCRIPT_MISSING) == 1
+    assert capsys.readouterr().err.count(vocabulary_check.GDSCRIPT_MISSING) == 1

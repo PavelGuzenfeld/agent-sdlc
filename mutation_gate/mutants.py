@@ -7,6 +7,7 @@ even where the same pattern matches elsewhere in the file.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import shutil
@@ -195,6 +196,10 @@ def _blob_diff_lines(root: Path, old_sha: str, new_sha: str) -> set[int]:
     return lines
 
 
+def _emit(line: str) -> None:
+    print(line, file=sys.stderr)
+
+
 def _binary_entry_lines(root: Path, path: str, added: bool, old_sha: str, new_sha: str) -> set[int]:
     text = text_or_none(git_bytes("cat-file", "-p", new_sha, cwd=root))
     if text is None:
@@ -381,14 +386,6 @@ def _literal_mutants(
     return out
 
 
-GDSCRIPT_MUTATION_SKIPPED = ("gdscript mutation skipped: no sgconfig.yml — install "
-                              "the parser with bin/install-gdscript-parser and commit one")
-
-
-def _emit(line: str) -> None:
-    print(line, file=sys.stderr)
-
-
 def _gdscript_config(root: Path) -> Path | None:
     from . import vocabulary_check
     return vocabulary_check._gdscript_ready(root)
@@ -398,22 +395,14 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
     """Every catalogue site landing on a changed line. No budget (decision 8).
     A GDScript file is skipped, not refused, when the parser is not ready."""
     out: list[Mutant] = []
-    gdscript_config: Path | None = None
-    gdscript_checked = False
     for rel, lines in sorted(files.items()):
         path = root / rel
         if not path.exists():
             continue
         lang = language_of(rel) or language
-        if lang == "gdscript":
-            if not gdscript_checked:
-                gdscript_config = _gdscript_config(root)
-                gdscript_checked = True
-                if gdscript_config is None:
-                    _emit(GDSCRIPT_MUTATION_SKIPPED)
-            if gdscript_config is None:
-                continue
-        config = gdscript_config if lang == "gdscript" else None
+        config = _gdscript_config(root) if lang == "gdscript" else None
+        if lang == "gdscript" and config is None:
+            continue
         data = path.read_bytes()
         starts = _line_starts(data)
         spans = masked_spans(path, lang, config)
@@ -447,18 +436,19 @@ def render_error_line(result: subprocess.CompletedProcess) -> str:
 
 PINNED_AST_GREP_VERSION = "0.45.3"
 
-_version_warned = False
 
-
-def require_ast_grep() -> None:
-    global _version_warned
+@functools.cache
+def _ast_grep_ready() -> None:
     if not shutil.which("ast-grep"):
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
     proc = subprocess.run(["ast-grep", "--version"], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
     installed = proc.stdout.strip().split()[-1]
-    if installed != PINNED_AST_GREP_VERSION and not _version_warned:
-        _version_warned = True
+    if installed != PINNED_AST_GREP_VERSION:
         _emit(f"mutation-gate: ast-grep {installed} on PATH, pinned to {PINNED_AST_GREP_VERSION} — "
               "the mutant catalogue and waivers were pinned against that version")
+
+
+def require_ast_grep() -> None:
+    _ast_grep_ready()

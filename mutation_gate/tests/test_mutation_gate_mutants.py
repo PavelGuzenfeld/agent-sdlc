@@ -12,24 +12,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import (
+    GDSCRIPT_BROKEN_SGCONFIG,
+    GDSCRIPT_SGCONFIG,
+    require_gdscript_parser as _require_gdscript_parser,
+)
 
-from mutation_gate import cli, mutants
+from mutation_gate import cli, mutants, no_comments, vocabulary_check
 from mutation_gate.repo import Config, DIFF_PREFIX_PIN_ARGS, GateError, Repo
-
-GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
-GDSCRIPT_SGCONFIG = (
-    "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
-    "\n    extensions: [gd]\n    expandoChar: _\n"
-)
-GDSCRIPT_BROKEN_SGCONFIG = (
-    "customLanguages:\n  gdscript:\n    libraryPath: /nonexistent/gdscript.so\n"
-    "    extensions: [gd]\n    expandoChar: _\n"
-)
-
-
-def _require_gdscript_parser() -> None:
-    if not GDSCRIPT_LIB.exists():
-        pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
 
 
 def _stub_git(monkeypatch, diff: str):
@@ -501,12 +491,12 @@ def test_generate_produces_a_gdscript_mutant_when_the_parser_is_ready(tmp_path, 
     (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
     generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
     assert ("1 + 2", "1 - 2") in [(m.old, m.new) for m in generated]
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED not in capsys.readouterr().err
+    assert vocabulary_check.GDSCRIPT_MISSING not in capsys.readouterr().err
 
 
 def test_gdscript_mutation_skipped_names_the_installer_and_the_missing_file():
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED == (
-        "gdscript mutation skipped: no sgconfig.yml — install the parser with "
+    assert vocabulary_check.GDSCRIPT_MISSING == (
+        "gdscript skipped: no sgconfig.yml — install the parser with "
         "bin/install-gdscript-parser and commit one"
     )
 
@@ -517,7 +507,7 @@ def test_generate_skips_gdscript_with_a_visible_reason_when_the_parser_is_not_re
     (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
     generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
     assert generated == []
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED in capsys.readouterr().err
+    assert vocabulary_check.GDSCRIPT_MISSING in capsys.readouterr().err
 
 
 def test_generate_skips_gdscript_with_a_visible_reason_when_the_library_is_broken(
@@ -529,7 +519,7 @@ def test_generate_skips_gdscript_with_a_visible_reason_when_the_library_is_broke
     (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
     generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
     assert generated == []
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED in capsys.readouterr().err
+    assert vocabulary_check.GDSCRIPT_MISSING in capsys.readouterr().err
 
 
 def test_generate_still_reaches_a_later_file_after_skipping_an_unready_gdscript_one(
@@ -612,14 +602,14 @@ def test_staged_dry_run_says_skipped_when_the_gdscript_parser_is_not_ready(
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED in err
+    assert vocabulary_check.GDSCRIPT_MISSING in err
     assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
 
 
 def test_require_ast_grep_prints_one_warning_line_naming_both_versions_on_a_mismatch(
     monkeypatch, capsys
 ):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     calls = []
 
     def fake_run(cmd, *args, **kwargs):
@@ -637,7 +627,7 @@ def test_require_ast_grep_prints_one_warning_line_naming_both_versions_on_a_mism
 
 
 def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, capsys):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     installed = mutants.PINNED_AST_GREP_VERSION.rsplit(".", 1)[0] + ".999"
     assert installed != mutants.PINNED_AST_GREP_VERSION
     stubbed = subprocess.CompletedProcess(
@@ -655,7 +645,7 @@ def test_require_ast_grep_warns_on_a_patch_only_version_difference(monkeypatch, 
 def test_require_ast_grep_warns_on_a_pin_that_is_a_proper_prefix_of_the_installed_version(
     monkeypatch, capsys
 ):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     installed = mutants.PINNED_AST_GREP_VERSION + "0"
     assert installed.startswith(mutants.PINNED_AST_GREP_VERSION)
     stubbed = subprocess.CompletedProcess(
@@ -673,7 +663,7 @@ def test_require_ast_grep_warns_on_a_pin_that_is_a_proper_prefix_of_the_installe
 def test_require_ast_grep_warns_only_once_across_repeated_calls_in_one_process(
     monkeypatch, capsys
 ):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     stubbed = subprocess.CompletedProcess(
         ["ast-grep", "--version"], 0, stdout="ast-grep 0.44.1\n", stderr=""
     )
@@ -682,12 +672,13 @@ def test_require_ast_grep_warns_only_once_across_repeated_calls_in_one_process(
     mutants.require_ast_grep()
     mutants.require_ast_grep()
     assert capsys.readouterr().err.count("\n") == 1
+    assert mutants._ast_grep_ready.cache_info().misses == 1
 
 
 def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
     monkeypatch, capsys
 ):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     stubbed = subprocess.CompletedProcess(
         ["ast-grep", "--version"], 0,
         stdout=f"ast-grep {mutants.PINNED_AST_GREP_VERSION}\n", stderr="",
@@ -700,7 +691,7 @@ def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
 def test_cli_dry_run_surfaces_the_ast_grep_version_warning_on_a_real_gate_run(
     tmp_path, monkeypatch, capsys
 ):
-    monkeypatch.setattr(mutants, "_version_warned", False)
+    mutants._ast_grep_ready.cache_clear()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     (tmp_path / "a.py").write_text("x = 1\n")
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
@@ -724,3 +715,153 @@ def test_cli_dry_run_surfaces_the_ast_grep_version_warning_on_a_real_gate_run(
         f"{mutants.PINNED_AST_GREP_VERSION} — the mutant catalogue and "
         "waivers were pinned against that version"
     ) in err
+
+
+def test_staged_dry_run_probes_gdscript_readiness_once_across_no_comments_vocabulary_and_mutants(
+    tmp_path, monkeypatch, capsys
+):
+    """#233: no-comments, vocabulary and mutants each ask whether the parser
+    is ready for the same .gd change; the probe and its skip line must not
+    repeat just because three checks asked."""
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "sgconfig.yml").write_text(GDSCRIPT_BROKEN_SGCONFIG)
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
+    (tmp_path / "b.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(
+        cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}, "b.gd": {2}}
+    )
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+
+    no_comments_calls = []
+    real_no_comments_check = no_comments.check
+
+    def counting_no_comments_check(*a, **k):
+        no_comments_calls.append(1)
+        return real_no_comments_check(*a, **k)
+
+    monkeypatch.setattr(cli.no_comments, "check", counting_no_comments_check)
+
+    vocabulary_calls = []
+    real_vocabulary_check = vocabulary_check.check
+
+    def counting_vocabulary_check(*a, **k):
+        vocabulary_calls.append(1)
+        return real_vocabulary_check(*a, **k)
+
+    monkeypatch.setattr(cli.vocabulary_check, "check", counting_vocabulary_check)
+
+    probe_calls = []
+    real_run = vocabulary_check.subprocess.run
+
+    def counting_run(cmd, **kwargs):
+        if any('"id": "probe"' in str(part) for part in cmd):
+            probe_calls.append(cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(vocabulary_check.subprocess, "run", counting_run)
+    vocabulary_check._gdscript_ready.cache_clear()
+
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    skip_lines = [line for line in err.splitlines()
+                  if "gdscript" in line.lower() and "skip" in line.lower()]
+    assert no_comments_calls == [1]
+    assert vocabulary_calls == [1]
+    assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
+    assert "b.gd: 0 candidate test file(s), 0 mutant(s)" in err
+    assert len(skip_lines) == 1
+    assert len(probe_calls) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
+
+
+def test_staged_dry_run_says_skipped_once_with_no_sgconfig_at_all(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): the missing-sgconfig case, not just the broken-library
+    one, must still resolve and print exactly once across every enabled check."""
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+    vocabulary_check._gdscript_ready.cache_clear()
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    skip_lines = [line for line in err.splitlines()
+                  if "gdscript" in line.lower() and "skip" in line.lower()]
+    assert len(skip_lines) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
+
+
+def test_staged_dry_run_never_probes_gdscript_readiness_for_a_python_only_change(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): a diff with no .gd file must not trigger the probe at
+    all, at the cli.main level, not just inside one module's own function."""
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "a.py").write_text("position = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+    monkeypatch.setattr(
+        vocabulary_check, "_gdscript_ready",
+        lambda root: pytest.fail("probed gdscript readiness for a python-only diff"),
+    )
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    assert vocabulary_check.GDSCRIPT_MISSING not in capsys.readouterr().err
+
+
+def test_staged_dry_run_probes_gdscript_readiness_once_when_the_parser_is_ready(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): the once-per-run guarantee must hold on the happy
+    path too, not only when the parser is missing or broken."""
+    _require_gdscript_parser()
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "sgconfig.yml").write_text(GDSCRIPT_SGCONFIG)
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar position = 1 + 2\n")
+    (tmp_path / "b.gd").write_text("func _ready():\n\tvar position = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(
+        cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}, "b.gd": {2}}
+    )
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+
+    probe_calls = []
+    real_run = vocabulary_check.subprocess.run
+
+    def counting_run(cmd, **kwargs):
+        if any('"id": "probe"' in str(part) for part in cmd):
+            probe_calls.append(cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(vocabulary_check.subprocess, "run", counting_run)
+    vocabulary_check._gdscript_ready.cache_clear()
+
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert vocabulary_check.GDSCRIPT_MISSING not in err
+    assert err.count("1 + 2 => 1 - 2") == 2
+    assert len(probe_calls) == 1
+    assert vocabulary_check._gdscript_ready.cache_info().misses == 1
