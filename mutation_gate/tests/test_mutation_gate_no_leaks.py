@@ -447,6 +447,7 @@ def test_a_modified_binary_marked_file_with_no_nul_byte_is_scanned_as_text(monke
     err = capsys.readouterr().err
     assert "no-leaks: BLOCKED — 1 finding(s)." in err
     assert "fixture.bin:1" in err
+    assert EMAIL not in err
 
 
 def test_a_modified_real_binary_file_with_a_nul_byte_is_skipped(monkeypatch, tmp_path):
@@ -466,7 +467,9 @@ def test_the_range_form_blocks_a_leak_in_a_modified_binary_marked_file(monkeypat
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
     _stub_git_bytes(monkeypatch, EMAIL.encode())
     assert _range(monkeypatch, tmp_path) == 1
-    assert "fixture.bin:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
 
 
 def test_a_failing_blob_read_for_a_binary_marked_file_refuses(monkeypatch, tmp_path):
@@ -501,7 +504,9 @@ def test_a_nul_free_blob_with_invalid_utf8_bytes_is_still_scanned(monkeypatch, t
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
     _stub_git_bytes(monkeypatch, b"\xff\xfe" + EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 1
-    assert "fixture.bin:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
 
 
 def test_a_binary_entry_does_not_hide_a_leak_in_a_later_file(monkeypatch, tmp_path, capsys):
@@ -509,7 +514,19 @@ def test_a_binary_entry_does_not_hide_a_leak_in_a_later_file(monkeypatch, tmp_pa
     _stub_git(monkeypatch, diff=diff)
     _stub_git_bytes(monkeypatch, b"plain prose line\n")
     assert _local(monkeypatch, tmp_path) == 1
-    assert "second.txt:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "second.txt:1" in err
+
+
+def test_a_skipped_real_binary_entry_does_not_hide_a_leak_in_a_later_file(monkeypatch, tmp_path, capsys):
+    diff = _binary_diff("first.bin") + _diff("second.txt", EMAIL)
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00binary")
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "second.txt:1" in err
 
 
 def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(monkeypatch, tmp_path, capsys):
@@ -525,6 +542,7 @@ def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(mo
     err = capsys.readouterr().err
     assert "no-leaks: BLOCKED — 1 finding(s)." in err
     assert "caf\\303\\251.bin:1" in err
+    assert EMAIL not in err
 
 
 def test_a_trailing_blank_line_after_a_binary_entry_is_not_treated_as_another_one(monkeypatch, tmp_path, capsys):
@@ -532,7 +550,9 @@ def test_a_trailing_blank_line_after_a_binary_entry_is_not_treated_as_another_on
     _stub_git(monkeypatch, diff=_binary_diff("fixture.bin") + "\n")
     assert _local(monkeypatch, tmp_path) == 1
     assert calls == [("cat-file", "-p", "1111111")]
-    assert "fixture.bin:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
 
 
 def test_the_range_form_blocks_a_leak_in_a_binary_marked_file_with_no_nul_byte(monkeypatch, tmp_path, capsys):
@@ -580,7 +600,7 @@ def test_a_real_binary_with_and_in_its_name_is_skipped_not_refused(monkeypatch, 
         "Binary files /dev/null and b/a and b.bin differ\n"
     )
     _stub_git(monkeypatch, diff=diff)
-    _stub_git_bytes(monkeypatch, b"\x00binary")
+    _stub_git_bytes(monkeypatch, b"\x00" + EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 0
 
 
@@ -594,7 +614,9 @@ def test_a_gitattributes_marked_file_with_and_in_its_name_is_still_scanned(monke
     _stub_git(monkeypatch, diff=diff)
     _stub_git_bytes(monkeypatch, EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 1
-    assert "a and b.txt:1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "a and b.txt:1" in err
+    assert EMAIL not in err
 
 
 def test_a_real_binary_with_a_quoted_non_ascii_name_is_skipped_not_refused(monkeypatch, tmp_path):
@@ -605,5 +627,5 @@ def test_a_real_binary_with_a_quoted_non_ascii_name_is_skipped_not_refused(monke
         'Binary files /dev/null and "b/caf\\303\\251.bin" differ\n'
     )
     _stub_git(monkeypatch, diff=diff)
-    _stub_git_bytes(monkeypatch, b"\x00binary")
+    _stub_git_bytes(monkeypatch, b"\x00" + EMAIL.encode())
     assert _local(monkeypatch, tmp_path) == 0
