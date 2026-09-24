@@ -133,6 +133,13 @@ def test_a_noun_phrase_file_with_no_declared_class_passes_the_namespace_mold(tmp
     assert vocabulary_path.check(repo, True, []) == []
 
 
+def test_a_staged_file_missing_from_the_worktree_is_skipped_not_a_traceback(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(vocabulary_path, "git",
+                        _fake_git(cached=["src/frame_count.py"], ls_tree=["src/existing.py"]))
+    assert vocabulary_path.check(repo, True, []) == []
+
+
 def test_a_file_with_the_trailing_underscore_private_mark_passes(tmp_path, monkeypatch):
     domain = '[[concept]]\nword = "impl"\nmeaning = "a private implementation module"\npos = ["noun"]\n'
     repo = _repo(tmp_path, domain)
@@ -352,6 +359,15 @@ def test_slice_cli_main_staged_passes_a_class_named_file(tmp_path, monkeypatch, 
            existing=["src/existing.py"])
     assert _cli(monkeypatch, tmp_path, repo) == 0
     assert "BLOCKED: vocabulary-path" not in capsys.readouterr().err
+
+
+def test_slice_cli_main_staged_a_staged_file_missing_from_the_worktree_does_not_traceback(
+        tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path)
+    _write(repo.root, ".mutation-gate.toml", 'vocabulary = ".vocabulary.toml"\n')
+    monkeypatch.setattr(vocabulary_path, "git",
+                        _fake_git(cached=["src/frame_count.py"], ls_tree=["src/existing.py"]))
+    assert _cli(monkeypatch, tmp_path, repo) == 0
 
 
 def test_slice_cli_main_staged_blocks_an_unknown_word_in_a_file_name(tmp_path, monkeypatch, capsys):
