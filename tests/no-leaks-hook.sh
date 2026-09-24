@@ -180,5 +180,41 @@ printf '%s' "$quoted_out" | grep -qF "identity.txt:1" || fail "the hook rejectio
 printf '%s' "$quoted_out" | grep -qF "$email_content" && fail "the hook rejection behind a quoted path echoed the email address" "$quoted_out"
 cgit reset -q --hard main
 
+cgit checkout -q -b binary-attr main
+printf '*.txt -diff\n' > "$consumer/.gitattributes"
+cgit add .gitattributes
+cgit commit -q -m "mark txt files binary via attribute"
+printf '%s\n' "$email_content" > "$consumer/identity.txt"
+cgit add identity.txt
+set +e
+attr_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+attr_code=$?
+set -e
+[ "$attr_code" -ne 0 ] || fail "the hook should reject an email address in a file a -diff attribute marks binary"
+printf '%s' "$attr_out" | grep -qF "identity.txt:1" || fail "the -diff attribute block did not name identity.txt:1" "$attr_out"
+printf '%s' "$attr_out" | grep -qF "$email_content" && fail "the -diff attribute block echoed the email address" "$attr_out"
+cgit reset -q --hard main
+
+cgit checkout -q -b binary-real main
+printf '\000\377\376%s' "$email_content" > "$consumer/real.bin"
+cgit add real.bin
+(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add binary") \
+    || fail "the hook should not block a real binary file containing NUL bytes"
+cgit reset -q --hard main
+
+cgit checkout -q -b binary-real-and-name main
+printf '\000\377\376%s' "$email_content" > "$consumer/a and b.bin"
+cgit add "a and b.bin"
+(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add binary") \
+    || fail "the hook should not block a real binary file whose name contains ' and '"
+cgit reset -q --hard main
+
+cgit checkout -q -b binary-real-quoted-name main
+printf '\000\377\376%s' "$email_content" > "$consumer/café.bin"
+cgit add "café.bin"
+(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add binary") \
+    || fail "the hook should not block a real binary file with a quoted non-ascii name"
+cgit reset -q --hard main
+
 rm -rf "$consumer" "$work"
 echo "all cases passed"

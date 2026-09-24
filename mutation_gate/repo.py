@@ -41,6 +41,17 @@ def git(*args: str, cwd: Path | None = None) -> str:
     return out.stdout
 
 
+def git_bytes(*args: str, cwd: Path | None = None) -> bytes:
+    """`git()`'s undecoded twin, for a blob whose bytes may not be UTF-8."""
+    try:
+        out = subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=False)
+    except FileNotFoundError as exc:
+        raise GateError(f"git not found on PATH: {exc}") from exc
+    if out.returncode != 0:
+        raise GateError(f"git {' '.join(args)}: {out.stderr.decode(errors='replace').strip()}")
+    return out.stdout
+
+
 # Forces `git diff`'s post-image header back to `b/<path>` regardless of
 # diff.noprefix or diff.mnemonicPrefix, so every `+++ ` line parser in this
 # package can assume one shape (#151, #159).
