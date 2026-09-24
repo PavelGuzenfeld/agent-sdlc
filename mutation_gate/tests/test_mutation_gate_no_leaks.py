@@ -64,6 +64,39 @@ def _stub_git(monkeypatch, *, diff: str = "", log: str = ""):
     return calls
 
 
+def _stub_git_bytes(monkeypatch, blob: bytes):
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git_bytes(*args: str, cwd=None) -> bytes:
+        calls.append(args)
+        return blob
+
+    monkeypatch.setattr(no_leaks, "git_bytes", fake_git_bytes)
+    return calls
+
+
+def _binary_diff(path: str, *, deleted: bool = False, modified: bool = False) -> str:
+    if deleted:
+        return (
+            f"diff --git a/{path} b/{path}\n"
+            f"deleted file mode 100644\n"
+            f"index 1111111..0000000\n"
+            f"Binary files a/{path} and /dev/null differ\n"
+        )
+    if modified:
+        return (
+            f"diff --git a/{path} b/{path}\n"
+            f"index 1111111..2222222 100644\n"
+            f"Binary files a/{path} and b/{path} differ\n"
+        )
+    return (
+        f"diff --git a/{path} b/{path}\n"
+        f"new file mode 100644\n"
+        f"index 0000000..1111111\n"
+        f"Binary files /dev/null and b/{path} differ\n"
+    )
+
+
 def _repo(tmp_path: Path, config: Config | None = None) -> Repo:
     return Repo(root=tmp_path, origin="", remotes=(), config=config or Config())
 
@@ -389,3 +422,210 @@ def test_a_failing_diff_refuses(monkeypatch, tmp_path):
     monkeypatch.setattr(no_leaks, "git", boom)
     monkeypatch.setattr(no_leaks, "discover", lambda: _repo(tmp_path))
     assert _local(monkeypatch, tmp_path) == 2
+
+
+def test_a_gitattributes_marked_binary_file_with_no_nul_byte_is_scanned_as_text(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, f"plain one\nplain two\n{EMAIL}\n".encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "fixture.bin:3" in err
+    assert EMAIL not in err
+
+
+def test_a_gitattributes_marked_binary_file_with_clean_content_passes(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, b"plain one\nplain two\n")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_modified_binary_marked_file_with_no_nul_byte_is_scanned_as_text(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_modified_real_binary_file_with_a_nul_byte_is_skipped(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_modified_binary_marked_files_blob_is_fetched_by_the_new_sha_not_the_old(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _local(monkeypatch, tmp_path)
+    assert calls == [("cat-file", "-p", "2222222")]
+
+
+def test_the_range_form_blocks_a_leak_in_a_modified_binary_marked_file(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", modified=True))
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _range(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_failing_blob_read_for_a_binary_marked_file_refuses(monkeypatch, tmp_path):
+    def boom(*args, cwd=None):
+        raise GateError("git cat-file: fatal")
+
+    monkeypatch.setattr(no_leaks, "git_bytes", boom)
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    assert _local(monkeypatch, tmp_path) == 2
+
+
+def test_the_range_form_skips_a_real_binary_file_with_a_nul_byte(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _range(monkeypatch, tmp_path) == 0
+
+
+def test_a_real_binary_file_with_a_nul_byte_anywhere_in_the_blob_is_skipped(monkeypatch, tmp_path):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, EMAIL.encode() + b"\x00trailing")
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_nul_byte_past_a_long_prefix_still_marks_the_blob_binary(monkeypatch, tmp_path):
+    padding = b"a" * 9000
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, padding + b"\x00" + EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_nul_free_blob_with_invalid_utf8_bytes_is_still_scanned(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, b"\xff\xfe" + EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_binary_entry_does_not_hide_a_leak_in_a_later_file(monkeypatch, tmp_path, capsys):
+    diff = _binary_diff("first.bin") + _diff("second.txt", EMAIL)
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "second.txt:1" in err
+
+
+def test_a_skipped_real_binary_entry_does_not_hide_a_leak_in_a_later_file(monkeypatch, tmp_path, capsys):
+    diff = _binary_diff("first.bin") + _diff("second.txt", EMAIL)
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00binary")
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "second.txt:1" in err
+
+
+def test_a_quoted_non_ascii_path_on_the_binary_line_still_attributes_the_line(monkeypatch, tmp_path, capsys):
+    diff = (
+        'diff --git "a/caf\\303\\251.bin" "b/caf\\303\\251.bin"\n'
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        'Binary files /dev/null and "b/caf\\303\\251.bin" differ\n'
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "no-leaks: BLOCKED — 1 finding(s)." in err
+    assert "caf\\303\\251.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_trailing_blank_line_after_a_binary_entry_is_not_treated_as_another_one(monkeypatch, tmp_path, capsys):
+    calls = _stub_git_bytes(monkeypatch, EMAIL.encode())
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin") + "\n")
+    assert _local(monkeypatch, tmp_path) == 1
+    assert calls == [("cat-file", "-p", "1111111")]
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_the_range_form_blocks_a_leak_in_a_binary_marked_file_with_no_nul_byte(monkeypatch, tmp_path, capsys):
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _range(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "fixture.bin:1" in err
+    assert EMAIL not in err
+
+
+def test_a_deleted_binary_marked_file_reads_no_post_image_blob(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin", deleted=True))
+    assert _local(monkeypatch, tmp_path) == 0
+    assert calls == []
+
+
+def test_a_binary_marked_files_blob_is_fetched_by_its_post_image_sha(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _local(monkeypatch, tmp_path)
+    assert calls == [("cat-file", "-p", "1111111")]
+
+
+def test_the_range_form_also_fetches_the_blob_by_sha(monkeypatch, tmp_path):
+    calls = _stub_git_bytes(monkeypatch, b"plain prose line\n")
+    _stub_git(monkeypatch, diff=_binary_diff("fixture.bin"))
+    _range(monkeypatch, tmp_path)
+    assert calls == [("cat-file", "-p", "1111111")]
+
+
+def test_a_diff_with_no_binary_entry_never_calls_cat_file(monkeypatch, tmp_path):
+    show_calls = _stub_git_bytes(monkeypatch, b"")
+    _stub_git(monkeypatch, diff=_diff("fixture.txt", "plain prose line"))
+    _local(monkeypatch, tmp_path)
+    assert show_calls == []
+
+
+def test_a_real_binary_with_and_in_its_name_is_skipped_not_refused(monkeypatch, tmp_path):
+    diff = (
+        "diff --git a/a and b.bin b/a and b.bin\n"
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        "Binary files /dev/null and b/a and b.bin differ\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00" + EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 0
+
+
+def test_a_gitattributes_marked_file_with_and_in_its_name_is_still_scanned(monkeypatch, tmp_path, capsys):
+    diff = (
+        "diff --git a/a and b.txt b/a and b.txt\n"
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        "Binary files /dev/null and b/a and b.txt differ\n"
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "a and b.txt:1" in err
+    assert EMAIL not in err
+
+
+def test_a_real_binary_with_a_quoted_non_ascii_name_is_skipped_not_refused(monkeypatch, tmp_path):
+    diff = (
+        'diff --git "a/caf\\303\\251.bin" "b/caf\\303\\251.bin"\n'
+        "new file mode 100644\n"
+        "index 0000000..1111111\n"
+        'Binary files /dev/null and "b/caf\\303\\251.bin" differ\n'
+    )
+    _stub_git(monkeypatch, diff=diff)
+    _stub_git_bytes(monkeypatch, b"\x00" + EMAIL.encode())
+    assert _local(monkeypatch, tmp_path) == 0

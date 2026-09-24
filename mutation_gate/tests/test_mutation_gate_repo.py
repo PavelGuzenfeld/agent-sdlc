@@ -8,17 +8,45 @@ Also: the namespaces a checkout may gate under come from the environment, then
 the repo's config, and an unconfigured checkout gates its own origin. agent-sdlc#8."""
 
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from mutation_gate.repo import OWN_NAMESPACES_ENV, Config, GateError, LanguageConfig, Repo, git
+from mutation_gate import repo as repo_module
+from mutation_gate.repo import (
+    OWN_NAMESPACES_ENV,
+    Config,
+    GateError,
+    LanguageConfig,
+    Repo,
+    git,
+    git_bytes,
+)
 
 
 def test_git_missing_from_path_raises_gate_error_not_file_not_found(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(GateError, match="git not found on PATH"):
         git("rev-parse", "--show-toplevel")
+
+
+def _stub_subprocess_run(monkeypatch, returncode: int, stdout: bytes = b"", stderr: bytes = b""):
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+
+    monkeypatch.setattr(repo_module.subprocess, "run", fake_run)
+
+
+def test_git_bytes_returns_raw_stdout_on_success(monkeypatch):
+    _stub_subprocess_run(monkeypatch, returncode=0, stdout=b"\x00binary")
+    assert git_bytes("show", ":x") == b"\x00binary"
+
+
+def test_git_bytes_raises_gate_error_with_decoded_stderr_on_nonzero_exit(monkeypatch):
+    _stub_subprocess_run(monkeypatch, returncode=7, stderr=b"fatal: bad revision")
+    with pytest.raises(GateError, match="fatal: bad revision"):
+        git_bytes("show", ":missing")
 
 
 def _write(tmp_path: Path, toml: str) -> Path:
