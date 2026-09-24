@@ -31,7 +31,7 @@ def _write_report(repo, name: str, text: str, staged: bool) -> Path:
     by what was reviewed so a stale report can't be mistaken for a fresh one."""
     path = CACHE_ROOT / repo.key / "reports" / f"{name}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_report_header(repo, staged) + text)
+    path.write_text(_report_header(repo, staged) + text, errors="backslashreplace")
     return path
 
 

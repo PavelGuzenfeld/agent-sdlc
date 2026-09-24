@@ -485,6 +485,30 @@ def test_write_report_saves_to_cache_root_keyed_by_repo(tmp_path, monkeypatch):
     )
 
 
+def test_write_report_survives_a_surrogate_escaped_path_in_the_findings_text(
+    tmp_path, monkeypatch
+):
+    """#249: a finding naming a non-UTF-8 path carries a lone surrogate;
+    `write_text`'s strict default raised UnicodeEncodeError on it."""
+    cache = tmp_path / "cache"
+
+    def _git(*args, **kwargs):
+        if args == ("write-tree",):
+            return "deadbeef\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+    repo = _repo(tmp_path / "repo")
+    findings = "caf\udce9.py:1: added comment\n"
+    path = cli._write_report(repo, "adversary", findings, staged=True)
+    assert path.read_text() == (
+        "reviewed: staged tree deadbeef at 2026-09-24T07:30:00Z\n"
+        "caf\\udce9.py:1: added comment\n"
+    )
+
+
 def test_report_header_names_head_and_dirty_state_for_worktree_mode(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
 
