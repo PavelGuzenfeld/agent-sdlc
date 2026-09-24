@@ -12,6 +12,7 @@
   always_run: true
   pass_filenames: false
   stages: [pre-commit]
+  verbose: true
 - id: commit-msg
   name: commit message check (voice.md banned words, attribution, sign-off)
   entry: mutation-gate commit-msg
