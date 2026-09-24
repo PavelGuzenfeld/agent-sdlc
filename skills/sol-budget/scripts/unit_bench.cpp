@@ -1,6 +1,6 @@
 // §4 Isolated — what one unit sustains, for perf/machine_model.md.
 //
-// Build:  g++ -O3 -std=c++17 -pthread -o unit_bench unit_bench.cpp
+// Build:  g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o unit_bench unit_bench.cpp
 //
 // -O3, not -O2, and it is load-bearing: gcc only auto-vectorises at -O3, and on the
 // JP6 Orin the same source reads 1.75e10 op/s at -O2 against 4.76e10 at -O3. A floor
@@ -42,9 +42,10 @@
 #include <sched.h>
 #include <unistd.h>
 
-#ifndef __OPTIMIZE__
+#if !defined(__OPTIMIZE__) || !defined(BENCH_OPTIMIZATION_LEVEL) || BENCH_OPTIMIZATION_LEVEL < 3
 #error "unit_bench measures what the machine sustains, not what an unoptimised build \
-does. Build it -O3; see the header for the 2.7x this costs."
+does. Build it -O3 -DBENCH_OPTIMIZATION_LEVEL=3; gcc and clang define __OPTIMIZE__ the \
+same way at -O2, so the level has to be named on the command line."
 #endif
 
 namespace {

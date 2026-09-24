@@ -1,6 +1,6 @@
 // §6 Scheduling — what the OS costs a stage, for perf/machine_model.md.
 //
-// Build:  g++ -O3 -std=c++17 -pthread -o sched_bench sched_bench.cpp
+// Build:  g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o sched_bench sched_bench.cpp
 // Run:    ./sched_bench [--window-seconds S] [--warmup-seconds N] [--samples N] [--date D]
 // Output: a paste-ready `sched:` yaml fragment.
 //
@@ -15,8 +15,9 @@
 // place in this skill where the p99 belongs in the model rather than in the
 // measurement: a deadline is missed by the late wake, never by the typical one.
 
-#ifndef __OPTIMIZE__
-#error "sched_bench must be built -O3; an unoptimised spin measures the compiler."
+#if !defined(__OPTIMIZE__) || !defined(BENCH_OPTIMIZATION_LEVEL) || BENCH_OPTIMIZATION_LEVEL < 3
+#error "sched_bench must be built -O3 -DBENCH_OPTIMIZATION_LEVEL=3; an unoptimised spin \
+measures the compiler, and -O2 defines __OPTIMIZE__ too, so the level has to be named."
 #endif
 
 #include <algorithm>
