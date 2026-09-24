@@ -154,6 +154,9 @@ def _stop_hook_payload() -> dict:
 
 
 SESSION_PROMPT_LIMIT = 4000
+SESSION_PROMPT_MIN_WORDS = 6
+
+COMPACTION_BOUNDARY = "This session is being continued from a previous conversation"
 
 SYNTHETIC_TURN_PREFIXES = (
     "<system-reminder>",
@@ -162,14 +165,16 @@ SYNTHETIC_TURN_PREFIXES = (
     "<local-command-stdout>",
     "<local-command-caveat>",
     "<task-notification>",
-    "[Request interrupted by user]",
-    "This session is being continued from a previous conversation",
+    "<bash-input>",
+    "<bash-stdout>",
+    "[Request interrupted by user",
 )
 
 
 def _session_prompt(transcript_path: str | None) -> str | None:
-    """Latest real user turn in the transcript JSONL — never a tool result, a
-    reminder, or a harness-injected wrapper, since none is what the person typed (#100)."""
+    """Latest user turn substantive enough to carry intent (#211): skips a
+    continuation under SESSION_PROMPT_MIN_WORDS words, and stops at a
+    compaction boundary rather than reaching into the session it summarizes."""
     if not transcript_path:
         return None
     try:
@@ -181,23 +186,32 @@ def _session_prompt(transcript_path: str | None) -> str | None:
             entry = json.loads(line)
             if entry.get("type") != "user" or entry.get("isMeta"):
                 continue
-            text = _user_turn_text(entry.get("message", {}).get("content"))
+            content = entry.get("message", {}).get("content")
         except (ValueError, AttributeError, TypeError):
             continue
-        if text:
+        if _is_compaction_boundary(content):
+            return None
+        text = _user_turn_text(content)
+        if text and len(text.split()) >= SESSION_PROMPT_MIN_WORDS:
             return text[:SESSION_PROMPT_LIMIT]
     return None
 
 
-def _user_turn_text(content) -> str | None:
+def _turn_blocks(content) -> list[str]:
     if isinstance(content, str):
-        blocks = [content]
-    elif isinstance(content, list):
-        blocks = [b.get("text", "") for b in content
-                  if isinstance(b, dict) and b.get("type") == "text"]
-    else:
-        blocks = []
-    kept = [b for b in (block.strip() for block in blocks)
+        return [content]
+    if isinstance(content, list):
+        return [b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"]
+    return []
+
+
+def _is_compaction_boundary(content) -> bool:
+    return any(block.strip().startswith(COMPACTION_BOUNDARY) for block in _turn_blocks(content))
+
+
+def _user_turn_text(content) -> str | None:
+    kept = [b for b in (block.strip() for block in _turn_blocks(content))
             if b and not b.startswith(SYNTHETIC_TURN_PREFIXES)]
     return "\n".join(kept) if kept else None
 
