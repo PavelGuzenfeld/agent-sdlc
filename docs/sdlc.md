@@ -2,7 +2,7 @@
 
 ```text
 +--------------------------+
-| ticket                   |   labelled `ready`: the approved ticket is the plan
+| ticket                   |   labelled `model:*`: the approved ticket is the plan
 +--------------------------+
              |
              v

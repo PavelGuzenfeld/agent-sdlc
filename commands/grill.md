@@ -67,6 +67,6 @@ Draft the material in the scratchpad first. Then, in the repo's own tracker:
   - **Open questions** — anything left unresolved.
   - **Rejected** — one line per alternative considered and why it lost, so a
     decision is not silently reversed later.
-- File one issue per implementation step, each labeled `ready` and
-  `model:<name>`, each linking back to the decision-record issue.
+- File one issue per implementation step, each labeled `model:<name>`, each
+  linking back to the decision-record issue.
 - Print the numbers of every issue filed.
