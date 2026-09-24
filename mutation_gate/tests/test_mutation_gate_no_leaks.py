@@ -4,6 +4,7 @@ RFC1918 and home-path shapes over the staged diff and commit message, plus a
 Fixture rows come from tests/fixtures/*.txt — never hardcode leak-shaped text
 here, or this file trips its own scan. `git` is stubbed."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -336,16 +337,27 @@ _DIFF_ARGS = ("diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff", "--n
 def test_local_form_uses_the_staged_index(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _local(monkeypatch, tmp_path)
-    assert calls == [(*_DIFF_ARGS, "--cached")]
+    assert calls == [(*_DIFF_ARGS, "--cached", "--", ".", no_leaks._FIXTURE_EXCLUDE_PATHSPEC)]
 
 
 def test_range_form_diffs_the_given_range_and_walks_its_commit_messages(monkeypatch, tmp_path):
     calls = _stub_git(monkeypatch)
     _range(monkeypatch, tmp_path)
     assert calls == [
-        (*_DIFF_ARGS, "base..HEAD"),
+        (*_DIFF_ARGS, "base..HEAD", "--", ".", no_leaks._FIXTURE_EXCLUDE_PATHSPEC),
         ("log", "-z", "base..HEAD", "--pretty=format:%H%x1f%B"),
     ]
+
+
+def test_the_fixture_exclusion_pathspec_excludes_tests_fixtures():
+    assert no_leaks._FIXTURE_EXCLUDE_PATHSPEC == ":!tests/fixtures/**"
+
+
+def test_the_fixture_exclusion_pathspec_matches_scripts_no_leaks_sh():
+    shell_text = (REPO_ROOT / "scripts" / "no-leaks.sh").read_text()
+    match = re.search(r"git ls-files -- \. '([^']+)'", shell_text)
+    assert match is not None
+    assert match.group(1) == no_leaks._FIXTURE_EXCLUDE_PATHSPEC
 
 
 def test_range_form_blocks_a_banned_name_in_a_ranged_commit_message(monkeypatch, tmp_path, capsys, banned_config):

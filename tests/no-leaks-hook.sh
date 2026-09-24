@@ -43,6 +43,25 @@ set -e
 printf '%s' "$range_out" | grep -qF 'use "bar"' || fail "--range block did not suggest the replacement" "$range_out"
 printf '%s' "$range_out" | grep -qF "foo" && fail "--range block echoed the banned token" "$range_out"
 
+cgit checkout -q -b fixture-range main
+mkdir -p "$consumer/tests/fixtures"
+printf '%s\n' "$email_content" > "$consumer/tests/fixtures/x.txt"
+cgit add tests/fixtures/x.txt
+cgit commit -q -m "add fixture"
+(cd "$consumer" && mutation-gate no-leaks --range "main..HEAD") \
+    || fail "--range should not block an email address staged under tests/fixtures/**"
+
+printf '%s\n' "$email_content" > "$consumer/x.txt"
+cgit add x.txt
+cgit commit -q -m "add x"
+set +e
+range_elsewhere_out=$(cd "$consumer" && mutation-gate no-leaks --range "main..HEAD" 2>&1)
+range_elsewhere_code=$?
+set -e
+[ "$range_elsewhere_code" -eq 1 ] || fail "--range should still block the same line staged outside tests/fixtures" "$range_elsewhere_out"
+printf '%s' "$range_elsewhere_out" | grep -qF "x.txt:1" || fail "--range block did not name x.txt:1" "$range_elsewhere_out"
+printf '%s' "$range_elsewhere_out" | grep -qF "$email_content" && fail "--range block echoed the email address" "$range_elsewhere_out"
+
 cat > "$consumer/.pre-commit-config.yaml" <<YAML
 repos:
   - repo: $dir
@@ -73,6 +92,13 @@ set -e
 [ "$present_code" -ne 0 ] || fail "the hook should reject a staged email address with banned_names_file present"
 printf '%s' "$present_out" | grep -qF "identity.txt:1" || fail "the hook rejection did not name identity.txt:1" "$present_out"
 printf '%s' "$present_out" | grep -qF "$email_content" && fail "the hook rejection echoed the email address" "$present_out"
+cgit reset -q --hard main
+
+mkdir -p "$consumer/tests/fixtures"
+printf '%s\n' "$email_content" > "$consumer/tests/fixtures/x.txt"
+cgit add tests/fixtures/x.txt
+(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add fixture") \
+    || fail "the hook should not block an email address staged under tests/fixtures/**"
 cgit reset -q --hard main
 
 printf 'test_paths = ["tests"]\nbanned_names_file = "%s"\n' "$missing_file" > "$consumer/.mutation-gate.toml"
