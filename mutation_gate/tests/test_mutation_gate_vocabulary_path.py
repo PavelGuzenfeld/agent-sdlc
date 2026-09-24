@@ -112,6 +112,64 @@ def test_tool_dictated_version_file_and_pybind_extension_pass(tmp_path, monkeypa
     assert vocabulary_path.check(repo, True, []) == []
 
 
+def test_dunder_main_passes(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"__main__.py": "pass\n"})
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_a_noun_phrase_file_with_no_declared_class_passes_the_namespace_mold(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"src/frame_count.py": "pass\n"}, existing=["src/existing.py"])
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_a_file_with_the_trailing_underscore_private_mark_passes(tmp_path, monkeypatch):
+    domain = '[[concept]]\nword = "impl"\nmeaning = "a private implementation module"\npos = ["noun"]\n'
+    repo = _repo(tmp_path, domain)
+    _added(monkeypatch, repo, {"src/impl_.py": "pass\n"}, existing=["src/existing.py"])
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_five_word_segment_blocks_on_the_word_cap(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _added(monkeypatch, repo, {"src/frame_frame_frame_frame_frame.py": "pass\n"},
+           existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [f.detail for f in found] == ["5 words; a name has 1 to 4"]
+
+
+def test_four_word_segment_of_known_nouns_passes(tmp_path, monkeypatch):
+    domain = '[[concept]]\nword = "buffer"\nmeaning = "a holding area"\npos = ["noun"]\n'
+    repo = _repo(tmp_path, domain)
+    _added(monkeypatch, repo, {"src/frame_frame_frame_buffer.py": "pass\n"},
+           existing=["src/existing.py"])
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_a_leading_underscore_directory_segment_blocks(tmp_path, monkeypatch):
+    domain = '[[concept]]\nword = "frob"\nmeaning = "a stand-in name used in a fixture"\npos = ["noun"]\n'
+    repo = _repo(tmp_path, domain)
+    _added(monkeypatch, repo, {"_frob/thing.py": "pass\n"}, existing=None)
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.segment, f.rule, f.suggestion) for f in found if f.segment == "_frob"] == [
+        ("_frob", "leading_underscore", "frob_")
+    ]
+
+
+def test_a_file_declaring_an_unrelated_class_does_not_take_the_type_mold(tmp_path, monkeypatch):
+    domain = (
+        '[[concept]]\nword = "move"\nmeaning = "change position over time"\n'
+        'pos = ["verb"]\nforms = ["-ing"]\n\n'
+        '[[concept]]\nword = "average"\nmeaning = "the mean value"\npos = ["noun"]\n'
+    )
+    repo = _repo(tmp_path, domain)
+    _added(monkeypatch, repo, {"src/moving_average.py": "class Other:\n    pass\n"},
+           existing=["src/existing.py"])
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.kind, f.detail) for f in found] == [("namespace", "a namespace takes nouns only")]
+
+
 def test_editing_an_existing_badly_named_file_adds_no_finding(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     monkeypatch.setattr(vocabulary_path, "git", _fake_git(cached=[]))
@@ -122,7 +180,10 @@ def test_a_new_directory_is_checked_the_same_as_the_file_in_it(tmp_path, monkeyp
     repo = _repo(tmp_path)
     _added(monkeypatch, repo, {"frob/thing.py": "pass\n"}, existing=None)
     found = vocabulary_path.check(repo, True, [])
-    assert [f.name for f in found] == ["frob", "thing"]
+    assert [(f.segment, f.kind, f.name, f.detail) for f in found] == [
+        ("frob", "namespace", "frob", "`frob` is not in the dictionary"),
+        ("thing.py", "namespace", "thing", "`thing` is not in the dictionary"),
+    ]
 
 
 def test_a_new_file_in_an_already_tracked_directory_checks_only_the_file(tmp_path, monkeypatch):
@@ -347,6 +408,14 @@ def test_real_git_repo_frame_parser_passes_and_parse_stuff_blocks(tmp_path, monk
     err = capsys.readouterr().err
     assert "BLOCKED: vocabulary-path — 2 finding(s)." in err
     assert "`stuff` is not in the dictionary" in err
+
+    subprocess.run(["git", *_GIT_IDENTITY, "commit", "-q", "-m", "add parse_stuff"],
+                   cwd=root, check=True)
+    (root / "src" / "parse_stuff.py").write_text("pass\npass\n")
+    subprocess.run(["git", "add", "src/parse_stuff.py"], cwd=root, check=True)
+    assert vocabulary_path.added_paths(Repo(root=root, origin="", remotes=(), config=Config()),
+                                       True) == []
+    assert cli.main(["--staged", "--no-adversary"]) == 0
     assert "a namespace takes nouns only" in err
 
 
