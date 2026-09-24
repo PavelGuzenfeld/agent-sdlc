@@ -1,0 +1,14 @@
+{
+  "name": "agent-sdlc",
+  "owner": {
+    "name": "Pavel Guzenfeld",
+    "url": "https://github.com/PavelGuzenfeld"
+  },
+  "plugins": [
+    {
+      "name": "agent-sdlc",
+      "source": "./",
+      "description": "Skills, slash commands, rules and a diff-scoped mutation gate for a ticket-to-PR software development lifecycle."
+    }
+  ]
+}
