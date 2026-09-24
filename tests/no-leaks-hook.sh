@@ -121,6 +121,28 @@ printf '%s' "$mnemonic_out" | grep -qF "$email_content" && fail "the hook reject
 cgit config --unset diff.mnemonicPrefix
 cgit reset -q --hard main
 
+hide_textconv="$work/hide-textconv.sh"
+cat > "$hide_textconv" <<'SH'
+#!/usr/bin/env sh
+exit 0
+SH
+chmod +x "$hide_textconv"
+printf 'identity.txt diff=hide\n' > "$consumer/.gitattributes"
+cgit add .gitattributes
+cgit commit -q -m "add textconv attribute"
+cgit config "diff.hide.textconv" "$hide_textconv"
+printf '%s\n' "$email_content" > "$consumer/identity.txt"
+cgit add identity.txt
+set +e
+textconv_out=$(cd "$consumer" && git -c user.email=sentinel -c user.name=sentinel commit -q -m "add identity" 2>&1)
+textconv_code=$?
+set -e
+[ "$textconv_code" -ne 0 ] || fail "the hook should reject a staged email address hidden behind a textconv filter"
+printf '%s' "$textconv_out" | grep -qF "identity.txt:1" || fail "the hook rejection behind a textconv filter did not name identity.txt:1" "$textconv_out"
+printf '%s' "$textconv_out" | grep -qF "$email_content" && fail "the hook rejection behind a textconv filter echoed the email address" "$textconv_out"
+cgit config --unset "diff.hide.textconv"
+cgit reset -q --hard main
+
 printf '%s\n' "$email_content" > "$consumer/café identity.txt"
 cgit add "café identity.txt"
 set +e
