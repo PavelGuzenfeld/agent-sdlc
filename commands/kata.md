@@ -8,9 +8,14 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
 
 ## Queue
 
-- `/kata` — every issue labelled `ready`.
-- `/kata <N>` — just ticket `N`. Naming a ticket in plain English is the same
-  authorisation as the label.
+- `/kata` — every issue labelled `ready`. Tickets also labelled size:tiny that
+  share one `model:<name>` label group into batches of at most five, each
+  batch taking its oldest ticket's queue position — a longer tiny queue splits
+  into more batches. Kata's own judgment may pull a ticket out of a batch it
+  finds not tiny; it never adds an unlabelled ticket to one.
+- `/kata <N>` — just ticket `N`, alone, even when it carries size:tiny.
+  Batching only happens in whole-queue `/kata`. Naming a ticket in plain
+  English is the same authorisation as the label.
 
 Read each ticket's `model:<name>` label before dispatch. A repo missing the
 `ready`/`model:*` labels, or a ticket missing one: create what's missing, then
@@ -20,40 +25,49 @@ missing. It never adds `ready` or `model:<name>` to an untriaged follow-up.
 
 ## Dispatch
 
-One ticket, one branch, one PR — never batch tickets onto a shared branch.
+One ticket, one branch, one PR, per `rules/tickets.md` — except its one
+carve-out, a confirmed-tiny batch, which shares a worker, a branch and a PR
+across the tickets grouped for it above.
 
 Same repo: sequential, unless the tickets touch disjoint paths, in which case
 run them in parallel. Different repos: always parallel.
 
-The orchestrator creates the ticket's worktree itself — `git worktree add
---lock -b <N>-<slug> ../<repo>-<N>-<slug> origin/main` — and hands the agent
-that path. Never the Agent tool's `isolation: "worktree"`: it auto-names the
-branch `worktree-agent-<id>`, and the gate's adversary can't read a ticket
-off that.
+The orchestrator creates the worktree itself — `git worktree add --lock -b
+<N>-<slug> ../<repo>-<N>-<slug> origin/main` — and hands the agent that path.
+A batch keeps the same branch shape, named for its oldest ticket, so the
+gate's adversary still reads a ticket number off it. Never the Agent tool's
+`isolation: "worktree"`: it auto-names the branch `worktree-agent-<id>`, and
+the gate's adversary can't read a ticket off that.
 
-Spawn a fresh implementation agent per ticket, with the ticket's number and
-body, its `model:<name>` label as the agent's model override, and the
-worktree's path. The agent works from that body and does not loop
-`gh issue view` over linked issues unless the ticket names one it needs. The
-agent:
+Spawn a fresh implementation agent per ticket or per batch, with every
+ticket's number and body, the shared `model:<name>` label as the agent's
+model override, and the worktree's path. The agent works from that body and
+does not loop `gh issue view` over linked issues unless a ticket names one it
+needs. The agent:
 
-1. Writes the ticket's slice test first and confirms it fails.
-2. Implements to green.
-3. Runs the gate. Its adversary runs on the ticket's `model:<name>` label.
-   Findings get addressed each round; after 2 rounds still carrying findings,
-   the agent reports back instead of running a third gated commit. A waiver
-   is fine only when it is an equivalence waiver proved by rebuild-and-diff —
-   any other waiver stops the agent the same way.
-4. Pushes, then opens a PR with `Closes #N`, at most three plain sentences on
-   what changed, and a Human-testing section when the change is
-   user-observable. No how-it-works paragraph.
+1. Writes each ticket's slice test first and confirms it fails.
+2. Implements each ticket to green.
+3. Runs the gate once for the whole branch. Its adversary runs on the shared
+   `model:<name>` label. Findings get addressed each round; after 2 rounds
+   still carrying findings, the agent reports back instead of running a third
+   gated commit. A waiver is fine only when it is an equivalence waiver proved
+   by rebuild-and-diff — any other waiver stops the agent the same way.
+4. Pushes, then opens one PR with a `Closes #N` line per ticket still in it,
+   at most three plain sentences on what changed, and a Human-testing section
+   when the change is user-observable. No how-it-works paragraph.
 5. Waits for CI with one blocking call — `gh pr checks <PR> --watch`, output
    to a file — never polling turn by turn. No `.github/workflows/` in the
    repo means no checks to wait for — skip straight to exit. Red: fix, push,
    and watch again.
 6. Exits only once CI is green on the pushed sha, never before, reporting the
-   PR number, the ticket number, and any follow-up candidates noticed but not
-   acted on.
+   PR number, every ticket number still in it, and any follow-up candidates
+   noticed but not acted on.
+
+A ticket the agent finds not tiny mid-batch: it reverts that ticket's changes
+off the branch, drops its `Closes #N` line, strips its size:tiny label with a
+one-line comment giving the reason, then finishes the rest of the batch. That
+ticket reports as pulled, not closed, and returns to the queue as a single
+run.
 
 At work: stop once CI is green on the pushed sha, never sooner. No self-merge,
 ever, regardless of LGTM.
@@ -65,16 +79,16 @@ PR.
 
 Wait for a human `LGTM` typed at the terminal prompt — never a PR comment.
 Anything else is feedback: respawn the same agent on the same branch with the
-comments — never open a second PR for the same ticket.
+comments — never open a second PR for the same ticket or batch.
 
 Where this loop is allowed to merge, an `LGTM` squash-merges, then unlocks and
-removes the worktree, then deletes the branch. The merge closes the ticket
-through `Closes #N`.
+removes the worktree, then deletes the branch. The merge closes every ticket
+still in it through its own `Closes #N` line.
 
 Then file the agent's follow-up candidates — `rules/tickets.md`'s Follow-ups
 section requires the labels — run `/done`'s tail without its handoff step or its
-agent-checkpoint step, and move to the next ticket. That tail follows one
-ticket's own merge, not a session interrupt, and must never reach into
+agent-checkpoint step, and move to the next ticket or batch. That tail
+follows one PR's own merge, not a session interrupt, and must never reach into
 another lane's live agents.
 
 ## Acceptance
@@ -82,3 +96,7 @@ another lane's live agents.
 `/kata 3` against a `ready` + `model:sonnet` ticket #3 ends with an open PR
 whose body has `Closes #3` and, when applicable, a Human-testing section — and
 a worktree that is gone once that PR merges.
+
+`/kata` over three `ready` + size:tiny + `model:sonnet` tickets and one plain
+`ready` ticket opens two PRs, one of them with a `Closes #N` line for all
+three tiny tickets.
