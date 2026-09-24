@@ -349,6 +349,10 @@ def test_range_form_diffs_the_given_range_and_walks_its_commit_messages(monkeypa
     ]
 
 
+def test_the_fixture_exclusion_pathspec_excludes_tests_fixtures():
+    assert no_leaks._FIXTURE_EXCLUDE_PATHSPEC == ":!tests/fixtures/**"
+
+
 def test_the_fixture_exclusion_pathspec_matches_scripts_no_leaks_sh():
     shell_text = (REPO_ROOT / "scripts" / "no-leaks.sh").read_text()
     match = re.search(r"git ls-files -- \. '([^']+)'", shell_text)
