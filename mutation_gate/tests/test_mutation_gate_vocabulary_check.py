@@ -30,6 +30,19 @@ GDSCRIPT_BROKEN_SGCONFIG = (
     "customLanguages:\n  gdscript:\n    libraryPath: /nonexistent/gdscript.so\n"
     "    extensions: [gd]\n    expandoChar: _\n"
 )
+GODOT_ENGINE_VIRTUALS = [
+    "_init", "_get", "_set", "_get_property_list", "_to_string", "_notification",
+    "_iter_get", "_iter_init", "_iter_next", "_property_can_revert", "_property_get_revert",
+    "_validate_property",
+    "_enter_tree", "_exit_tree", "_ready", "_process", "_physics_process", "_input",
+    "_unhandled_input", "_unhandled_key_input", "_shortcut_input", "_get_configuration_warnings",
+    "_get_accessibility_configuration_warnings", "_get_focused_accessibility_element",
+    "_draw",
+    "_gui_input", "_can_drop_data", "_drop_data", "_get_drag_data", "_get_cursor_shape",
+    "_get_minimum_size", "_get_maximum_size", "_get_tooltip", "_has_point",
+    "_make_custom_tooltip", "_structured_text_parser", "_accessibility_get_contextual_info",
+    "_get_accessibility_container_name", "_get_tooltip_auto_translate_mode_at",
+]
 
 
 def _require_gdscript_parser() -> None:
@@ -387,6 +400,12 @@ def test_core_convention_list_carries_gdscript_engine_virtuals_and_autoconnect_p
     assert "_on_" in dictionary.convention_prefixes
 
 
+@pytest.mark.parametrize("name", GODOT_ENGINE_VIRTUALS)
+def test_core_convention_list_carries_every_godot_engine_virtual(tmp_path, name):
+    dictionary = vocabulary.load(tmp_path, "")
+    assert name in dictionary.conventions
+
+
 def test_gated_files_drops_non_gated_languages_and_excluded_paths(tmp_path, monkeypatch):
     repo = _repo(tmp_path, 'exclude_paths = ["third_party/"]\n',
                  {"pkg/a.py": "x = 1\n", "src/k.cpp": "int y = 1;\n"})
@@ -707,6 +726,14 @@ def test_gdscript_autoconnect_handler_and_engine_virtuals_are_exempt(tmp_path):
             "func _on_button_pressed():\n\tpass\n")
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
     assert vocabulary_check.check(repo, {"game/a.gd": {1, 3, 5, 7, 9}}, []) == []
+
+
+@pytest.mark.parametrize("name", GODOT_ENGINE_VIRTUALS)
+def test_gdscript_engine_virtual_is_exempt(tmp_path, name):
+    _require_gdscript_parser()
+    text = f"func {name}():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
 
 
 def test_gdscript_getter_property_and_plain_variable_are_told_apart(tmp_path):
