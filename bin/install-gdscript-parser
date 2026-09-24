@@ -11,6 +11,7 @@ set -euo pipefail
 
 DEST="${1:-$HOME/.local/share/ast-grep/gdscript.so}"
 VERSION="${GDSCRIPT_GRAMMAR_VERSION:-6.1.0}"
+SHA256="${GDSCRIPT_GRAMMAR_SHA256:-dc6e293c6821c3790412f4c19ba18edda2ef72eacf0df1e6ba222f17c910f13f}"
 OUT_DIR="$(dirname "$DEST")"
 OUT_NAME="$(basename "$DEST")"
 

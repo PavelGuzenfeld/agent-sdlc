@@ -41,6 +41,24 @@ jobs:
       - run: pip install --no-cache-dir -e ".[vocabulary]" pytest pytest-cov pyyaml ast-grep-cli
       - run: mkdir -p /usr/share/nltk_data && python -c "import nltk; nltk.download('wordnet', download_dir='/usr/share/nltk_data')"
       - run: ast-grep --version
+      - uses: actions/cache@v4
+        id: gdscript-parser-cache
+        with:
+          path: ~/.local/share/ast-grep/gdscript.so
+          key: gdscript-parser-${{ hashFiles('bin/install-gdscript-parser', '.github/workflows/ci.yml') }}
+      - name: Build GDScript parser
+        if: steps.gdscript-parser-cache.outputs.cache-hit != 'true'
+        run: |
+          apt-get install -y --no-install-recommends gcc libc6-dev
+          version=$(sed -n 's/.*GDSCRIPT_GRAMMAR_VERSION:-\([^}]*\)}.*/\1/p' bin/install-gdscript-parser)
+          sha256=$(sed -n 's/.*GDSCRIPT_GRAMMAR_SHA256:-\([^}]*\)}.*/\1/p' bin/install-gdscript-parser)
+          dest="$HOME/.local/share/ast-grep/gdscript.so"
+          mkdir -p "$(dirname "$dest")"
+          build="$(mktemp -d)"
+          python -c "import urllib.request; urllib.request.urlretrieve('https://registry.npmjs.org/tree-sitter-gdscript/-/tree-sitter-gdscript-${version}.tgz', '${build}/gdscript.tgz')"
+          echo "$sha256  $build/gdscript.tgz" | sha256sum -c -
+          tar -xzf "$build/gdscript.tgz" -C "$build"
+          cc -shared -fPIC -I "$build/package/src" "$build/package/src/parser.c" "$build/package/src/scanner.c" -o "$dest"
       - run: pytest -q mutation_gate/tests
 
   install:
