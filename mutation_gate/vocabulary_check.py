@@ -425,6 +425,16 @@ def _judge_verb(dictionary: vocabulary.Dictionary, kind: str, first: str, writte
     return []
 
 
+_TRI_STATE_BOOL = re.compile(
+    r"(?:typing\.)?Optional\[bool\]"
+    r"|(?:typing\.)?Union\[\s*bool\s*,\s*None\s*\]"
+    r"|(?:typing\.)?Union\[\s*None\s*,\s*bool\s*\]"
+    r"|bool\s*\|\s*None"
+    r"|None\s*\|\s*bool"
+    r"|std::optional<bool>"
+)
+
+
 def judge_type(dictionary: vocabulary.Dictionary,
                declared: Declared) -> list[tuple[str, str, str]]:
     """T1 to T3 of decision 9 on the written type alone; an unwritten one is skipped."""
@@ -435,7 +445,7 @@ def judge_type(dictionary: vocabulary.Dictionary,
     out: list[tuple[str, str, str]] = []
     if first in vocabulary_molds.MOLDS["predicate"].prefix and declared.written != "bool":
         detail = f"`{first}_` asks yes or no; its type is `{declared.written}`, not `bool`"
-        if declared.written in ("Optional[bool]", "bool | None"):
+        if _TRI_STATE_BOOL.fullmatch(declared.written):
             detail += "; a tri-state value needs a noun name"
         out.append((RULE_TYPE_BOOL, detail, ""))
     if declared.kind in NOUN_KINDS:

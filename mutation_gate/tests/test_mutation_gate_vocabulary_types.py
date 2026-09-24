@@ -73,30 +73,61 @@ def test_staged_predicate_typed_int_blocks_naming_bool(tmp_path, monkeypatch, ca
             "its type is `int`, not `bool`") in err
 
 
-@pytest.mark.parametrize("name, written, source", [
-    ("is_ready", "Optional[bool]", "is_ready: Optional[bool] = None\n"),
-    ("is_ready", "bool | None", "is_ready: bool | None = None\n"),
-])
+TRI_STATE_BOOL_SPELLINGS = (
+    "Optional[bool]",
+    "typing.Optional[bool]",
+    "bool | None",
+    "None | bool",
+    "bool|None",
+    "Union[bool, None]",
+    "typing.Union[None, bool]",
+)
+
+
+@pytest.mark.parametrize("written", TRI_STATE_BOOL_SPELLINGS)
 def test_staged_predicate_typed_optional_bool_blocks_naming_tri_state(
-    tmp_path, monkeypatch, capsys, name, written, source
+    tmp_path, monkeypatch, capsys, written
 ):
-    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": source})
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"is_ready: {written} = None\n"})
     err = capsys.readouterr().err
     assert code == 1
     assert "BLOCKED: vocabulary — 1 finding(s)." in err
-    assert (f"pkg/a.py:1: variable `{name}` — `is_` asks yes or no; its type is `{written}`, "
+    assert (f"pkg/a.py:1: variable `is_ready` — `is_` asks yes or no; its type is `{written}`, "
             "not `bool`; a tri-state value needs a noun name") in err
 
 
+@pytest.mark.parametrize("written", ["Optional[bool]", "bool | None", "Union[bool, None]"])
 def test_staged_predicate_function_return_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys, written
+):
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"def is_ready() -> {written}:\n    pass\n"})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert (f"pkg/a.py:1: function `is_ready` — `is_` asks yes or no; its type is `{written}`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_cpp_field_typed_std_optional_bool_blocks_naming_tri_state(tmp_path, monkeypatch, capsys):
+    text = "class Frame {\n  std::optional<bool> is_ready;\n};\n"
+    code = _gate(monkeypatch, tmp_path, {"src/k.hpp": text})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert ("src/k.hpp:2: field `is_ready` — `is_` asks yes or no; its type is `std::optional<bool>`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_predicate_typed_optional_int_blocks_naming_bool_without_tri_state_clause(
     tmp_path, monkeypatch, capsys
 ):
-    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "def is_ready() -> Optional[bool]:\n    pass\n"})
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "is_ready: Optional[int] = None\n"})
     err = capsys.readouterr().err
     assert code == 1
     assert "BLOCKED: vocabulary — 1 finding(s)." in err
-    assert ("pkg/a.py:1: function `is_ready` — `is_` asks yes or no; its type is `Optional[bool]`, "
-            "not `bool`; a tri-state value needs a noun name") in err
+    assert ("pkg/a.py:1: variable `is_ready` — `is_` asks yes or no; its type is `Optional[int]`, "
+            "not `bool`\n") in err
+    assert "tri-state" not in err
 
 
 def test_staged_plural_list_tail_bool_and_unannotated_names_pass(tmp_path, monkeypatch):
