@@ -380,12 +380,14 @@ def test_target_error_reads_first_line_of_error_output(tmp_path, monkeypatch):
     instead of its first line, so a multi-line ast-grep error gave a
     multi-line refusal."""
     (tmp_path / "a.py").write_text("frame = 1\n")
+    first_line = "Cannot parse rule " + "x" * 200
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
-        a, 8, stdout="", stderr="Cannot parse rule\nsee --help"))
+        a, 8, stdout="", stderr=f"{first_line}\nsee --help"))
     with pytest.raises(GateError) as excinfo:
         vocabulary_check.declarations(tmp_path / "a.py", "python")
     assert str(excinfo.value).splitlines() == [str(excinfo.value)]
-    assert "Cannot parse rule" in str(excinfo.value)
+    assert first_line in str(excinfo.value)
+    assert "see --help" not in str(excinfo.value)
 
 
 def test_target_error_uses_status_code_for_empty_output(tmp_path, monkeypatch):
@@ -393,6 +395,16 @@ def test_target_error_uses_status_code_for_empty_output(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 8, stdout="", stderr=""))
     with pytest.raises(GateError, match=r"exit 8$"):
+        vocabulary_check.declarations(tmp_path / "a.py", "python")
+
+
+def test_target_error_sends_output_to_reader(tmp_path, monkeypatch):
+    """#202: one helper backs every ast-grep refusal; this pins declarations'."""
+    (tmp_path / "a.py").write_text("frame = 1\n")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 8, stdout="", stderr="boom"))
+    monkeypatch.setattr(vocabulary_check.mutants, "render_error_line", lambda result: "stub-line")
+    with pytest.raises(GateError, match="stub-line"):
         vocabulary_check.declarations(tmp_path / "a.py", "python")
 
 

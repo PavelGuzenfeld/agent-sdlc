@@ -213,17 +213,21 @@ def test_kind_hits_raises_gate_error_on_a_crashed_ast_grep_scan(monkeypatch, tmp
         )
 
     monkeypatch.setattr(mutants.subprocess, "run", fake_run)
-    with pytest.raises(GateError, match="crashed parser"):
+    with pytest.raises(GateError) as excinfo:
         mutants.kind_hits(fixture, "python", "comment")
+    assert str(excinfo.value).splitlines() == [str(excinfo.value)]
+    assert "crashed parser" in str(excinfo.value)
+    assert "retry" not in str(excinfo.value)
 
 
-def test_path_error_uses_status_code_for_empty_output(monkeypatch, tmp_path):
-    """#202: no stderr at all still needs a one-line refusal."""
+@pytest.mark.parametrize("stderr", ["", "\n \t\n"])
+def test_path_error_uses_status_code_for_empty_output(monkeypatch, tmp_path, stderr):
+    """#202: no usable stderr still needs a one-line refusal."""
     fixture = tmp_path / "fixture.py"
     fixture.write_text("x = 1\n")
 
     def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 9, stdout="", stderr="")
+        return subprocess.CompletedProcess(cmd, 9, stdout="", stderr=stderr)
 
     monkeypatch.setattr(mutants.subprocess, "run", fake_run)
     with pytest.raises(GateError, match=r"exit 9$"):
@@ -235,27 +239,58 @@ def test_pattern_error_reads_first_line_of_error_output(monkeypatch, tmp_path):
     line, so a multi-line ast-grep error gave a multi-line refusal."""
     fixture = tmp_path / "fixture.py"
     fixture.write_text("x = 1\n")
+    first_line = "bad pattern " + "x" * 200
 
     def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="bad pattern\nsee --help")
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr=f"{first_line}\nsee --help")
 
     monkeypatch.setattr(mutants.subprocess, "run", fake_run)
     with pytest.raises(GateError) as excinfo:
         mutants._ast_grep(fixture, "python", "$A", "$A", None)
     assert str(excinfo.value).splitlines() == [str(excinfo.value)]
-    assert "bad pattern" in str(excinfo.value)
+    assert first_line in str(excinfo.value)
+    assert "see --help" not in str(excinfo.value)
 
 
-def test_pattern_error_uses_status_code_for_empty_output(monkeypatch, tmp_path):
+@pytest.mark.parametrize("stderr", ["", "\n \t\n"])
+def test_pattern_error_uses_status_code_for_empty_output(monkeypatch, tmp_path, stderr):
     fixture = tmp_path / "fixture.py"
     fixture.write_text("x = 1\n")
 
     def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="")
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr=stderr)
 
     monkeypatch.setattr(mutants.subprocess, "run", fake_run)
     with pytest.raises(GateError, match=r"exit 8$"):
         mutants._ast_grep(fixture, "python", "$A", "$A", None)
+
+
+def test_pattern_error_sends_output_to_reader(monkeypatch, tmp_path):
+    """#202: one helper backs every ast-grep refusal; this pins _ast_grep's."""
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="boom")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    monkeypatch.setattr(mutants, "render_error_line", lambda result: "stub-line")
+    with pytest.raises(GateError, match="stub-line"):
+        mutants._ast_grep(fixture, "python", "$A", "$A", None)
+
+
+def test_path_error_sends_output_to_reader(monkeypatch, tmp_path):
+    """#202: one helper backs every ast-grep refusal; this pins kind_hits'."""
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("x = 1\n")
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 8, stdout="", stderr="boom")
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    monkeypatch.setattr(mutants, "render_error_line", lambda result: "stub-line")
+    with pytest.raises(GateError, match="stub-line"):
+        mutants.kind_hits(fixture, "python", "comment")
 
 
 def test_ast_grep_routes_gdscript_through_scan_with_the_custom_language_config(tmp_path):
