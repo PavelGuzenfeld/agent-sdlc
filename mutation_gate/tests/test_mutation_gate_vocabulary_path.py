@@ -140,6 +140,17 @@ def test_a_staged_file_missing_from_the_worktree_is_skipped_not_a_traceback(tmp_
     assert vocabulary_path.check(repo, True, []) == []
 
 
+def test_a_staged_file_missing_from_the_worktree_still_gets_its_name_checked(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    monkeypatch.setattr(vocabulary_path, "git",
+                        _fake_git(cached=["src/parse_stuff.py"], ls_tree=["src/existing.py"]))
+    found = vocabulary_path.check(repo, True, [])
+    assert [(f.file, f.kind, f.name, f.detail) for f in found] == [
+        ("src/parse_stuff.py", "namespace", "parse_stuff", "`stuff` is not in the dictionary"),
+        ("src/parse_stuff.py", "namespace", "parse_stuff", "a namespace takes nouns only"),
+    ]
+
+
 def test_a_file_with_the_trailing_underscore_private_mark_passes(tmp_path, monkeypatch):
     domain = '[[concept]]\nword = "impl"\nmeaning = "a private implementation module"\npos = ["noun"]\n'
     repo = _repo(tmp_path, domain)
