@@ -21,6 +21,20 @@ DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
 LOC = '[reject]\nloc = "position"\n'
 Q_SYMBOL = '[[symbol]]\nword = "Q"\nmeaning = "process noise covariance"\n'
+GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
+GDSCRIPT_SGCONFIG = (
+    "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
+    "\n    extensions: [gd]\n    expandoChar: _\n"
+)
+GDSCRIPT_BROKEN_SGCONFIG = (
+    "customLanguages:\n  gdscript:\n    libraryPath: /nonexistent/gdscript.so\n"
+    "    extensions: [gd]\n    expandoChar: _\n"
+)
+
+
+def _require_gdscript_parser() -> None:
+    if not GDSCRIPT_LIB.exists():
+        pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
 
 
 def _write(root: Path, rel: str, text: str) -> None:
@@ -348,3 +362,157 @@ def test_gated_files_drops_non_gated_languages_and_excluded_paths(tmp_path, monk
     listing = "pkg/a.py\0src/k.cpp\0README.md\0third_party/v.py\0"
     monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
     assert vocabulary_check.gated_files(repo) == ["pkg/a.py", "src/k.cpp"]
+
+
+def test_tsx_pascal_case_function_takes_the_type_mold(tmp_path):
+    assert _findings(tmp_path, "ui/a.tsx", "function FrameViewer() {}\n", {1}) == []
+
+
+def test_tsx_camel_case_function_keeps_the_function_mold_and_blocks_on_an_unknown_word(tmp_path):
+    found = _findings(tmp_path, "ui/a.tsx", "function renderStuff() {}\n", {1})
+    assert found == ["1:function:renderStuff:`Stuff` is not in the dictionary:"]
+
+
+def test_ts_interface_i_prefix_blocks_as_a_non_local_symbol(tmp_path):
+    found = _findings(tmp_path, "ui/a.ts", "interface IFrame {}\n", {1})
+    assert found == ["1:type:IFrame:`I`: loop index; locals and parameters only:"]
+
+
+def test_ts_private_keyword_leading_underscore_blocks_suggesting_trailing_form(tmp_path):
+    text = "class Frame {\n  private _count: number;\n}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2}) == [
+        "2:field:_count:a leading `_` is not the private mark; private is a trailing `_`:count_"
+    ]
+
+
+def test_ts_hash_private_member_without_trailing_underscore_blocks(tmp_path):
+    text = "class Frame {\n  #count: number;\n}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2}) == [
+        "2:field:#count:a private member takes a trailing `_`:#count_"
+    ]
+
+
+@pytest.mark.parametrize("field", ["private count_: number;", "#count_: number;"])
+def test_ts_private_member_with_trailing_underscore_passes(tmp_path, field):
+    text = f"class Frame {{\n  {field}\n}}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2}) == []
+
+
+def test_ts_getter_takes_the_variable_mold_and_setter_is_exempt(tmp_path):
+    text = "class Frame {\n  get count(): number { return 1; }\n  set count(v: number) {}\n}\n"
+    assert _findings(tmp_path, "ui/a.ts", text, {2, 3}) == []
+
+
+def test_ts_getter_with_an_unknown_word_blocks(tmp_path):
+    text = "class Frame {\n  get frob(): number { return 1; }\n}\n"
+    found = _findings(tmp_path, "ui/a.ts", text, {2})
+    assert found == ["2:property:frob:`frob` is not in the dictionary:"]
+
+
+def test_on_prefix_is_exempt_via_the_core_convention_list(tmp_path):
+    assert _findings(tmp_path, "pkg/a.py", "_on_button_pressed = 1\n", {1}) == []
+
+
+def test_declarations_passes_the_config_flag_for_a_custom_language(tmp_path):
+    config = tmp_path / "sgconfig.yml"
+    config.write_text(GDSCRIPT_BROKEN_SGCONFIG)
+    gd = tmp_path / "a.gd"
+    gd.write_text("signal health_changed\n")
+    with pytest.raises(GateError, match="custom language"):
+        vocabulary_check.declarations(gd, "gdscript", config)
+
+
+def test_gdscript_with_sgconfig_but_broken_library_refuses(tmp_path):
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "signal health_changed\n", "sgconfig.yml": GDSCRIPT_BROKEN_SGCONFIG})
+    with pytest.raises(GateError):
+        vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+
+
+def test_gdscript_without_sgconfig_is_skipped_with_a_visible_reason(tmp_path, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "signal change_health\n"})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    err = capsys.readouterr().err
+    assert found == []
+    assert vocabulary_check.GDSCRIPT_MISSING in err
+
+
+def test_gdscript_missing_parser_message_prints_once_for_two_files(tmp_path, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "signal x_changed\n", "game/b.gd": "signal y_changed\n"})
+    vocabulary_check.check(repo, {"game/a.gd": {1}, "game/b.gd": {1}}, [])
+    assert capsys.readouterr().err.count(vocabulary_check.GDSCRIPT_MISSING) == 1
+
+
+def test_gdscript_missing_parser_skip_still_reaches_a_later_file(tmp_path):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "signal x_changed\n", "pkg/b.py": "frob = 1\n"})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}, "pkg/b.py": {1}}, [])
+    assert [(f.file, f.name) for f in found] == [("pkg/b.py", "frob")]
+
+
+def test_leading_underscore_skips_a_missing_gdscript_parser_and_still_reaches_the_next_file(
+    tmp_path, monkeypatch
+):
+    repo = _repo(tmp_path, "", {"game/a.gd": "signal x_changed\n", "pkg/b.py": "_frob = 1\n"})
+    listing = "game/a.gd\0pkg/b.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    assert vocabulary_check.leading_underscore(repo) == [("pkg/b.py", 1, "_frob", "frob_")]
+
+
+def test_staged_tsx_component_passes_and_camel_case_function_blocks(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"ui/a.tsx": "function FrameViewer() {}\nfunction renderStuff() {}\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {"ui/a.tsx": {1, 2}})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "ui/a.tsx:2: function `renderStuff`" in err
+    assert "FrameViewer" not in err
+
+
+def test_staged_gdscript_without_parser_skips_with_a_message_instead_of_blocking(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "signal change_health\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {"game/a.gd": {1}})
+    err = capsys.readouterr().err
+    assert code == 0
+    assert vocabulary_check.GDSCRIPT_MISSING in err
+
+
+def test_gdscript_signal_takes_the_event_mold(tmp_path):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "signal health_changed\n", "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1}}, []) == []
+
+
+def test_gdscript_signal_not_ending_in_a_past_participle_blocks(tmp_path):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "signal change_health\n", "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert [(f.kind, f.rule) for f in found] == [("event", vocabulary_check.RULE_MOLD)]
+
+
+def test_gdscript_private_variable_leading_underscore_blocks_suggesting_trailing(tmp_path):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "var _health := 100\n", "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1}}, [])
+    assert [(f.kind, f.rule, f.suggestion) for f in found] == [
+        ("variable", vocabulary_check.RULE_LEADING_UNDERSCORE, "health_")
+    ]
+
+
+def test_gdscript_autoconnect_handler_and_engine_virtual_are_exempt(tmp_path):
+    _require_gdscript_parser()
+    text = "func _ready():\n\tpass\nfunc _on_button_pressed():\n\tpass\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert vocabulary_check.check(repo, {"game/a.gd": {1, 3}}, []) == []
+
+
+def test_gdscript_getter_property_and_plain_variable_are_told_apart(tmp_path):
+    _require_gdscript_parser()
+    text = "var count: int:\n\tget:\n\t\treturn count\nvar frob := 1\n"
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    found = vocabulary_check.check(repo, {"game/a.gd": {1, 4}}, [])
+    assert [(f.kind, f.name) for f in found] == [("variable", "frob")]

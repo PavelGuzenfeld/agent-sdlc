@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,9 +17,16 @@ from . import mutants, vocabulary, vocabulary_molds, waivers
 from .repo import GateError, Repo, git
 
 CHECK = "vocabulary"
-SUFFIX = {"python": ".py", "cpp": ".cpp"}
+SUFFIX = {"python": ".py", "cpp": ".cpp", "typescript": ".ts", "tsx": ".tsx", "gdscript": ".gd"}
 SYMBOL_KINDS = ("local", "parameter")
 UNKNOWN_DETAIL = "is not in the dictionary"
+GDSCRIPT_CONFIG = "sgconfig.yml"
+GDSCRIPT_MISSING = ("gdscript vocabulary skipped: no " + GDSCRIPT_CONFIG + " — install the "
+                    "parser with bin/install-gdscript-parser and commit one")
+
+
+def _emit(line: str) -> None:
+    print(line, file=sys.stderr)
 
 
 def _decorated(regex: str) -> dict:
@@ -105,6 +113,57 @@ RULES: dict[str, dict[str, dict]] = {
     },
 }
 
+_TS_PASCAL = {"regex": "^[A-Z]"}
+_TS_FUNCTION_NAME = {"any": [
+    {"kind": "identifier", "inside": {"kind": "function_declaration", "field": "name"}},
+    {"kind": "identifier", "inside": {
+        "kind": "variable_declarator", "field": "name",
+        "has": {"field": "value", "any": [{"kind": "arrow_function"}, {"kind": "function_expression"}]}}},
+]}
+_TS_TYPE_NAME = {"any": [
+    {"kind": "type_identifier", "inside": {"kind": "class_declaration", "field": "name"}},
+    {"kind": "type_identifier", "inside": {"kind": "interface_declaration", "field": "name"}},
+    {"kind": "type_identifier", "inside": {"kind": "type_alias_declaration", "field": "name"}},
+]}
+_TS_GETTER = {"kind": "property_identifier", "inside": {
+    "kind": "method_definition", "field": "name", "regex": r"^get\b"}}
+_TS_FIELD_NAME = {"any": [
+    {"kind": "property_identifier", "inside": {"kind": "public_field_definition", "field": "name"}},
+    {"kind": "private_property_identifier", "inside": {"kind": "public_field_definition", "field": "name"}},
+]}
+_TS_PRIVATE_FIELD_NAME = {"any": [
+    {"kind": "private_property_identifier", "inside": {"kind": "public_field_definition", "field": "name"}},
+    {"kind": "property_identifier", "inside": {
+        "kind": "public_field_definition", "field": "name",
+        "has": {"kind": "accessibility_modifier", "regex": "^private$"}}},
+]}
+RULE_FIELD_PRIVATE = "field_private"
+
+RULES["typescript"] = {
+    "function": _TS_FUNCTION_NAME,
+    "type": _TS_TYPE_NAME,
+    "property": _TS_GETTER,
+    "field": _TS_FIELD_NAME,
+    RULE_FIELD_PRIVATE: _TS_PRIVATE_FIELD_NAME,
+}
+RULES["tsx"] = {
+    "function": {"all": [_TS_FUNCTION_NAME, {"not": _TS_PASCAL}]},
+    "type": {"any": [*_TS_TYPE_NAME["any"], {"all": [_TS_FUNCTION_NAME, _TS_PASCAL]}]},
+    "property": _TS_GETTER,
+    "field": _TS_FIELD_NAME,
+    RULE_FIELD_PRIVATE: _TS_PRIVATE_FIELD_NAME,
+}
+
+_GD_GETTER = {"field": "setget", "kind": "setget", "has": {"field": "get", "kind": "get_body"}}
+RULES["gdscript"] = {
+    "event": {"kind": "name", "inside": {"kind": "signal_statement", "field": "name"}},
+    "function": {"kind": "name", "inside": {"kind": "function_definition", "field": "name"}},
+    "property": {"kind": "name", "inside": {
+        "kind": "variable_statement", "field": "name", "has": _GD_GETTER}},
+    "variable": {"kind": "name", "inside": {
+        "kind": "variable_statement", "field": "name", "not": {"has": _GD_GETTER}}},
+}
+
 _CASE_CHUNKS = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+")
 _DIGIT = re.compile(r"\d")
 
@@ -127,17 +186,20 @@ def _inline_rules(lang: str) -> str:
     )
 
 
-def declarations(path: Path, lang: str) -> list[tuple[int, str, str]]:
+def declarations(
+    path: Path, lang: str, config: Path | None = None
+) -> list[tuple[int, str, str]]:
     """(line, declaration kind, name), 1-based, scanned from a copy carrying the
-    language's own suffix: ast-grep reads `.h` as C and would find nothing."""
+    language's own suffix: ast-grep reads `.h` as C and would find nothing.
+    `config` points a custom language (GDScript) at its parser library."""
     with tempfile.TemporaryDirectory(prefix="mutation-gate-vocabulary-") as tmp:
         copy = Path(tmp, "source" + SUFFIX[lang])
         shutil.copyfile(path, copy)
-        proc = subprocess.run(
-            ["ast-grep", "scan", f"--inline-rules={_inline_rules(lang)}", "--json=compact",
-             copy.name],
-            cwd=tmp, capture_output=True, text=True, check=False,
-        )
+        cmd = ["ast-grep", "scan"]
+        if config is not None:
+            cmd.append(f"--config={config}")
+        cmd += [f"--inline-rules={_inline_rules(lang)}", "--json=compact", copy.name]
+        proc = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError(f"ast-grep scan failed on {path}: {proc.stderr.strip()}")
     hits = json.loads(proc.stdout) if proc.stdout.strip() else []
@@ -159,7 +221,8 @@ def _spelled_like(word: str, canonical: str) -> str:
 
 def _exempt(dictionary: vocabulary.Dictionary, name: str) -> bool:
     dunder = name.startswith("__") and name.endswith("__")
-    return name == "_" or dunder or name in dictionary.conventions
+    prefixed = any(name.startswith(p) for p in dictionary.convention_prefixes)
+    return name == "_" or dunder or name in dictionary.conventions or prefixed
 
 
 RULE_LEADING_UNDERSCORE = "leading_underscore"
@@ -169,6 +232,15 @@ RULE_REJECTED_SYNONYM = "rejected_synonym"
 RULE_FUNCTION_WORD = "function_word"
 RULE_SYMBOL_SCOPE = "symbol_scope"
 RULE_MOLD = "mold"
+RULE_PRIVATE_TRAILING = "private_trailing_underscore"
+
+
+def private_trailing(dictionary: vocabulary.Dictionary, name: str) -> list[tuple[str, str, str]]:
+    """Decision 34 for TS `private`/`#` members: the marker is syntax, not the
+    identifier's own spelling, so a bare or leading-`_` name still needs a trailing `_`."""
+    if _exempt(dictionary, name) or name.startswith("_") or name.endswith("_"):
+        return []
+    return [(RULE_PRIVATE_TRAILING, "a private member takes a trailing `_`", f"{name}_")]
 
 
 def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
@@ -210,18 +282,33 @@ def judge(dictionary: vocabulary.Dictionary, kind: str, name: str,
 def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
     catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds)
+    gdscript_config = repo.root / GDSCRIPT_CONFIG
+    gdscript_ready = gdscript_config.exists()
+    warned = False
     out: list[Finding] = []
     for rel, lines in sorted(changed.items()):
         lang = mutants.language_of(rel)
         excluded = any(rel.startswith(p) for p in repo.config.exclude_paths)
         if lang not in SUFFIX or excluded or not (repo.root / rel).exists():
             continue
+        if lang == "gdscript" and not gdscript_ready:
+            if not warned:
+                _emit(GDSCRIPT_MISSING)
+                warned = True
+            continue
         mutants.require_ast_grep()
-        for line, kind, name in declarations(repo.root / rel, lang):
+        config = gdscript_config if lang == "gdscript" else None
+        for line, kind, name in declarations(repo.root / rel, lang, config):
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue
-            for rule, detail, suggestion in judge(dictionary, kind, name, catalogue):
-                out.append(Finding(rel, line, kind, name, rule, detail, suggestion))
+            if kind == RULE_FIELD_PRIVATE:
+                faults = private_trailing(dictionary, name)
+                reported_kind = "field"
+            else:
+                faults = judge(dictionary, kind, name, catalogue)
+                reported_kind = kind
+            for rule, detail, suggestion in faults:
+                out.append(Finding(rel, line, reported_kind, name, rule, detail, suggestion))
     return out
 
 
@@ -266,9 +353,15 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
     """(file, line, old, new) rows for #111 `--leading-underscore`: every declared
     name and path segment decisions 34/35 would reject a leading `_` on."""
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    gdscript_config = repo.root / GDSCRIPT_CONFIG
+    gdscript_ready = gdscript_config.exists()
     rows: list[tuple[str, int, str, str]] = []
     for rel in gated_files(repo):
-        for line, _kind, name in declarations(repo.root / rel, mutants.language_of(rel)):
+        lang = mutants.language_of(rel)
+        if lang == "gdscript" and not gdscript_ready:
+            continue
+        config = gdscript_config if lang == "gdscript" else None
+        for line, _kind, name in declarations(repo.root / rel, lang, config):
             if name.startswith("_") and not _exempt(dictionary, name):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
         segments = rel.split("/")

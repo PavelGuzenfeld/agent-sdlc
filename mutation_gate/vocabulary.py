@@ -56,6 +56,7 @@ class Dictionary:
     collections: frozenset[str]
     distinct: frozenset[frozenset[str]]
     conventions: frozenset[str]
+    convention_prefixes: frozenset[str]
 
     def resolve(self, word: str) -> Match | None:
         return self.matches.get(word)
@@ -224,8 +225,11 @@ def load(root: Path, domain: str) -> Dictionary:
                     f"{source}: [[distinct]] {pair} names a word that is not canonical"
                 )
             distinct.add(frozenset(pair))
-    conventions = frozenset(layers[0][1].get("convention", {}).get("names", []))
-    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct), conventions)
+    convention = layers[0][1].get("convention", {})
+    conventions = frozenset(convention.get("names", []))
+    convention_prefixes = frozenset(convention.get("prefixes", []))
+    return Dictionary(concepts, matches, frozenset(collections), frozenset(distinct),
+                       conventions, convention_prefixes)
 
 
 def describe(match: Match) -> str:

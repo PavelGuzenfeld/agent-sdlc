@@ -306,7 +306,7 @@ def test_collisions_for_skips_a_word_missing_from_the_dictionary_without_stoppin
     bar = _concept("bar", ("noun",))
     dictionary = vocabulary.Dictionary(
         concepts={"bar": bar, "real": real}, matches={}, collections=frozenset(),
-        distinct=frozenset(), conventions=frozenset(),
+        distinct=frozenset(), conventions=frozenset(), convention_prefixes=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("ghost", "real"),
                                                 changed=(), removed=())]
@@ -324,7 +324,7 @@ def test_collisions_for_continues_past_a_distinct_pair_to_check_the_next_word(mo
     dictionary = vocabulary.Dictionary(
         concepts={"cushion": cushion, "cask": cask, "buffer": buffer}, matches={},
         collections=frozenset(), distinct=frozenset({frozenset({"buffer", "cushion"})}),
-        conventions=frozenset(),
+        conventions=frozenset(), convention_prefixes=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("buffer",),
                                                 changed=(), removed=())]
@@ -341,7 +341,7 @@ def test_collisions_for_records_one_collision_per_pair_across_two_shared_pos(mon
     cushion = _concept("cushion", ("noun", "verb"))
     dictionary = vocabulary.Dictionary(
         concepts={"cushion": cushion, "buffer": buffer}, matches={}, collections=frozenset(),
-        distinct=frozenset(), conventions=frozenset(),
+        distinct=frozenset(), conventions=frozenset(), convention_prefixes=frozenset(),
     )
     diffs = [vocabulary_wordnet.DictionaryDiff(source="x.toml", added=("buffer",),
                                                 changed=(), removed=())]
