@@ -1141,8 +1141,10 @@ def test_gdscript_variable_leading_underscore_is_still_not_exempt(tmp_path):
 
 def test_python_parameter_leading_underscore_still_blocks(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "def read(_health):\n    pass\n", {1})
-    assert ("1:parameter:_health:a leading `_` is not the private mark; "
-            "private is a trailing `_`:health_") in found
+    assert found == [
+        "1:parameter:_health:a leading `_` is not the private mark; "
+        "private is a trailing `_`:health_"
+    ]
 
 
 def test_gdscript_judge_exempts_only_the_parameter_kind(tmp_path):
@@ -1161,12 +1163,28 @@ def test_gdscript_judge_exempts_only_the_parameter_kind(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("lang", ["python", "cpp", "typescript"])
+def test_non_gdscript_parameter_leading_underscore_is_unaffected(tmp_path, lang):
+    repo = _repo(tmp_path, OPTED_IN, {})
+    dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
+    assert vocabulary_check.judge(dictionary, "parameter", "_health", lang=lang) == [
+        (vocabulary_check.RULE_LEADING_UNDERSCORE,
+         "a leading `_` is not the private mark; private is a trailing `_`", "health_")
+    ]
+
+
 def test_leading_underscore_audit_exempts_a_gdscript_unused_parameter(tmp_path, monkeypatch):
     _require_gdscript_parser()
     repo = _repo(tmp_path, "", {"game/a.gd": "func _on_timer_timeout(_health):\n\tpass\n",
                                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
     monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: "game/a.gd\0")
     assert vocabulary_check.leading_underscore(repo) == []
+
+
+def test_leading_underscore_audit_still_flags_a_python_parameter(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, "", {"pkg/a.py": "def read(_health):\n    pass\n"})
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: "pkg/a.py\0")
+    assert vocabulary_check.leading_underscore(repo) == [("pkg/a.py", 1, "_health", "health_")]
 
 
 def test_leading_underscore_audit_parameter_skip_does_not_drop_a_later_row(tmp_path, monkeypatch):
