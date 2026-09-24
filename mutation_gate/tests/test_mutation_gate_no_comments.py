@@ -55,13 +55,13 @@ def _gate(monkeypatch, tmp_path: Path, repo: Repo, added: dict[str, set[int]],
     return cli.main(["--staged", "--no-adversary"])
 
 
-def _stub_comment_scan(monkeypatch, returncode: int, stderr: str = "") -> None:
+def _stub_comment_scan(monkeypatch, returncode: int, stderr: str = "", stdout: str = "") -> None:
     """Only the comment-kind scan is faked; `ast-grep --version` stays real."""
     real_run = mutants.subprocess.run
 
     def fake_run(cmd, *args, **kwargs):
         if cmd[:2] == ["ast-grep", "run"] and cmd[cmd.index("--kind") + 1] == "comment":
-            return subprocess.CompletedProcess(cmd, returncode, stdout="", stderr=stderr)
+            return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
         return real_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(mutants.subprocess, "run", fake_run)
@@ -78,7 +78,8 @@ def test_added_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, cap
 
 def test_crashed_ast_grep_scan_refuses_instead_of_passing_silently(tmp_path, monkeypatch, capsys):
     repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1\n"})
-    _stub_comment_scan(monkeypatch, returncode=8, stderr="Error: crashed parser\nHelp: retry")
+    _stub_comment_scan(monkeypatch, returncode=8, stderr="Error: crashed parser\nHelp: retry",
+                       stdout="[]")
     code = _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {})
     err = capsys.readouterr().err
     assert code == 2
