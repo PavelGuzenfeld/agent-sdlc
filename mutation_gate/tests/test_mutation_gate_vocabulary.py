@@ -109,6 +109,29 @@ def test_mined_core_resolves_src_to_source_and_made_to_make(tmp_path, monkeypatc
     assert out == "make: verb\n  made is the -ed form of make\n"
 
 
+def test_model_lookup_resolves_as_a_core_noun_not_unknown(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, err = _lookup("model", capsys)
+    assert code == 0
+    assert err == ""
+    assert out == "model: noun\n  forms: models\n"
+
+
+def test_models_plural_lookup_resolves_to_the_model_concept(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("models", capsys)
+    assert code == 0
+    assert out == "model: noun\n  models is the plural form of model\n"
+
+
+def test_core_model_concept_meaning_covers_the_system_model_and_ai_model_senses(tmp_path):
+    dictionary = vocabulary.load(tmp_path, "")
+    assert dictionary.concepts["model"].meaning == (
+        "a mathematical or learned representation of a system's behaviour, "
+        "or an AI system trained to generate answers"
+    )
+
+
 def test_canonical_lookup_lists_the_derived_forms(tmp_path, monkeypatch, capsys):
     _repo(tmp_path, monkeypatch, OPTED_IN, MERGE + 'forms = ["-s", "-ed", "-ing", "-er"]\n')
     code, out, _ = _lookup("merge", capsys)
