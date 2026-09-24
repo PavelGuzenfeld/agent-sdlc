@@ -118,16 +118,57 @@ def test_staged_cpp_field_typed_std_optional_bool_blocks_naming_tri_state(tmp_pa
             "not `bool`; a tri-state value needs a noun name") in err
 
 
-def test_staged_predicate_typed_optional_int_blocks_naming_bool_without_tri_state_clause(
-    tmp_path, monkeypatch, capsys
+@pytest.mark.parametrize("written", ["Optional[int]", "Union[bool, int]"])
+def test_staged_predicate_typed_bool_free_of_none_blocks_naming_bool_without_tri_state_clause(
+    tmp_path, monkeypatch, capsys, written
 ):
-    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": "is_ready: Optional[int] = None\n"})
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"is_ready: {written} = None\n"})
     err = capsys.readouterr().err
     assert code == 1
     assert "BLOCKED: vocabulary — 1 finding(s)." in err
-    assert ("pkg/a.py:1: variable `is_ready` — `is_` asks yes or no; its type is `Optional[int]`, "
+    assert (f"pkg/a.py:1: variable `is_ready` — `is_` asks yes or no; its type is `{written}`, "
             "not `bool`\n") in err
     assert "tri-state" not in err
+
+
+@pytest.mark.parametrize("name, prefix", [("has_frames", "has"), ("can_read", "can")])
+def test_staged_predicate_prefix_has_and_can_typed_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys, name, prefix
+):
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": f"{name}: Optional[bool] = None\n"})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert (f"pkg/a.py:1: variable `{name}` — `{prefix}_` asks yes or no; its type is `Optional[bool]`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_property_is_ready_returning_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys
+):
+    text = "class Frame:\n    @property\n    def is_ready(self) -> Optional[bool]:\n        return None\n"
+    code = _gate(monkeypatch, tmp_path, {"pkg/a.py": text})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert ("pkg/a.py:3: property `is_ready` — `is_` asks yes or no; its type is `Optional[bool]`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_cpp_method_returning_std_optional_bool_blocks_naming_tri_state(
+    tmp_path, monkeypatch, capsys
+):
+    text = "class Frame {\n  std::optional<bool> is_ready() const;\n};\n"
+    code = _gate(monkeypatch, tmp_path, {"src/k.hpp": text})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "BLOCKED: vocabulary — 1 finding(s)." in err
+    assert ("src/k.hpp:2: method `is_ready` — `is_` asks yes or no; its type is `std::optional<bool>`, "
+            "not `bool`; a tri-state value needs a noun name") in err
+
+
+def test_staged_predicate_renamed_off_the_prefix_typed_optional_bool_passes(tmp_path, monkeypatch):
+    assert _gate(monkeypatch, tmp_path, {"pkg/a.py": "ready_frame: Optional[bool] = None\n"}) == 0
 
 
 def test_staged_plural_list_tail_bool_and_unannotated_names_pass(tmp_path, monkeypatch):
@@ -305,7 +346,10 @@ def test_function_is_ready_returning_int_is_a_t1_finding(tmp_path):
 
 def test_variable_is_ready_typed_optional_bool_is_a_t1_finding(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "is_ready: Optional[bool] = None\n")
-    assert [f.split(":")[:4] for f in found] == [["1", "variable", "is_ready", "type_bool"]]
+    assert found == [
+        "1:variable:is_ready:type_bool:`is_` asks yes or no; its type is `Optional[bool]`, not `bool`; "
+        "a tri-state value needs a noun name:"
+    ]
 
 
 def test_cpp_from_bytes_returning_another_type_blocks_naming_the_class(tmp_path):
