@@ -1,6 +1,6 @@
 // Offered load on the shared fabric, for §5's contention sweep.
 //
-// Build:  g++ -O3 -std=c++17 -pthread -o load_gen load_gen.cpp
+// Build:  g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o load_gen load_gen.cpp
 // Run:    ./load_gen --threads N --seconds S [--bytes MiB] [--quiet]
 // Prints: the traffic it actually generated, so the sweep records offered load as a
 //         measurement rather than as the number it asked for.
@@ -12,9 +12,10 @@
 // exactly the moment the generator stops keeping up, so that is the moment its own
 // number stops being true.
 
-#ifndef __OPTIMIZE__
-#error "load_gen must be built -O3; an unoptimised memcpy loop offers a load nobody \
-in production would generate."
+#if !defined(__OPTIMIZE__) || !defined(BENCH_OPTIMIZATION_LEVEL) || BENCH_OPTIMIZATION_LEVEL < 3
+#error "load_gen must be built -O3 -DBENCH_OPTIMIZATION_LEVEL=3; an unoptimised memcpy \
+loop offers a load nobody in production would generate, and -O2 defines __OPTIMIZE__ \
+too, so the level has to be named."
 #endif
 
 #include <algorithm>

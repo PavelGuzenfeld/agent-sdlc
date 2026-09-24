@@ -133,15 +133,18 @@ A real-NIC crossing needs a peer host, so no row here can measure it. It stays
 (one pinned core), plus `cpu_python` for a stage the interpreter runs:
 
 ```
-g++ -O3 -std=c++17 -pthread -o unit_bench scripts/unit_bench.cpp && ./unit_bench
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o unit_bench scripts/unit_bench.cpp && ./unit_bench
 python3 scripts/unit_bench.py    # the cpu_python unit
 ```
 
 **-O3 is load-bearing.** gcc only auto-vectorises there, and on the JP6 Orin the same
 source reads 1.75e10 op/s at -O2 against 4.76e10 at -O3. A compute floor built from
 the -O2 number is 2.7× too low, which raises every SOL above it and makes a stage
-that has real headroom read as though it were already at the metal. The bench
-refuses to compile at -O0; nothing stops -O2, so check the build line.
+that has real headroom read as though it were already at the metal. gcc and clang
+define `__OPTIMIZE__` the same way at -O2 and -O3, so the bench cannot see the level
+from inside; it refuses to compile without `-DBENCH_OPTIMIZATION_LEVEL=3` named on
+the command line instead. That still trusts the build line — a line that passes
+`-O2` alongside the define compiles anyway — so check it.
 
 Pick the unit a node actually runs on. Measured on that same target, a Python stage
 sustains 2.1e7 op/s against the native single core's 5.96e9 — 282× — while its
@@ -153,11 +156,11 @@ needs `nvcc`, everything else needs a compiler and Python:
 
 ```
 nvcc -O3 -std=c++17 -o fabric_bw scripts/fabric_bw.cu && ./fabric_bw   # §2 + the gpu unit
-g++ -O3 -std=c++17 -pthread -o load_gen scripts/load_gen.cpp
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o load_gen scripts/load_gen.cpp
 nvcc -O3 -std=c++17 -o load_gen_cuda scripts/load_gen.cu
 python3 scripts/contention_sweep.py --load-gen ./load_gen \
         --load-gen-cuda ./load_gen_cuda                               # §5, the knee
-g++ -O3 -std=c++17 -pthread -o sched_bench scripts/sched_bench.cpp && ./sched_bench  # §6
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o sched_bench scripts/sched_bench.cpp && ./sched_bench  # §6
 python3 scripts/thermal_watch.py                                      # §7, run this first
 ```
 
