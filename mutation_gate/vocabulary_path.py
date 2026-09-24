@@ -89,10 +89,10 @@ def _pre_existing_dirs(repo: Repo, staged: bool, added: frozenset[str]) -> froze
 
 def _declared_type_words(repo: Repo, rel: str) -> list[list[str]]:
     lang = mutants.language_of(rel)
-    if lang not in vocabulary_check.SUFFIX:
+    path = repo.root / rel
+    if lang not in vocabulary_check.SUFFIX or not path.exists():
         return []
     mutants.require_ast_grep()
-    path = repo.root / rel
     out: list[list[str]] = []
     for declared in vocabulary_check.declarations(path, lang):
         _, kind, name = declared[:3]
