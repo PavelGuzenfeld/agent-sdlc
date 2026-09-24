@@ -20,9 +20,12 @@ from . import mutants, waivers
 from .repo import GateError, Repo, git
 
 CHECK = "no-comments"
-LANGUAGES = ("python", "cpp", "gdscript")
+LANGUAGES = ("python", "cpp", "gdscript", "typescript", "tsx")
 # Directives a tool reads, not prose a human reads.
-PRAGMA_RE = re.compile(r"^(?:#|//)\s*(?:pyright:|noqa|type:|ruff:|NOLINT|clang-format)")
+PRAGMA_RE = re.compile(
+    r"^(?:#|//+|/\*)\s*(?:pyright:|noqa|type:|ruff:|NOLINT|clang-format|"
+    r"@ts-expect-error|@ts-ignore|eslint-disable|<reference|istanbul ignore)"
+)
 LICENSE_RE = re.compile(r"SPDX-|copyright|licen[cs]e", re.IGNORECASE)
 GDSCRIPT_MISSING = ("gdscript comments skipped: no sgconfig.yml — install the "
                     "parser with bin/install-gdscript-parser and commit one")
@@ -39,7 +42,9 @@ class Finding:
     text: str
 
 
-def exempt(text: str) -> bool:
+def exempt(text: str, lang: str) -> bool:
+    if lang in ("typescript", "tsx") and text.startswith("/**"):
+        return True
     return text.startswith("#!") or bool(PRAGMA_RE.match(text)) or bool(LICENSE_RE.search(text))
 
 
@@ -104,7 +109,7 @@ def check(repo: Repo, changed: dict[str, set[int]], wvs, staged: bool) -> list[F
             if budget[text] > 0:
                 budget[text] -= 1
                 continue
-            if exempt(text):
+            if exempt(text, lang):
                 continue
             if waivers.finding_waived(wvs, CHECK, rel, line=line):
                 continue

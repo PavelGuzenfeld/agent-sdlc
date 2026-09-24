@@ -18,6 +18,8 @@ from mutation_gate.waivers import Waiver, finding_waived
 
 OPTED_IN = "no_comments = true\n"
 FILE = "tests/test_a.py"
+TS_FILE = "tests/test_a.ts"
+TSX_FILE = "tests/test_a.tsx"
 GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
 GDSCRIPT_SGCONFIG = (
     "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
@@ -332,6 +334,91 @@ def test_gdscript_missing_parser_skip_still_reaches_a_later_file(tmp_path, monke
     _stub_git(monkeypatch, {})
     found = no_comments.check(repo, {"game/a.gd": {2}, "pkg/a.py": {1}}, [], staged=True)
     assert [(f.file, f.line) for f in found] == [("pkg/a.py", 1)]
+
+
+def test_added_ts_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: "const x = 1;  // one\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TS_FILE}:1" in err
+    assert "// one" in err
+
+
+def test_added_tsx_jsx_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: "const x = <div>{/* one */}</div>;\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TSX_FILE}:1" in err
+    assert "/* one */" in err
+
+
+def test_added_tsx_line_comment_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: "const x = 1;  // one\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TSX_FILE}:1" in err
+    assert "// one" in err
+
+
+PRAGMA_TEXTS = [
+    "// @ts-expect-error\n",
+    "// @ts-ignore\n",
+    "// eslint-disable-next-line no-unused-vars\n",
+    "// eslint-disable-line no-unused-vars\n",
+    "/* eslint-disable no-unused-vars */\n",
+    "/// <reference types=\"node\" />\n",
+    "/* istanbul ignore next */\n",
+]
+
+
+@pytest.mark.parametrize("text", PRAGMA_TEXTS)
+def test_ts_pragmas_are_carved_out(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {}) == 0
+
+
+@pytest.mark.parametrize("text", PRAGMA_TEXTS)
+def test_tsx_pragmas_are_carved_out(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {}) == 0
+
+
+@pytest.mark.parametrize("text", [
+    "// eslint is noisy\n",
+    "// @todo fix this later\n",
+    "/// some prose, not a reference directive\n",
+    "/* istanbul was not consulted */\n",
+])
+def test_ts_prose_that_merely_resembles_a_pragma_still_blocks(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {}) == 1
+
+
+def test_ts_pragma_on_an_earlier_line_does_not_hide_a_later_prose_comment(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN,
+                 {TS_FILE: "// @ts-expect-error\nconst y = 2;  // two\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1, 2}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TS_FILE}:2" in err
+
+
+def test_ts_preexisting_comment_on_an_edited_line_is_invisible(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {"src/a.ts": "const x = 2;  // one\n"})
+    assert _findings(monkeypatch, repo, "src/a.ts", {1}, pre="const x = 1;  // one\n") == []
+
+
+def test_jsdoc_block_is_not_flagged_in_ts(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: "/**\n * Added prose.\n */\nfunction f() {}\n"})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1, 2, 3}}, {}) == 0
+
+
+def test_jsdoc_style_block_still_blocks_in_cpp(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {"src/a.cpp": "/**\n * Added prose.\n */\nint f() { return 1; }\n"})
+    assert _findings(monkeypatch, repo, "src/a.cpp", {1, 2, 3}) == ["src/a.cpp:1"]
 
 
 def test_gdscript_missing_parser_message_prints_once_for_two_files(tmp_path, monkeypatch, capsys):
