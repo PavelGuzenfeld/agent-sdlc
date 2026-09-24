@@ -48,6 +48,12 @@ def test_every_rule_at_the_repo_root_is_packaged():
     assert rules.SCOPED_RULE in PACKAGED
 
 
+@pytest.mark.parametrize("name", PACKAGED)
+def test_every_packaged_rule_has_a_snippet_in_docs_rules_md(name):
+    docs_rules = (Path(__file__).parents[2] / "docs" / "rules.md").read_text()
+    assert f'--8<-- "rules/{name}"' in docs_rules
+
+
 def test_sync_then_check_passes_with_model_paths_set(tmp_path, monkeypatch):
     synced = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n')
     assert cli.main(["rules", "sync"]) == 0

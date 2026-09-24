@@ -8,6 +8,8 @@ Included verbatim from `rules/`.
 
 --8<-- "rules/model-vv.md"
 
+--8<-- "rules/naming.md"
+
 --8<-- "rules/testing.md"
 
 --8<-- "rules/tickets.md"
