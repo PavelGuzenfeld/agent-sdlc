@@ -4,6 +4,7 @@ is built from dictionary words, spells private as a trailing `_`, and takes a
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import shutil
@@ -22,7 +23,7 @@ SUFFIX = {"python": ".py", "cpp": ".cpp", "typescript": ".ts", "tsx": ".tsx", "g
 SYMBOL_KINDS = ("local", "parameter")
 UNKNOWN_DETAIL = "is not in the dictionary"
 GDSCRIPT_CONFIG = "sgconfig.yml"
-GDSCRIPT_MISSING = ("gdscript vocabulary skipped: no " + GDSCRIPT_CONFIG + " — install the "
+GDSCRIPT_MISSING = ("gdscript skipped: no " + GDSCRIPT_CONFIG + " — install the "
                     "parser with bin/install-gdscript-parser and commit one")
 
 
@@ -30,12 +31,14 @@ def _emit(line: str) -> None:
     print(line, file=sys.stderr)
 
 
+@functools.cache
 def _gdscript_ready(repo_root: Path) -> Path | None:
-    """The custom-language parser loads only when a repo commits its own
-    `sgconfig.yml` pointing at an installed library; probe rather than trust
-    the file's mere existence, since the library it names can still be missing."""
+    """Probes rather than trusts `sgconfig.yml`'s mere existence, since the
+    library it names can still be missing. Cached per root and warns once, so
+    every check in a gate run shares one probe and one skip line (#233)."""
     config = repo_root / GDSCRIPT_CONFIG
     if not config.exists():
+        _emit(GDSCRIPT_MISSING)
         return None
     probe = json.dumps({"id": "probe", "language": "gdscript", "rule": {"kind": "name"}})
     with tempfile.TemporaryDirectory(prefix="mutation-gate-vocabulary-") as tmp:
@@ -46,7 +49,10 @@ def _gdscript_ready(repo_root: Path) -> Path | None:
              "--json=compact", source.name],
             cwd=tmp, capture_output=True, text=True, check=False,
         )
-    return config if proc.returncode == 0 else None
+    if proc.returncode == 0:
+        return config
+    _emit(GDSCRIPT_MISSING)
+    return None
 
 
 def _decorated(regex: str) -> dict:
@@ -505,21 +511,16 @@ def judge_type(dictionary: vocabulary.Dictionary,
 def check(repo: Repo, changed: dict[str, set[int]], wvs) -> list[Finding]:
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
     catalogue = vocabulary_molds.narrow(repo.config.vocabulary_molds)
-    gdscript_config = _gdscript_ready(repo.root)
-    warned = False
     out: list[Finding] = []
     for rel, lines in sorted(changed.items()):
         lang = mutants.language_of(rel)
         excluded = any(rel.startswith(p) for p in repo.config.exclude_paths)
         if lang not in SUFFIX or excluded or not (repo.root / rel).exists():
             continue
-        if lang == "gdscript" and gdscript_config is None:
-            if not warned:
-                _emit(GDSCRIPT_MISSING)
-                warned = True
+        config = _gdscript_ready(repo.root) if lang == "gdscript" else None
+        if lang == "gdscript" and config is None:
             continue
         mutants.require_ast_grep()
-        config = gdscript_config if lang == "gdscript" else None
         for declared in declarations(repo.root / rel, lang, config, dictionary.conventions):
             line, kind, name = declared[:3]
             if line not in lines or waivers.finding_waived(wvs, CHECK, rel, line=line):
@@ -579,17 +580,12 @@ def leading_underscore(repo: Repo) -> list[tuple[str, int, str, str]]:
     from . import vocabulary_path
 
     dictionary = vocabulary.load(repo.root, repo.config.vocabulary)
-    gdscript_config = _gdscript_ready(repo.root)
-    warned = False
     rows: list[tuple[str, int, str, str]] = []
     for rel in gated_files(repo):
         lang = mutants.language_of(rel)
-        if lang == "gdscript" and gdscript_config is None:
-            if not warned:
-                _emit(GDSCRIPT_MISSING)
-                warned = True
+        config = _gdscript_ready(repo.root) if lang == "gdscript" else None
+        if lang == "gdscript" and config is None:
             continue
-        config = gdscript_config if lang == "gdscript" else None
         for line, _kind, name, *_ in declarations(repo.root / rel, lang, config, dictionary.conventions):
             if name.startswith("_") and not _exempt(dictionary, name):
                 rows.append((rel, line, name, f"{name.strip('_')}_"))
