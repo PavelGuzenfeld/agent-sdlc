@@ -149,7 +149,7 @@ need_apt() {
 
 py_install() {
     if command -v pipx >/dev/null 2>&1; then
-        pipx install "$1" >/dev/null
+        pipx install ${2:+--force} "$1" >/dev/null
     else
         python3 -m pip install --user "$1" >/dev/null
     fi
@@ -173,7 +173,9 @@ install_deps() {
         as_root apt-get install -y -q --no-install-recommends $apt_missing
         echo "apt$apt_missing"
     fi
-    command -v ast-grep >/dev/null 2>&1 || py_install ast-grep-cli==0.45.3
+    ast_grep_pin=ast-grep-cli==0.45.3
+    installed_ast_grep=$(ast-grep --version 2>/dev/null || true)
+    [ "$installed_ast_grep" = "ast-grep ${ast_grep_pin#*==}" ] || py_install "$ast_grep_pin" force
     command -v pre-commit >/dev/null 2>&1 || py_install pre-commit
     command -v mutation-gate >/dev/null 2>&1 || py_install "$repo"
     [ "$deps" = say ] && install_say
