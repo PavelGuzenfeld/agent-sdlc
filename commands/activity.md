@@ -78,7 +78,8 @@ else rather than guessing.
   and any project dir added later. Nothing is dropped.
 - **Commits:** yours only, matched via `git config user.name`/`user.email` (override with
   `ACTIVITY_AUTHOR`), deduped by SHA so a worktree pair like `foo`/`foo-worktree` counts
-  once. Git stash entries are filtered out.
+  once. Git stash entries are filtered out. Repos are found under the dirs in
+  `ACTIVITY_DIRS` (default `workspace personalspace`), one level deep under `$HOME`.
 - **Excluded:** `<session>/subagents/*.jsonl` — subagents run inside a parent session,
   so counting them double-counts the parent's hours.
 
@@ -117,7 +118,7 @@ if [ -z "$AUTHOR" ]; then
   email=$(git config --get user.email 2>/dev/null || true)
   [ -n "$email" ] && AUTHOR="${AUTHOR:+$AUTHOR\\|}$email"
 fi
-home_esc=$(printf '%s' "$HOME" | sed -e 's/\\/\\\\/g' -e 's/\./\\./g')
+home_esc=$(printf '%s' "$HOME" | sed 's/\./[.]/g')
 alt=$(printf '%s' "$BASE_DIRS" | tr ' ' '|')
 home_regex="$home_esc/($alt)/[A-Za-z0-9._-]+"
 
