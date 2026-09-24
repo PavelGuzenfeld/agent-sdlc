@@ -115,6 +115,48 @@ word = "empty"
 meaning = "holding nothing"
 pos = ["adjective"]
 
+[[concept]]
+word = "health"
+meaning = "how much damage a thing can still take before it is destroyed"
+pos = ["noun"]
+
+[[concept]]
+word = "change"
+meaning = "make or become different, or the resulting difference"
+pos = ["verb", "noun"]
+forms = ["plural", "-s", "-ed", "-ing"]
+
+[[concept]]
+word = "button"
+meaning = "a control a user presses to trigger an action"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "press"
+meaning = "push something down, or trigger by pushing"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "viewer"
+meaning = "something that displays a stream of frames"
+pos = ["noun"]
+forms = ["plural"]
+head = true
+
+[[concept]]
+word = "render"
+meaning = "draw a visual representation"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+
+[[concept]]
+word = "use"
+meaning = "employ or apply"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+
 [[symbol]]
 word = "i"
 meaning = "loop index"
@@ -160,7 +202,9 @@ names = [
   "setUp", "tearDown", "setUpClass", "tearDownClass",
   "tmp_path", "tmp_path_factory", "tmpdir", "monkeypatch", "capsys", "capfd", "caplog",
   "request", "recwarn", "pytestconfig",
+  "_ready", "_process", "_physics_process", "_input",
 ]
+prefixes = ["_on_"]
 
 [function_words]
 preposition = ["to", "from", "per", "of", "since", "by", "at", "in", "for", "with", "on", "into"]
