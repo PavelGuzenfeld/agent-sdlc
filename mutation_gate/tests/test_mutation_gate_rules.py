@@ -30,6 +30,8 @@ def _unscoped_bytes() -> dict[str, bytes]:
 
 
 def _fresh_repo(tmp_path: Path, monkeypatch, toml: str) -> Path:
+    if "model_paths" in toml and "model_spec" not in toml:
+        toml += 'model_spec = "issue:1"\n'
     (tmp_path / ".mutation-gate.toml").write_text(toml)
     monkeypatch.setattr(
         rules, "discover",
@@ -131,7 +133,7 @@ def test_hand_edited_frontmatter_fails_check_with_config_unchanged(tmp_path, mon
 def test_changing_model_paths_without_resync_fails_check_naming_model_vv(tmp_path, monkeypatch, capsys):
     root = _fresh_repo(tmp_path, monkeypatch, f'model_paths = ["{SCOPED}"]\n').parents[1]
     cli.main(["rules", "sync"])
-    (root / ".mutation-gate.toml").write_text('model_paths = ["other/"]\n')
+    (root / ".mutation-gate.toml").write_text('model_paths = ["other/"]\nmodel_spec = "issue:1"\n')
     capsys.readouterr()
     assert cli.main(["rules", "check"]) == 1
     err = _named(capsys)
