@@ -12,7 +12,7 @@ rerun overwrites the header rather than appending to it."""
 import contextlib
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from mutation_gate import cli
@@ -22,6 +22,7 @@ from mutation_gate.repo import Config, GateError, Repo
 class _FrozenClock:
     @staticmethod
     def now(tz):
+        assert tz is timezone.utc
         return datetime(2026, 9, 24, 7, 30, 0, tzinfo=tz)
 
 
@@ -200,8 +201,13 @@ def test_staged_never_reads_stdin_for_a_cwd(tmp_path, monkeypatch):
 
 def test_write_report_saves_to_cache_root_keyed_by_repo(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
+
+    def _git(*args, **kwargs):
+        assert args[0] == "write-tree"
+        return "deadbeef\n"
+
     monkeypatch.setattr(cli, "CACHE_ROOT", cache)
-    monkeypatch.setattr(cli, "git", lambda *a, **kw: "deadbeef\n", raising=False)
+    monkeypatch.setattr(cli, "git", _git, raising=False)
     monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
     repo = _repo(tmp_path / "repo")
     path = cli._write_report(repo, "adversary", "findings text\n", staged=True)
@@ -281,3 +287,34 @@ def test_staged_adversary_report_is_headed_by_the_reviewed_tree_and_rewritten_on
     second = report.read_text()
     assert second == "reviewed: staged tree treehashb at 2026-09-24T07:30:00Z\nfindings\n"
     assert second != first
+
+
+def test_worktree_adversary_report_is_headed_by_head_and_dirty_state(tmp_path, monkeypatch):
+    repo = _repo(tmp_path / "repo")
+    (tmp_path / "repo").mkdir()
+    cache = tmp_path / "cache"
+
+    def _git(*args, **kwargs):
+        if args[0] == "rev-parse":
+            return "abc123\n"
+        if args[0] == "status":
+            return " M foo.py\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli, "CACHE_ROOT", cache)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"foo.py": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli, "_gate_file", lambda *a, **kw: (False, [], [Path("tests/x.py")]))
+    monkeypatch.setattr(cli.adversary, "resolve_intent", lambda repo, prompt: None)
+    monkeypatch.setattr(cli.adversary, "run", lambda tests, intent, note: "findings\n")
+    monkeypatch.setattr(cli, "git", _git, raising=False)
+    monkeypatch.setattr(cli, "datetime", _FrozenClock, raising=False)
+
+    assert cli.main(["--worktree"]) == 0
+    report = cache / repo.key / "reports" / "adversary.md"
+    assert report.read_text() == "reviewed: abc123 +dirty at 2026-09-24T07:30:00Z\nfindings\n"
