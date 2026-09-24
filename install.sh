@@ -173,7 +173,7 @@ install_deps() {
         as_root apt-get install -y -q --no-install-recommends $apt_missing
         echo "apt$apt_missing"
     fi
-    command -v ast-grep >/dev/null 2>&1 || py_install ast-grep-cli
+    command -v ast-grep >/dev/null 2>&1 || py_install ast-grep-cli==0.45.3
     command -v pre-commit >/dev/null 2>&1 || py_install pre-commit
     command -v mutation-gate >/dev/null 2>&1 || py_install "$repo"
     [ "$deps" = say ] && install_say

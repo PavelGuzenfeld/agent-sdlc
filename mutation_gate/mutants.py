@@ -445,9 +445,16 @@ def render_error_line(result: subprocess.CompletedProcess) -> str:
     return result.stderr.strip().partition("\n")[0] or f"exit {result.returncode}"
 
 
+PINNED_AST_GREP_VERSION = "0.45.3"
+
+
 def require_ast_grep() -> None:
     if not shutil.which("ast-grep"):
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
-    proc = subprocess.run(["ast-grep", "--version"], capture_output=True, check=False)
+    proc = subprocess.run(["ast-grep", "--version"], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
+    installed = proc.stdout.strip().split()[-1]
+    if installed != PINNED_AST_GREP_VERSION:
+        _emit(f"mutation-gate: ast-grep {installed} on PATH, pinned to {PINNED_AST_GREP_VERSION} — "
+              "the mutant catalogue and waivers were pinned against that version")

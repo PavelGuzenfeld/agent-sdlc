@@ -614,3 +614,29 @@ def test_staged_dry_run_says_skipped_when_the_gdscript_parser_is_not_ready(
     err = capsys.readouterr().err
     assert mutants.GDSCRIPT_MUTATION_SKIPPED in err
     assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
+
+
+def test_require_ast_grep_warns_once_when_the_installed_version_differs_from_the_pin(
+    monkeypatch, capsys
+):
+    stubbed = subprocess.CompletedProcess(
+        ["ast-grep", "--version"], 0, stdout="ast-grep 0.44.1\n", stderr=""
+    )
+    monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
+    mutants.require_ast_grep()
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert "0.44.1" in err
+    assert mutants.PINNED_AST_GREP_VERSION in err
+
+
+def test_require_ast_grep_is_silent_when_the_installed_version_matches_the_pin(
+    monkeypatch, capsys
+):
+    stubbed = subprocess.CompletedProcess(
+        ["ast-grep", "--version"], 0,
+        stdout=f"ast-grep {mutants.PINNED_AST_GREP_VERSION}\n", stderr="",
+    )
+    monkeypatch.setattr(mutants.subprocess, "run", lambda *a, **k: stubbed)
+    mutants.require_ast_grep()
+    assert capsys.readouterr().err == ""
