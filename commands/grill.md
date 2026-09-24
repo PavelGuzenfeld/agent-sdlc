@@ -57,14 +57,16 @@ decisions.
 
 Draft the material in the scratchpad first. Then, in the repo's own tracker:
 
-- File one decision-record issue and pin it, with sections:
+- File one decision-record issue and pin it, the interview not retold, with
+  sections:
   - **Goal**
   - **Non-goals**
-  - **Decisions** — a flat numbered list; each settled decision as one atomic,
-    declarative statement (this is the set `/rectify` can later audit).
+  - **Decisions** — a flat numbered list; each settled decision as one line,
+    one atomic, declarative statement (this is the set `/rectify` can later
+    audit).
   - **Open questions** — anything left unresolved.
-  - **Rejected** — alternatives considered and why they lost, so a decision is
-    not silently reversed later.
+  - **Rejected** — one line per alternative considered and why it lost, so a
+    decision is not silently reversed later.
 - File one issue per implementation step, each labeled `ready` and
   `model:<name>`, each linking back to the decision-record issue.
 - Print the numbers of every issue filed.
