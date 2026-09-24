@@ -124,7 +124,7 @@ Deferred because: <one line>
 
 A public remote gets the same content as prose, three lines at most: no field
 labels, no bullets, no AI-attribution line ever. `gh issue create` with the
-labels `rules/tickets.md`'s Follow-ups section names.
+labels `rules/tickets.md`'s Follow-ups section requires.
 
 Nothing qualifying prints nothing. Anything here failing — auth, network, API — prints
 the drafts and continues; the commit and the SHA report never depend on this step.

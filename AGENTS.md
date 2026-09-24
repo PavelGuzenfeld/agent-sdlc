@@ -227,14 +227,14 @@ with nothing broken — a deferred scope, an added `TODO`/`FIXME`, a waiver, a
 parked idea. `bug` never goes on a follow-up; it stays the outside-reporter
 form's label.
 
-The filer proposes `size:tiny` — a ticket is tiny when its evidence names one
-location, it leaves no design choice open, and it needs no new file,
+The filer proposes `size:tiny` when the ticket is tiny: its evidence names
+one location, it leaves no design choice open, and it needs no new file,
 dependency or config key. The maintainer confirms the proposal by adding
 `ready`. A follow-up is never born with `ready` or `model:<name>`, and a
 label-creation step must never add either to an untriaged follow-up.
 
-Labels are created if missing, the way `follow-up` is today; if creation is
-refused, file without them rather than drop the item.
+Labels are created if missing; if creation is refused, file without them
+rather than drop the item.
 
 ## voice
 

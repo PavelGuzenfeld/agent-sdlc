@@ -92,7 +92,7 @@ whichever lens carries the proposed change, not once per lens it touches.
 Offer to file each finding as an issue on this repo, through the same gate
 `/done` step 4 uses: one prompt, private-remote rows pre-selected, unticked
 rows dropped, five-candidate cap, the labels `rules/tickets.md`'s Follow-ups
-section names, the banned-name scan from the `banned_names_file` named in
+section requires, the banned-name scan from the `banned_names_file` named in
 `.mutation-gate.toml` run over every draft before it's filed. Title is the
 finding flat, body is the same four-field shape (`Evidence` / `Noticed in` —
 this session's transcript path and id, not a commit — / `Deferred because`,
