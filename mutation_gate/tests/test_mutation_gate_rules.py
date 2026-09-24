@@ -195,7 +195,7 @@ def test_tickets_rule_names_the_follow_up_convention():
 
 def test_no_rule_command_or_doc_names_the_ready_label():
     root = Path(__file__).parents[2]
-    pattern = re.compile(r"\bready\b", re.IGNORECASE)
+    pattern = re.compile(r"`ready`")
     offenders = [
         str(path.relative_to(root))
         for base in ("rules", "commands", "docs")

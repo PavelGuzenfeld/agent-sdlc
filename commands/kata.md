@@ -100,9 +100,9 @@ another lane's live agents.
 has `Closes #3` and, when applicable, a Human-testing section — and a
 worktree that is gone once that PR merges.
 
-`/kata` over three size:tiny `model:sonnet` tickets and one unlabelled ticket
-opens two PRs, one of them with a `Closes #N` line for all three tiny
-tickets.
+`/kata` over three size:tiny `model:sonnet` tickets and one plain
+`model:sonnet` ticket opens two PRs, one of them with a `Closes #N` line for
+all three tiny tickets.
 
 `/kata` over one `model:haiku` ticket and one unlabelled ticket dispatches
 only the first, on haiku.
