@@ -76,7 +76,7 @@ Exit condition: every unit and mechanism the hot path touches has a measured row
    If the resulting critical path exceeds the window minus margin, it stops: the graph
    is wrong, and no implementation reaches that deadline. Do not start coding.
 5. **Budgets.** `budget.md`, per node, as a fraction of SOL — 0.70 memory-bound, 0.50
-   dispatch-dominated, 0.85 tight compute. Margin 25% on a shared fabric, 10% on bare
+   tax-dominated, 0.85 tight compute. Margin 25% on a shared fabric, 10% on bare
    metal.
 6. **Measure** with the real overlap, production cache state, and enough iterations for
    a p99. Append to `measurements.csv` with the build and the graph digest.
@@ -87,7 +87,7 @@ python3 scripts/sol.py --perf perf
 
 ## Phase 3 — decide and gate
 
-Let `ratio = measured ÷ SOL`.
+Let `ratio = SOL ÷ measured`.
 
 - **ratio ≥ 0.7 — refuse to optimise the implementation.** Say so plainly: this stage
   is within 30% of what the machine was measured to do, so tuning the code cannot buy
@@ -112,7 +112,7 @@ different graph is refused, not compared.
 python3 scripts/budget_check.py --perf perf   # PERF_GATE: pass|fail
 ```
 
-Gate: a node p99 over budget, or the critical path over the window minus margin, fails
+Gate: a node p99 over budget, or the sum of node p99s (the serial upper bound) over the window minus margin, fails
 — unless `budget_revisions.md` carries a dated entry naming that node and saying why
 the derived budget was wrong. "It is slow" is not a reason; that is the finding, not
 the revision.
@@ -141,7 +141,7 @@ python3 scripts/unit_bench.py    # the cpu_python unit
 source reads 1.75e10 op/s at -O2 against 4.76e10 at -O3. A compute floor built from
 the -O2 number is 2.7× too low, which raises every SOL above it and makes a stage
 that has real headroom read as though it were already at the metal. The bench
-refuses to compile unoptimised rather than let that happen quietly.
+refuses to compile at -O0; nothing stops -O2, so check the build line.
 
 Pick the unit a node actually runs on. Measured on that same target, a Python stage
 sustains 2.1e7 op/s against the native single core's 5.96e9 — 282× — while its
@@ -161,8 +161,8 @@ g++ -O3 -std=c++17 -pthread -o sched_bench scripts/sched_bench.cpp && ./sched_be
 python3 scripts/thermal_watch.py                                      # §7, run this first
 ```
 
-**Run §7 first.** It reports the equilibrium the other benches should use as their
-`--warmup-seconds`, and whether `clocks:` may say `modelled-steady-state` at all.
+**Run §7 first.** It reports the equilibrium the other benches that take
+`--warmup-seconds` should use, and whether `clocks:` may say `modelled-steady-state` at all.
 
 `fabric_bw` prints the `integrated` flag, and it changes the graph: on an integrated
 part a host-to-device copy never leaves DRAM, so it is a copy node the graph can

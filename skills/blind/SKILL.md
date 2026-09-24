@@ -32,7 +32,7 @@ Every guard here is structural. Nothing relies on an agent choosing to obey.
 
 ### 1. Manifest
 
-Ask for, and write to `<work>/manifest.md` — the blind pass reads it and can only
+`mkdir -p <work>/evidence`, then ask for, and write to `<work>/manifest.md` — the blind pass reads it and can only
 read inside `<work>`. Copy it to `<record>/manifest.md`, which is the committed
 copy.
 
@@ -52,12 +52,12 @@ copy.
   git -C <repo> status --porcelain --untracked-files=all
   ```
 
-  Subtract the export file list. What remains is what the export silently drops.
+  Subtract `git -C <repo> ls-tree -r --name-only <pin>`. What remains is what the export silently drops.
   Show that list and ask which entries were load-bearing for the capture. An
   export missing a load-bearing path diagnoses code that did not produce the data.
 
 - **Hypothesis-term hits.** You hold the hypothesis; the blind process never will.
-  So grep the export for its terms — mechanism names, component names — and show
+  So `git -C <repo> grep -n -e <term> <pin>` for its terms — mechanism names, component names — and show
   the hits. Ask which paths to withhold. Record the answer.
 
   Identifiers still leak, and measurably more than by nudging a ranking. In an
@@ -97,7 +97,7 @@ Write it to `<record>/informed.md` before spawning anything.
 **Blind.** Build the working root, then run it out of process:
 
 ```
-mkdir -p <work>/tree <work>/evidence
+mkdir -p <work>/tree
 git -C <repo> archive --format=tar <pin> -- . \
   ':(exclude)docs/hypotheses' <accepted exclusions> | tar -x -C <work>/tree
 cd <work> && claude -p \
@@ -177,6 +177,10 @@ Two locations, deliberately.
 
 The export must not live in the repo it came from — committed it duplicates the
 tree, untracked it corrupts the untracked accounting step 1 depends on.
+
+The gate's no-new-docs check blocks `<record>` until the repo's
+`.mutation-gate.toml` has a `[[doc_allow]]` for `docs/hypotheses/**` whose
+reason names blind records as evidence, not a decision log.
 
 ## Blinding is a trade
 

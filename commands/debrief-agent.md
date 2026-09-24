@@ -44,7 +44,7 @@ says nothing — do not manufacture a finding to fill a slot.
    short pointer to where the real content lives. This includes the
    always-loaded surface: every skill and command's frontmatter
    `description` sits in context every turn. Measure it — word-count each
-   `description` in `~/.claude/skills/*/SKILL.md` and `.claude/commands/*.md`
+   `description` in `~/.claude/skills/*/SKILL.md` and `~/.claude/commands/*.md`
    touched or loaded this session, and flag the long tail against the
    shortest ones in the same set, not against a guessed target.
 5. **Tool economy** — a tool call that burned unusual time or tokens (a full

@@ -33,7 +33,8 @@ just consume it. Without one, no amount of reading code will save you.
 Spend disproportionate effort here. Exhaust the list below before concluding no
 loop exists.
 
-Keep a local, untracked notes file of per-toolchain recipes for your own stack;
+Worked recipes for a few stacks are in `references/loops.md`; keep your own in a
+local, untracked notes file;
 this skill's phases are the discipline, not the recipe list. Ways to construct a
 loop, in roughly this order:
 
@@ -86,7 +87,8 @@ least once**, showing the invocation and its output, and that is:
   *exact* symptom, so it goes red on this bug and green once fixed.
 - **Deterministic** — the same verdict every run, or a pinned high repro rate.
 - **Fast** — seconds, not minutes.
-- **Agent-runnable** — you can run it unattended.
+- **Agent-runnable** — you can run it unattended (option 10 excepted: say so, and
+  budget the human's time).
 
 **Verify the baseline is green before trusting a red.** A suite already failing
 makes every perturbation read as caught.

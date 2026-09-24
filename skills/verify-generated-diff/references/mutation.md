@@ -45,7 +45,7 @@ scripts/mutate.sh src/trk/gate.cpp \
 # Python
 scripts/mutate.sh gate.py \
   'def accept(self, d2, thresh):' \
-  'def accept(self, d2, thresh):\n        return True' \
+  $'def accept(self, d2, thresh):\n        return True' \
   test_gate.py
 
 # Rust

@@ -55,7 +55,7 @@ Run git from the work-tree root. A subdirectory cwd silently scopes pathspecs, s
 
 The cheapest check per changed file type, on changed files only, in every repo Survey
 covered — main tree and each replying agent's worktree: `bash -n`, `zsh -n`, an elisp
-`read` loop, `ruff`/`prettier`, a JSON parse. Never a build, never Docker — this command
+`read` loop, `ruff`/`prettier`, a JSON parse. Never a build, never Docker — this step
 is a reflex and has to stay sub-second.
 
 A deleted line range is the case that needs this most: confirm the file still parses
@@ -95,7 +95,7 @@ session scratchpad — read that file, leave it untouched. Nothing inferred, not
 
 Route by the remote the commit landed on; no remote, or not a repo, means print the
 candidates and file nothing. Drop any the handoff already references, and any whose
-title matches an open issue — one `gh issue list --state open` per target repo. The
+title matches an open issue — one `gh issue list --state open --limit 1000` per target repo. The
 handoff is overwritten each run, so only that match catches a repeat from last week.
 
 One gate, five candidates maximum across all repos — a checkpointed agent's reported
@@ -109,6 +109,7 @@ before filing it; a hit blocks that item and names the token, never redact and f
 Build the alternation from the banned-name list at the `banned_names_file`
 named in `.mutation-gate.toml`, which is the only copy of it, and run it over
 the draft — the no-leaks hook's own scan already covers identity patterns.
+Unset or missing: block filing and say so — never file unscanned.
 Never restate the tokens here — this file is committed.
 
 Title states the defect or the task flat — no prefix tag, no Overview, no closing

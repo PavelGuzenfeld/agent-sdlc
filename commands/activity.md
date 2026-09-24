@@ -32,7 +32,7 @@ else rather than guessing.
    - `###REPORT###` — one line: the absolute path to write the report to.
 
 3. **Write one sentence per non-empty (day, space) cell — from `###REPOS###` and
-   `###COMMITS###`, not from the titles.** The `title` field is the session's *first
+   `###COMMITS###`, not from the titles.** The `title` field is the session's *AI title, or its last
    prompt*, and it lies constantly: August 2026 produced `hi`, `done`, `cleanup`,
    `What's next`, `Model opus`. One session titled `Model opus` made 2,129 references to
    naval-planner files while doing a feature rip-out. Rank the day's repos by touch count, name

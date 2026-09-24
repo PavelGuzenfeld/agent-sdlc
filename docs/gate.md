@@ -23,7 +23,7 @@
     | kill it: a test    |     | spec present: MS-n lines  |
     | from the intent    |     | in the pinned issue       |
     | or waive it with   |     | each test cites an MS-n   |
-    | a reason           |     | blind pass over the code  |
+    | a reason           |     | golden hash matches       |
     +--------------------+     +---------------------------+
                      |               |
                      +-------+-------+
@@ -34,6 +34,7 @@
                   | sees intent + tests, |
                   | never the code;      |
                   | reports, no block    |
+                  | + model blind pass   |
                   +----------------------+
 ```
 

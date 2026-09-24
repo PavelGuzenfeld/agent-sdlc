@@ -32,5 +32,5 @@ Technical debt         (inventory: what's owed, where, and the risk of leaving i
 ```
 
 For each item, give the file:line, the problem, and the proposed direction. This is a
-map for later work — the user approves a subset with `/goon`; do not start applying
+map for later work — the user names the items to apply; do not start applying
 changes yourself.

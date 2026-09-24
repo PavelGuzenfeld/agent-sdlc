@@ -17,7 +17,7 @@
              |
              v
 +--------------------------+
-| implement, <= 40 lines   |   smallest change that satisfies the ticket
+| implement the slice      |   smallest change that satisfies the ticket
 +--------------------------+
              |
              v
