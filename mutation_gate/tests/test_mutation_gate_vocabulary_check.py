@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from mutation_gate import cli, mutants, runner, token, vocabulary, vocabulary_check
+from mutation_gate import cli, mutants, runner, token, vocabulary, vocabulary_check, vocabulary_path
 from mutation_gate.repo import Config, GateError, Repo
 from mutation_gate.waivers import Waiver
 
@@ -677,6 +677,23 @@ def test_leading_underscore_reaches_a_file_past_an_exempt_directory_segment(tmp_
     monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
     rows = vocabulary_check.leading_underscore(repo)
     assert rows == [("pkg/__pycache__/_frob.py", 0, "_frob.py", "frob_.py")]
+
+
+def test_leading_underscore_tool_dictated_exemption_is_read_from_the_core_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(vocabulary_path, "TOOL_DICTATED_FILES", frozenset())
+    repo = _repo(tmp_path, "", {"src/_version.py": ""})
+    listing = "src/_version.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    rows = vocabulary_check.leading_underscore(repo)
+    assert rows == [("src/_version.py", 0, "_version.py", "version_.py")]
+
+
+def test_leading_underscore_still_flags_a_declaration_inside_a_tool_dictated_file(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, "", {"src/_version.py": "def _parse_frame():\n    pass\n"})
+    listing = "src/_version.py\0"
+    monkeypatch.setattr(vocabulary_check, "git", lambda *a, cwd=None: listing)
+    rows = vocabulary_check.leading_underscore(repo)
+    assert rows == [("src/_version.py", 1, "_parse_frame", "parse_frame_")]
 
 
 def test_staged_tsx_component_passes_and_camel_case_function_blocks(tmp_path, monkeypatch, capsys):
