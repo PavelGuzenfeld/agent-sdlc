@@ -78,6 +78,17 @@ def test_staged_loc_assignment_blocks_and_suggests_position(tmp_path, monkeypatc
     assert "try `position`" in err
 
 
+def test_staged_vague_word_declaration_shows_its_hint_as_the_suggestion(
+    tmp_path, monkeypatch, capsys
+):
+    repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": "manager = 1\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {"pkg/a.py": {1}})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "pkg/a.py:1: variable `manager`" in err
+    assert "try `name what it does: scheduler, registry, pool, cache`" in err
+
+
 def test_staged_use_of_an_existing_loc_passes(tmp_path, monkeypatch):
     repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": "loc = 1\nprint(loc)\n"})
     assert _gate(monkeypatch, tmp_path, repo, {"pkg/a.py": {2}}) == 0
@@ -194,10 +205,11 @@ def test_unknown_word_blocks_naming_the_word(tmp_path):
     assert found == ["1:variable:frob:`frob` is not in the dictionary:"]
 
 
-def test_vague_word_blocks_with_its_hint(tmp_path):
+def test_vague_word_blocks_with_its_hint_as_the_suggestion(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "class FrameManager:\n    pass\n", {1})
     assert found == [
         "1:type:FrameManager:`Manager` is vague — name what it does: scheduler, registry, pool, cache:"
+        "name what it does: scheduler, registry, pool, cache"
     ]
 
 
@@ -375,6 +387,7 @@ def test_tsx_pascal_case_function_is_checked_as_a_type_not_a_function(tmp_path):
     found = _findings(tmp_path, "ui/a.tsx", "function FrameManager() {}\n", {1})
     assert found == [
         "1:type:FrameManager:`Manager` is vague — name what it does: scheduler, registry, pool, cache:"
+        "name what it does: scheduler, registry, pool, cache"
     ]
 
 
@@ -409,6 +422,7 @@ def test_tsx_pascal_case_arrow_function_is_checked_as_a_type(tmp_path):
     found = _findings(tmp_path, "ui/a.tsx", "const FrameManager = () => {};\n", {1})
     assert found == [
         "1:type:FrameManager:`Manager` is vague — name what it does: scheduler, registry, pool, cache:"
+        "name what it does: scheduler, registry, pool, cache"
     ]
 
 
