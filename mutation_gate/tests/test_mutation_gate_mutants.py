@@ -18,7 +18,7 @@ from conftest import (
     require_gdscript_parser as _require_gdscript_parser,
 )
 
-from mutation_gate import cli, mutants, vocabulary_check
+from mutation_gate import cli, mutants, no_comments, vocabulary_check
 from mutation_gate.repo import Config, DIFF_PREFIX_PIN_ARGS, GateError, Repo
 
 
@@ -452,11 +452,29 @@ def test_staged_dry_run_probes_gdscript_readiness_once_across_no_comments_vocabu
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
 
+    no_comments_calls = []
+    real_no_comments_check = no_comments.check
+
+    def counting_no_comments_check(*a, **k):
+        no_comments_calls.append(1)
+        return real_no_comments_check(*a, **k)
+
+    monkeypatch.setattr(cli.no_comments, "check", counting_no_comments_check)
+
+    vocabulary_calls = []
+    real_vocabulary_check = vocabulary_check.check
+
+    def counting_vocabulary_check(*a, **k):
+        vocabulary_calls.append(1)
+        return real_vocabulary_check(*a, **k)
+
+    monkeypatch.setattr(cli.vocabulary_check, "check", counting_vocabulary_check)
+
     probe_calls = []
     real_run = vocabulary_check.subprocess.run
 
     def counting_run(cmd, **kwargs):
-        if any(str(part).endswith("probe.gd") for part in cmd):
+        if any('"id": "probe"' in str(part) for part in cmd):
             probe_calls.append(cmd)
         return real_run(cmd, **kwargs)
 
@@ -464,5 +482,89 @@ def test_staged_dry_run_probes_gdscript_readiness_once_across_no_comments_vocabu
 
     assert cli.main(["--staged", "--dry-run"]) == 0
     err = capsys.readouterr().err
-    assert err.count("bin/install-gdscript-parser") == 1
+    assert no_comments_calls == [1]
+    assert vocabulary_calls == [1]
+    assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
+    assert "b.gd: 0 candidate test file(s), 0 mutant(s)" in err
+    assert err.count(vocabulary_check.GDSCRIPT_MISSING) == 1
+    assert len(probe_calls) == 1
+
+
+def test_staged_dry_run_says_skipped_once_with_no_sgconfig_at_all(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): the missing-sgconfig case, not just the broken-library
+    one, must still print a single skip line across every enabled check."""
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert err.count(vocabulary_check.GDSCRIPT_MISSING) == 1
+
+
+def test_staged_dry_run_never_probes_gdscript_readiness_for_a_python_only_change(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): a diff with no .gd file must not trigger the probe at
+    all, at the cli.main level, not just inside one module's own function."""
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "a.py").write_text("position = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.py": {1}})
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+    monkeypatch.setattr(
+        vocabulary_check, "_gdscript_ready",
+        lambda root: pytest.fail("probed gdscript readiness for a python-only diff"),
+    )
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    assert vocabulary_check.GDSCRIPT_MISSING not in capsys.readouterr().err
+
+
+def test_staged_dry_run_probes_gdscript_readiness_once_when_the_parser_is_ready(
+    tmp_path, monkeypatch, capsys
+):
+    """#233 (adversary): the once-per-run guarantee must hold on the happy
+    path too, not only when the parser is missing or broken."""
+    _require_gdscript_parser()
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(no_comments=True, vocabulary=".vocabulary.toml"))
+    (tmp_path / ".vocabulary.toml").write_text("")
+    (tmp_path / "sgconfig.yml").write_text(GDSCRIPT_SGCONFIG)
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar position = 1 + 2\n")
+    (tmp_path / "b.gd").write_text("func _ready():\n\tvar position = 1 + 2\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(
+        cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}, "b.gd": {2}}
+    )
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.vocabulary_path, "git", lambda *a, **k: "")
+
+    probe_calls = []
+    real_run = vocabulary_check.subprocess.run
+
+    def counting_run(cmd, **kwargs):
+        if any('"id": "probe"' in str(part) for part in cmd):
+            probe_calls.append(cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(vocabulary_check.subprocess, "run", counting_run)
+
+    assert cli.main(["--staged", "--dry-run"]) == 0
+    err = capsys.readouterr().err
+    assert vocabulary_check.GDSCRIPT_MISSING not in err
     assert len(probe_calls) == 1
