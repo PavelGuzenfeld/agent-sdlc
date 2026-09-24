@@ -4,6 +4,7 @@ test_paths, nor a repo's own `doc_allow = [{glob, reason}]`. Editing an
 existing `.md` file is never "added", so it always passes. `git` is stubbed —
 the gate's test image has none."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,70 @@ def test_hook_refuses_loudly_on_a_reasonless_doc_allow_entry(monkeypatch, tmp_pa
     err = capsys.readouterr().err
     assert "no-new-docs refused" in err
     assert "reason" in err
+
+
+def test_matching_added_paths_does_not_walk_the_filesystem(monkeypatch, tmp_path, capsys):
+    def boom_glob(*args, **kwargs):
+        raise AssertionError("no-new-docs must not walk the filesystem")
+
+    def boom_scandir(*args, **kwargs):
+        raise AssertionError("no-new-docs must not walk the filesystem")
+
+    monkeypatch.setattr(Path, "glob", boom_glob)
+    monkeypatch.setattr(os, "scandir", boom_scandir)
+    _stub_git(monkeypatch, added=_added(["README.md", "pkg/README.md", "design.md"]))
+    assert _local(monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "design.md" in err
+    assert "README.md" not in err
+    assert "pkg/README.md" not in err
+
+
+_PATTERN_SHAPES = [
+    ("**/README*", "README.md", True),
+    ("**/README*", "pkg/README.md", True),
+    ("**/README*", "a/b/README.md", True),
+    ("**/README*", ".hidden/README.md", True),
+    ("**/README*", "README.d/design.md", False),
+    ("**/README*", "pkg/readme.md", False),
+    ("AGENTS.md", "AGENTS.md", True),
+    ("AGENTS.md", "pkg/AGENTS.md", False),
+    (".github/**/*", ".github/x.md", True),
+    (".github/**/*", ".github/a/b/x.md", True),
+    (".github/**/*", ".gitlab/y.md", False),
+    (".github/**/*", "pkg/.github/x.md", False),
+    (".github/**/*", ".githubx/y.md", False),
+    (".github/**/*", ".github", False),
+    ("docs/**", "docs/y.md", False),
+    (".claude/rules/**/*", ".claude/rules/voice.md", True),
+    (".claude/rules/**/*", ".claude/rules/sub/voice.md", True),
+    (".claude/rules/**/*", ".claude", False),
+    ("docs/**/*", "docs/y.md", True),
+    ("docs/**/*", "docs/sub/y.md", True),
+    ("docs/**/*", "notes.md", False),
+    ("skills/**/*", "skills/sol-budget/SKILL.md", True),
+    ("commands/**/*", "commands/kata.md", True),
+    ("rules/**/*", "rules/voice.md", True),
+]
+
+
+@pytest.mark.parametrize(("pattern", "rel", "expected"), _PATTERN_SHAPES)
+def test_an_allow_pattern_matches_exactly_what_it_is_meant_to(pattern, rel, expected):
+    assert no_new_docs._matches(rel, pattern) is expected
+
+
+@pytest.mark.parametrize(("pattern", "rel", "expected"), _PATTERN_SHAPES)
+def test_an_allow_pattern_matches_what_a_real_path_glob_would_have_matched(
+    tmp_path, pattern, rel, expected
+):
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x")
+    oracle = rel in {
+        str(p.relative_to(tmp_path)) for p in tmp_path.glob(pattern) if p.is_file()
+    }
+    assert oracle is expected
+    assert no_new_docs._matches(rel, pattern) is expected
 
 
 def test_this_repos_own_doc_allow_covers_docs_skills_commands_rules_with_reasons():
