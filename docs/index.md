@@ -24,7 +24,8 @@ the binary is on `PATH`. A second run changes nothing.
 
 Rules load per repo, not globally: run `mutation-gate rules sync` inside a
 repo that opts in, which writes `.claude/rules/*.md` and the `AGENTS.md`
-block there.
+block there. `mutation-gate rules check` catches drift in those files and
+runs automatically as the `rules-check` pre-commit hook.
 
 `--deps` installs `git gh jq docker python3 ast-grep pytest` and the gate;
 `--deps=say` adds the Kokoro voice stack.
