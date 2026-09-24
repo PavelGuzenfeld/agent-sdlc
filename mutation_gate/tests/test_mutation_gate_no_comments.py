@@ -101,6 +101,28 @@ def test_genuine_no_match_from_ast_grep_still_passes(tmp_path, monkeypatch):
     assert _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {}) == 0
 
 
+def test_a_multi_file_run_prints_the_ast_grep_version_warning_only_once(
+    tmp_path, monkeypatch, capsys
+):
+    """Issue #244: no_comments.check calls require_ast_grep per gated file, and
+    cli.main calls it again afterwards — one gate run must still warn once."""
+    repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1\n", TS_FILE: "y = 1;\n"})
+    mutants._ast_grep_ready.cache_clear()
+    real_run = mutants.subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if cmd == ["ast-grep", "--version"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="ast-grep 0.44.1\n", stderr="")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(mutants.subprocess, "run", fake_run)
+    code = _gate(monkeypatch, tmp_path, repo, {FILE: {1}, TS_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 0
+    assert err.count("mutation-gate: ast-grep 0.44.1 on PATH") == 1
+    assert mutants._ast_grep_ready.cache_info().misses == 1
+
+
 def test_pragma_comment_is_not_flagged(tmp_path, monkeypatch):
     repo = _repo(tmp_path, OPTED_IN, {FILE: "x = 1  # pyright: ignore[reportUnusedVariable]\n"})
     assert _gate(monkeypatch, tmp_path, repo, {FILE: {1}}, {}) == 0
@@ -279,8 +301,8 @@ def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "pass  # one\n", "pkg/a.py": "y = 1  # two\n"})
     _stub_git(monkeypatch, {"game/a.gd": "pass  # zero\n"})
     no_comments.check(repo, {"game/a.gd": {1}, "pkg/a.py": {1}}, [], staged=True)
-    gd_calls = [cmd for cmd in seen if any(a.endswith("a.gd") for a in cmd)]
-    py_calls = [cmd for cmd in seen if any(a.endswith("a.py") for a in cmd)]
+    gd_calls = [cmd for cmd in seen if any(a.endswith(".gd") for a in cmd)]
+    py_calls = [cmd for cmd in seen if any(a.endswith(".py") for a in cmd)]
     assert len(gd_calls) == 2, "expected one call for the added file, one for its pre-image copy"
     assert all(cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in gd_calls)
     assert len(py_calls) == 1

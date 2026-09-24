@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dynamic = ["version"]
-dependencies = ["ast-grep-cli"]
+dependencies = ["ast-grep-cli==0.45.3"]
 
 [project.optional-dependencies]
 vocabulary = ["nltk"]

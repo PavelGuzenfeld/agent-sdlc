@@ -7,11 +7,13 @@ even where the same pattern matches elsewhere in the file.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
@@ -252,24 +254,35 @@ def changed_lines(root: Path, staged: bool) -> dict[str, set[int]]:
     return {f: lines for f, lines in result.items() if lines}
 
 
+LANG_SUFFIX = {"python": ".py", "gdscript": ".gd", "cpp": ".cpp", "typescript": ".ts", "tsx": ".tsx"}
+
+
+def _run_ast_grep(
+    path: Path, lang: str, rule: dict, run_args: list[str], config: Path | None
+) -> subprocess.CompletedProcess:
+    """Scans a same-suffix copy under an ASCII name: ast-grep (Rust `env::args`)
+    panics on a non-UTF-8 argv path, even one passed as raw fsencode()d bytes (#249)."""
+    with tempfile.TemporaryDirectory(prefix="mutation-gate-ast-grep-") as tmp:
+        copy = Path(tmp, "source" + LANG_SUFFIX[lang])
+        shutil.copyfile(path, copy)
+        if config is not None:
+            cmd = ["ast-grep", "scan", f"--config={config}",
+                   f"--inline-rules={json.dumps(rule)}", "--json=compact", copy.name]
+        else:
+            cmd = ["ast-grep", "run", "-l", lang, *run_args, "--json=compact", copy.name]
+        return subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, check=False)
+
+
 def _ast_grep(
     path: Path, lang: str, pattern: str, replacement: str, config: Path | None = None
 ) -> list[dict]:
     """`--pattern=` / `--rewrite=`, never `-p` / `-r`: a leading `-` (`-$A`, `!$A`)
     would else parse as a flag. `config` routes through `scan`, ast-grep's only
     mode for loading a custom language such as GDScript."""
-    if config is not None:
-        rule = json.dumps({"id": "mutant", "language": lang,
-                           "rule": {"pattern": pattern}, "fix": replacement})
-        cmd = ["ast-grep", "scan", f"--config={config}",
-               f"--inline-rules={rule}", "--json=compact", str(path)]
-    else:
-        cmd = [
-            "ast-grep", "run", "-l", lang,
-            f"--pattern={pattern}", f"--rewrite={replacement}",
-            "--json=compact", str(path),
-        ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    rule = {"id": "mutant", "language": lang, "rule": {"pattern": pattern}, "fix": replacement}
+    proc = _run_ast_grep(
+        path, lang, rule, [f"--pattern={pattern}", f"--rewrite={replacement}"], config
+    )
     if proc.returncode not in (0, 1):
         raise GateError(f"ast-grep failed on pattern {pattern!r}: {render_error_line(proc)}")
     if not proc.stdout.strip():
@@ -308,13 +321,8 @@ MASK_KINDS = {
 
 
 def kind_hits(path: Path, lang: str, kind: str, config: Path | None = None) -> list[dict]:
-    if config is not None:
-        rule = json.dumps({"id": "kind", "language": lang, "rule": {"kind": kind}})
-        cmd = ["ast-grep", "scan", f"--config={config}",
-               f"--inline-rules={rule}", "--json=compact", str(path)]
-    else:
-        cmd = ["ast-grep", "run", "-l", lang, "--kind", kind, "--json=compact", str(path)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    rule = {"id": "kind", "language": lang, "rule": {"kind": kind}}
+    proc = _run_ast_grep(path, lang, rule, ["--kind", kind], config)
     if proc.returncode not in (0, 1):
         raise GateError(f"ast-grep run failed on {path}: {render_error_line(proc)}")
     if not proc.stdout.strip():
@@ -433,9 +441,21 @@ def render_error_line(result: subprocess.CompletedProcess) -> str:
     return result.stderr.strip().partition("\n")[0] or f"exit {result.returncode}"
 
 
-def require_ast_grep() -> None:
+PINNED_AST_GREP_VERSION = "0.45.3"
+
+
+@functools.cache
+def _ast_grep_ready() -> None:
     if not shutil.which("ast-grep"):
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
-    proc = subprocess.run(["ast-grep", "--version"], capture_output=True, check=False)
+    proc = subprocess.run(["ast-grep", "--version"], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise GateError("ast-grep not found on PATH (./install.sh --deps, or pip install ast-grep-cli)")
+    installed = proc.stdout.strip().rpartition(" ")[2]
+    if installed != PINNED_AST_GREP_VERSION:
+        _emit(f"mutation-gate: ast-grep {installed} on PATH, pinned to {PINNED_AST_GREP_VERSION} — "
+              "the mutant catalogue and waivers were pinned against that version")
+
+
+def require_ast_grep() -> None:
+    _ast_grep_ready()

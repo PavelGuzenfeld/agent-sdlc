@@ -38,7 +38,7 @@ jobs:
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
       - uses: actions/checkout@v4
-      - run: pip install --no-cache-dir -e ".[vocabulary]" pytest pytest-cov pyyaml ast-grep-cli
+      - run: pip install --no-cache-dir -e ".[vocabulary]" pytest pytest-cov pyyaml ast-grep-cli==0.45.3
       - run: mkdir -p /usr/share/nltk_data && python -c "import nltk; nltk.download('wordnet', download_dir='/usr/share/nltk_data')"
       - run: ast-grep --version
       - uses: actions/cache@v4
@@ -108,6 +108,7 @@ jobs:
           sh tests/mutants-diff-prefix.sh
           sh tests/mutants-unescape-quoted-paths.sh
           sh tests/mutants-binary-entries.sh
+          sh tests/mutants-non-utf8-argv.sh
 
   docs:
     runs-on: ubuntu-latest
