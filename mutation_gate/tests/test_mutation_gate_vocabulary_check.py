@@ -120,6 +120,7 @@ def test_cpp_field_named_q_blocks_as_a_symbol_outside_a_local(tmp_path, monkeypa
     assert code == 1
     assert "src/k.hpp:2: field `Q`" in err
     assert "locals and parameters only" in err
+    assert "try `spell out what the symbol stands for, or make it a local/parameter`" in err
 
 
 def test_cpp_local_named_q_passes_with_q_in_symbol(tmp_path, monkeypatch):
@@ -319,7 +320,15 @@ def test_lower_case_symbol_spelling_matches_the_symbol_table(tmp_path):
 
 def test_module_variable_named_by_a_symbol_blocks(tmp_path):
     found = _findings(tmp_path, "pkg/a.py", "x = 1\n", {1})
-    assert found == ["1:variable:x:`x`: first axis coordinate; locals and parameters only:"]
+    assert found == ["1:variable:x:`x`: first axis coordinate; locals and parameters only:"
+                     "spell out what the symbol stands for, or make it a local/parameter"]
+
+
+def test_symbol_scope_spells_out_a_dictionary_noun_phrase_meaning(tmp_path):
+    domain = '[[symbol]]\nword = "q"\nmeaning = "Process state"\n'
+    found = _findings(tmp_path, "pkg/a.py", "q = 1\n", {1}, domain)
+    assert found == ["1:variable:q:`q`: Process state; locals and parameters only:"
+                     "process_state"]
 
 
 def test_cpp_declaration_kinds_are_told_apart(tmp_path):
@@ -503,7 +512,8 @@ def test_tsx_pascal_case_function_ending_in_ing_blocks_as_a_type(tmp_path):
 
 def test_ts_interface_i_prefix_blocks_as_a_non_local_symbol(tmp_path):
     found = _findings(tmp_path, "ui/a.ts", "interface IFrame {}\n", {1})
-    assert found == ["1:type:IFrame:`I`: loop index; locals and parameters only:"]
+    assert found == ["1:type:IFrame:`I`: loop index; locals and parameters only:"
+                     "spell out what the symbol stands for, or make it a local/parameter"]
 
 
 def test_ts_private_keyword_leading_underscore_blocks_suggesting_trailing_form(tmp_path):
