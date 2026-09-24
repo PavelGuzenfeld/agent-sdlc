@@ -21,6 +21,10 @@ GDSCRIPT_SGCONFIG = (
     "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
     "\n    extensions: [gd]\n    expandoChar: _\n"
 )
+GDSCRIPT_BROKEN_SGCONFIG = (
+    "customLanguages:\n  gdscript:\n    libraryPath: /nonexistent/gdscript.so\n"
+    "    extensions: [gd]\n    expandoChar: _\n"
+)
 
 
 def _require_gdscript_parser() -> None:
@@ -225,17 +229,37 @@ def test_ast_grep_routes_gdscript_through_scan_with_the_custom_language_config(t
     assert [(h["text"], h["replacement"]) for h in hits] == [("1 + 2", "1 - 2")]
 
 
-def test_generate_produces_a_gdscript_mutant_when_the_parser_is_ready(tmp_path):
+def test_generate_produces_a_gdscript_mutant_when_the_parser_is_ready(tmp_path, capsys):
     _require_gdscript_parser()
     (tmp_path / "sgconfig.yml").write_text(GDSCRIPT_SGCONFIG)
     (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
     generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
     assert ("1 + 2", "1 - 2") in [(m.old, m.new) for m in generated]
+    assert mutants.GDSCRIPT_MUTATION_SKIPPED not in capsys.readouterr().err
+
+
+def test_gdscript_mutation_skipped_names_the_installer_and_the_missing_file():
+    assert mutants.GDSCRIPT_MUTATION_SKIPPED == (
+        "gdscript mutation skipped: no sgconfig.yml — install the parser with "
+        "bin/install-gdscript-parser and commit one"
+    )
 
 
 def test_generate_skips_gdscript_with_a_visible_reason_when_the_parser_is_not_ready(
     tmp_path, capsys
 ):
+    (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
+    generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
+    assert generated == []
+    assert mutants.GDSCRIPT_MUTATION_SKIPPED in capsys.readouterr().err
+
+
+def test_generate_skips_gdscript_with_a_visible_reason_when_the_library_is_broken(
+    tmp_path, capsys
+):
+    """A committed sgconfig.yml pointing at a missing library is still not
+    ready — treat it the same as no sgconfig.yml, per vocabulary_check."""
+    (tmp_path / "sgconfig.yml").write_text(GDSCRIPT_BROKEN_SGCONFIG)
     (tmp_path / "a.gd").write_text("func _ready():\n\tvar x = 1 + 2\n")
     generated = mutants.generate(tmp_path, {"a.gd": {2}}, "gdscript")
     assert generated == []
@@ -271,7 +295,8 @@ def test_generate_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
     (tmp_path / "a.gd").write_text("var x = 1\n")
     mutants.generate(tmp_path, {"a.gd": {1}}, "gdscript")
     assert seen
-    assert all(f"--config={config}" in cmd for cmd in seen)
+    assert all(cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in seen)
+    assert not any("-l" in cmd or "gdscript" in cmd for cmd in seen)
 
 
 def test_generate_does_not_probe_gdscript_readiness_for_an_unrelated_language(
@@ -320,4 +345,6 @@ def test_staged_dry_run_says_skipped_when_the_gdscript_parser_is_not_ready(
     monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"a.gd": {2}})
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     assert cli.main(["--staged", "--dry-run"]) == 0
-    assert mutants.GDSCRIPT_MUTATION_SKIPPED in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert mutants.GDSCRIPT_MUTATION_SKIPPED in err
+    assert "a.gd: 0 candidate test file(s), 0 mutant(s)" in err
