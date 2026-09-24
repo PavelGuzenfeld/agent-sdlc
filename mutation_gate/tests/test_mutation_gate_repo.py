@@ -22,6 +22,7 @@ from mutation_gate.repo import (
     Repo,
     git,
     git_bytes,
+    post_image_path,
 )
 
 
@@ -287,3 +288,26 @@ def test_unconfigured_checkout_still_flags_an_upstream_remote(tmp_path, monkeypa
     monkeypatch.delenv(OWN_NAMESPACES_ENV, raising=False)
     repo = _repo(tmp_path, "https://github.com/third-party/x.git", remotes=("origin", "upstream"))
     assert repo.fork_signal == "a remote named 'upstream' exists (fork of an upstream)"
+
+
+@pytest.mark.parametrize(
+    "field, expected",
+    [
+        ("b/fixture.py", "fixture.py"),
+        ("/dev/null", None),
+        (r'"b/caf\303\251.py"', "café.py"),
+        (r'"b/tab\tname.py"', "tab\tname.py"),
+        (r'"b/quote\"name.py"', 'quote"name.py'),
+        (r'"b/back\\slash.py"', "back\\slash.py"),
+        (r'"b/ctrl\001byte.py"', "ctrl\x01byte.py"),
+        (r'"b/all\a\b\f\n\r\t\v\\end.py"', "all\a\b\f\n\r\t\v\\end.py"),
+        (r'"b/\303\2511.py"', "é1.py"),
+        (r'"b/bad\377.py"', "bad\udcff.py"),
+    ],
+)
+def test_post_image_path_unescapes_git_c_style_quoting(field, expected):
+    assert post_image_path(field) == expected
+
+
+def test_post_image_path_leaves_an_unquoted_escape_sequence_unescaped():
+    assert post_image_path(r"b/back\tail.py") == "back\\tail.py"

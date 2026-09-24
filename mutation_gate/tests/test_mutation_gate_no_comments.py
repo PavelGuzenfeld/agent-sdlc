@@ -18,6 +18,8 @@ from mutation_gate.waivers import Waiver, finding_waived
 
 OPTED_IN = "no_comments = true\n"
 FILE = "tests/test_a.py"
+TS_FILE = "tests/test_a.ts"
+TSX_FILE = "tests/test_a.tsx"
 GDSCRIPT_LIB = Path.home() / ".local" / "share" / "ast-grep" / "gdscript.so"
 GDSCRIPT_SGCONFIG = (
     "customLanguages:\n  gdscript:\n    libraryPath: " + str(GDSCRIPT_LIB) +
@@ -157,6 +159,7 @@ def test_docstring_is_not_a_comment(tmp_path, monkeypatch):
     "x = 1  # noqa: E501\n",
     "x: int = 1  # type: ignore\n",
     "# ruff: noqa\n",
+    "# gdlint: disable=max-line-length\n",
 ])
 def test_shebang_license_and_pragma_lines_are_carved_out(tmp_path, monkeypatch, text):
     repo = _repo(tmp_path, OPTED_IN, {"pkg/a.py": text})
@@ -326,12 +329,149 @@ def test_gdscript_prose_comment_blocks_when_parser_is_ready(tmp_path, monkeypatc
     assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
 
 
+@pytest.mark.parametrize("text", [
+    "\t#region Movement\n",
+    "\t#endregion Movement\n",
+    "\t# gdlint: disable=max-line-length\n",
+])
+def test_gdscript_region_and_gdlint_pragmas_are_carved_out_when_parser_is_ready(
+    tmp_path, monkeypatch, text
+):
+    """232: `#region`/`#endregion` parse as their own region_start/region_end
+    kind, never `comment` — the grammar carves them out on its own."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": f"func _ready():\n{text}",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == []
+
+
+def test_gdscript_region_prose_blocks_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\t# region is weird\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+def test_gdscript_gdlint_lookalike_prose_blocks_when_parser_is_ready(tmp_path, monkeypatch):
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": "func _ready():\n\t# gdlint is noisy\n",
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == ["game/a.gd:2"]
+
+
+@pytest.mark.parametrize("text", ["#region\nvar x = 1\n#endregion\n", "#region Movement\nvar x = 1\n#endregion\n"])
+def test_gdscript_top_level_region_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch, text):
+    """232: a bare `#region` and a top-level, unindented one both stay
+    region_start/region_end, matching how Godot repos fold class bodies."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": text, "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {1, 3}) == []
+
+
+def test_gdscript_warning_ignore_annotation_is_carved_out_when_parser_is_ready(tmp_path, monkeypatch):
+    """232 title: `@warning_ignore(...)` parses as `annotation`, never
+    `comment`, so it never reaches PRAGMA_RE either."""
+    _require_gdscript_parser()
+    repo = _repo(tmp_path, OPTED_IN,
+                 {"game/a.gd": 'func _ready():\n    @warning_ignore("unused_variable")\n    var y = 2\n',
+                  "sgconfig.yml": GDSCRIPT_SGCONFIG})
+    assert _findings(monkeypatch, repo, "game/a.gd", {2}) == []
+
+
 def test_gdscript_missing_parser_skip_still_reaches_a_later_file(tmp_path, monkeypatch):
     repo = _repo(tmp_path, OPTED_IN,
                  {"game/a.gd": "func _ready():\n\tpass  # one\n", "pkg/a.py": "y = 1  # two\n"})
     _stub_git(monkeypatch, {})
     found = no_comments.check(repo, {"game/a.gd": {2}, "pkg/a.py": {1}}, [], staged=True)
     assert [(f.file, f.line) for f in found] == [("pkg/a.py", 1)]
+
+
+def test_added_ts_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: "const x = 1;  // one\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TS_FILE}:1" in err
+    assert "// one" in err
+
+
+def test_added_tsx_jsx_comment_line_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: "const x = <div>{/* one */}</div>;\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TSX_FILE}:1" in err
+    assert "/* one */" in err
+
+
+def test_added_tsx_line_comment_blocks_and_names_the_line(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: "const x = 1;  // one\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TSX_FILE}:1" in err
+    assert "// one" in err
+
+
+PRAGMA_TEXTS = [
+    "// @ts-expect-error\n",
+    "// @ts-ignore\n",
+    "// eslint-disable-next-line no-unused-vars\n",
+    "// eslint-disable-line no-unused-vars\n",
+    "/* eslint-disable no-unused-vars */\n",
+    "/// <reference types=\"node\" />\n",
+    "/* istanbul ignore next */\n",
+]
+
+
+@pytest.mark.parametrize("text", PRAGMA_TEXTS)
+def test_ts_pragmas_are_carved_out(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {}) == 0
+
+
+@pytest.mark.parametrize("text", PRAGMA_TEXTS)
+def test_tsx_pragmas_are_carved_out(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TSX_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TSX_FILE: {1}}, {}) == 0
+
+
+@pytest.mark.parametrize("text", [
+    "// eslint is noisy\n",
+    "// @todo fix this later\n",
+    "/// some prose, not a reference directive\n",
+    "/* istanbul was not consulted */\n",
+])
+def test_ts_prose_that_merely_resembles_a_pragma_still_blocks(tmp_path, monkeypatch, text):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: text})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1}}, {}) == 1
+
+
+def test_ts_pragma_on_an_earlier_line_does_not_hide_a_later_prose_comment(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path, OPTED_IN,
+                 {TS_FILE: "// @ts-expect-error\nconst y = 2;  // two\n"})
+    code = _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1, 2}}, {})
+    err = capsys.readouterr().err
+    assert code == 1
+    assert f"{TS_FILE}:2" in err
+
+
+def test_ts_preexisting_comment_on_an_edited_line_is_invisible(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {"src/a.ts": "const x = 2;  // one\n"})
+    assert _findings(monkeypatch, repo, "src/a.ts", {1}, pre="const x = 1;  // one\n") == []
+
+
+def test_jsdoc_block_is_not_flagged_in_ts(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {TS_FILE: "/**\n * Added prose.\n */\nfunction f() {}\n"})
+    assert _gate(monkeypatch, tmp_path, repo, {TS_FILE: {1, 2, 3}}, {}) == 0
+
+
+def test_jsdoc_style_block_still_blocks_in_cpp(tmp_path, monkeypatch):
+    repo = _repo(tmp_path, OPTED_IN, {"src/a.cpp": "/**\n * Added prose.\n */\nint f() { return 1; }\n"})
+    assert _findings(monkeypatch, repo, "src/a.cpp", {1, 2, 3}) == ["src/a.cpp:1"]
 
 
 def test_gdscript_missing_parser_message_prints_once_for_two_files(tmp_path, monkeypatch, capsys):
