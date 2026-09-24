@@ -50,7 +50,7 @@ def _c_quote(p: str) -> str:
         p.encode("ascii")
         return p
     except UnicodeEncodeError:
-        escaped = "".join(f"\\{b:03o}" for b in p.encode("utf-8"))
+        escaped = "".join(f"\\{b:03o}" for b in p.encode("utf-8", errors="surrogateescape"))
         return f'"{escaped}"'
 
 
@@ -58,6 +58,7 @@ def _fake_git(cached: list[str] = (), worktree: list[str] = (),
               ls_tree: list[str] | None = (), ls_files: list[str] = ()):
     def fake(*args: str, cwd=None) -> str:
         if args[0] == "diff":
+            assert "-z" in args, f"diff must use -z: {args}"
             added = cached if "--cached" in args else worktree
             return "".join(f"{p}\0" for p in added)
         if args[:3] == ("ls-tree", "-r", "--name-only"):
@@ -91,6 +92,14 @@ def test_non_ascii_existing_directory_is_recognized(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     _added(monkeypatch, repo, {"café/frame_parser.py": "class FrameParser:\n    pass\n"},
            existing=["café/existing.py"])
+    assert vocabulary_path.check(repo, True, []) == []
+
+
+def test_invalid_utf8_existing_directory_is_recognized(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    name = os.fsdecode(b"caf\xe9")
+    _added(monkeypatch, repo, {f"{name}/frame_parser.py": "class FrameParser:\n    pass\n"},
+           existing=[f"{name}/existing.py"])
     assert vocabulary_path.check(repo, True, []) == []
 
 
