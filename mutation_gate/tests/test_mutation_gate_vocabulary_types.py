@@ -19,12 +19,10 @@ from mutation_gate.repo import Config, GateError, Repo
 DOMAIN = ".vocabulary.toml"
 OPTED_IN = f'vocabulary = "{DOMAIN}"\n'
 WORDS = (
-    '[[concept]]\nword = "ready"\nmeaning = "prepared to act"\npos = ["adjective"]\n\n'
     '[[concept]]\nword = "reset"\nmeaning = "return to the initial state"\npos = ["verb"]\n'
     'returns = "none"\n\n'
     '[[concept]]\nword = "second"\nmeaning = "the SI unit of time"\npos = ["noun"]\n'
     'forms = ["plural"]\n\n'
-    '[[concept]]\nword = "list"\nmeaning = "an ordered sequence"\npos = ["noun"]\nhead = true\n\n'
 )
 FRAME_LIST = WORDS + '[collection]\ntypes = ["FrameList"]\n'
 FRAMES_ALIAS = "using Frames = std::vector<Frame>;\n"
