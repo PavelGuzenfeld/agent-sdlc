@@ -95,10 +95,9 @@ def _banned_hit(line: str, name: BannedName) -> bool:
 
 
 def _binary_marked_text_hits(repo: Repo, sha: str, path: str) -> list[tuple[str, int, str]]:
-    """A path attributes call binary still scans here when its blob has no NUL
-    byte. Fetched by blob sha, never by path, so quoting or an ` and ` in the
-    name never breaks the lookup. Scans the whole post-image, not just the
-    diff — a binary diff carries no hunk boundaries to say what changed."""
+    """By blob sha, not path: the Binary-files line cannot name a quoted or
+    ` and `-split path reliably. Whole post-image, as a binary diff has no
+    hunks; revisit if an old hit starts blocking unrelated edits."""
     blob = git_bytes("cat-file", "-p", sha, cwd=repo.root)
     if b"\x00" in blob:
         return []
