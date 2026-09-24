@@ -12,10 +12,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_path, vocabulary_wordnet, waivers
-from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, skip_reason
+from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, git, skip_reason
 
 
 TIMEOUT_FACTOR = 6.0
@@ -25,13 +26,23 @@ def _emit(line: str = "") -> None:
     print(line, file=sys.stderr)
 
 
-def _write_report(repo, name: str, text: str) -> Path:
-    """A green pre-commit hook only surfaces its output on failure (#62), so the
-    adversary/blind-pass reports need a durable home besides the terminal."""
+def _write_report(repo, name: str, text: str, staged: bool) -> Path:
+    """dotfiles#62: a durable home for the report besides the terminal, headed
+    by what was reviewed so a stale report can't be mistaken for a fresh one."""
     path = CACHE_ROOT / repo.key / "reports" / f"{name}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(_report_header(repo, staged) + text)
     return path
+
+
+def _report_header(repo, staged: bool) -> str:
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    if staged:
+        tree = git("write-tree", cwd=repo.root).strip()
+        return f"reviewed: staged tree {tree} at {stamp}\n"
+    head = git("rev-parse", "HEAD", cwd=repo.root).strip()
+    dirty = " +dirty" if git("status", "--porcelain", cwd=repo.root).strip() else ""
+    return f"reviewed: {head}{dirty} at {stamp}\n"
 
 
 def _warn_stale_waivers(repo, rel: str, wvs) -> None:
@@ -414,13 +425,13 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
             repo, args.user_prompt, _session_prompt(transcript_path)
         )
         findings = adversary.run(sorted(set(all_cands)), intent, "")
-        path = _write_report(repo, "adversary", findings)
+        path = _write_report(repo, "adversary", findings, staged)
         _emit("")
         _emit(f"── adversary (isolated; reports only, never blocks; saved to {path}) ──")
         _emit(findings)
     if not args.no_adversary and model_vv.model_changed(repo, all_changed):
         findings = model_vv.blind_pass(repo)
-        path = _write_report(repo, "blind-pass", findings)
+        path = _write_report(repo, "blind-pass", findings, staged)
         _emit("")
         _emit(f"── blind pass (code only, no spec; reports only, never blocks; saved to {path}) ──")
         _emit(findings)
