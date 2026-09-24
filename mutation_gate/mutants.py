@@ -15,7 +15,7 @@ import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
-from .repo import GateError
+from .repo import DIFF_PREFIX_PIN_ARGS, GateError, git, post_image_path
 
 # Broad catalogue per decision 10. Retire an entry here when it keeps landing in
 # waiver files as an equivalent mutant — the waiver list is the tuning data.
@@ -168,23 +168,27 @@ def language_of(path: str) -> str | None:
 
 def changed_lines(root: Path, staged: bool) -> dict[str, set[int]]:
     """Post-image line numbers per file. staged=index (pre-commit), else worktree."""
-    args = ["diff", "-U0", "--no-color"]
+    args = ["diff", "-U0", "--no-color", *DIFF_PREFIX_PIN_ARGS]
     if staged:
         args.append("--cached")
-    out = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, check=False
-    ).stdout
+    out = git(*args, cwd=root)
     result: dict[str, set[int]] = {}
-    current = None
+    current: str | None = None
+    in_hunk = False
     for raw in out.splitlines():
-        if raw.startswith("+++ b/"):
-            current = raw[6:]
-            result.setdefault(current, set())
-        elif raw.startswith("@@") and current is not None:
-            m = re.search(r"\+(\d+)(?:,(\d+))?", raw)
-            if m:
-                start, count = int(m.group(1)), int(m.group(2) or 1)
-                result[current].update(range(start, start + count))
+        if raw.startswith("diff --git "):
+            current, in_hunk = None, False
+        elif not in_hunk and raw.startswith("+++ "):
+            current = post_image_path(raw[4:])
+            if current is not None:
+                result.setdefault(current, set())
+        elif raw.startswith("@@"):
+            in_hunk = True
+            if current is not None:
+                m = re.search(r"\+(\d+)(?:,(\d+))?", raw)
+                if m:
+                    start, count = int(m.group(1)), int(m.group(2) or 1)
+                    result[current].update(range(start, start + count))
     return {f: lines for f, lines in result.items() if lines}
 
 

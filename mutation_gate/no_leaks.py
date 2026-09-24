@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .commit_msg import _strip_editor_cruft, _word_pattern
-from .repo import GateError, Repo, discover, git
+from .repo import DIFF_PREFIX_PIN_ARGS, GateError, Repo, discover, git, post_image_path
 
 _OCTET = r"[0-9]{1,3}"
 _IDENTITY_RE = re.compile(
@@ -89,21 +89,10 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
-def _post_image_path(field: str) -> str | None:
-    field = field.removesuffix("\t")
-    if field.startswith('"') and field.endswith('"'):
-        field = field[1:-1]
-    if field == "/dev/null":
-        return None
-    if not field.startswith("b/"):
-        raise GateError("no-leaks: a diff post-image header did not parse")
-    return field[2:]
-
-
 def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]:
     out = git(
-        "diff", "-U0", "--no-color", "--no-renames", "--no-ext-diff",
-        "--src-prefix=a/", "--dst-prefix=b/", *diff_args, cwd=repo.root,
+        "diff", "-U0", "--no-color", "--no-renames", *DIFF_PREFIX_PIN_ARGS,
+        *diff_args, cwd=repo.root,
     )
     hits: list[tuple[str, int, str]] = []
     current: str | None = None
@@ -113,7 +102,7 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
         if raw.startswith("diff --git "):
             current, in_hunk = None, False
         elif not in_hunk and raw.startswith("+++ "):
-            current = _post_image_path(raw[4:])
+            current = post_image_path(raw[4:])
         elif raw.startswith("@@"):
             in_hunk = True
             m = re.search(r"\+(\d+)", raw)
