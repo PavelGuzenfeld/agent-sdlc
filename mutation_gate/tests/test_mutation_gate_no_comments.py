@@ -301,8 +301,8 @@ def test_check_passes_the_ready_config_into_every_ast_grep_call_for_gdscript(
     repo = _repo(tmp_path, OPTED_IN, {"game/a.gd": "pass  # one\n", "pkg/a.py": "y = 1  # two\n"})
     _stub_git(monkeypatch, {"game/a.gd": "pass  # zero\n"})
     no_comments.check(repo, {"game/a.gd": {1}, "pkg/a.py": {1}}, [], staged=True)
-    gd_calls = [cmd for cmd in seen if any(a.endswith("a.gd") for a in cmd)]
-    py_calls = [cmd for cmd in seen if any(a.endswith("a.py") for a in cmd)]
+    gd_calls = [cmd for cmd in seen if any(a.endswith(".gd") for a in cmd)]
+    py_calls = [cmd for cmd in seen if any(a.endswith(".py") for a in cmd)]
     assert len(gd_calls) == 2, "expected one call for the added file, one for its pre-image copy"
     assert all(cmd[:2] == ["ast-grep", "scan"] and f"--config={config}" in cmd for cmd in gd_calls)
     assert len(py_calls) == 1

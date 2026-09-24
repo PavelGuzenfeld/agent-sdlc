@@ -8,6 +8,7 @@ the helper no-leaks shares. `git` is stubbed; the test image carries no git
 binary."""
 
 import contextlib
+import os
 import subprocess
 from pathlib import Path
 
@@ -471,6 +472,22 @@ def test_path_error_sends_output_to_reader(monkeypatch, tmp_path):
     monkeypatch.setattr(mutants, "render_error_line", lambda result: "stub-line")
     with pytest.raises(GateError, match="stub-line"):
         mutants.kind_hits(fixture, "python", "comment")
+
+
+def test_ast_grep_scans_a_latin1_named_file_without_ast_grep_panicking(tmp_path):
+    """#249: ast-grep (Rust `env::args`) panics on a non-UTF-8 argv path, so
+    `_ast_grep` must scan an ASCII-named copy instead of the real path."""
+    fixture = tmp_path / os.fsdecode(b"caf\xe9.py")
+    fixture.write_bytes(b"x = 1 + 2\n")
+    hits = mutants._ast_grep(fixture, "python", "$A + $B", "$A - $B", None)
+    assert [(h["text"], h["replacement"]) for h in hits] == [("1 + 2", "1 - 2")]
+
+
+def test_kind_hits_scans_a_latin1_named_file_without_ast_grep_panicking(tmp_path):
+    fixture = tmp_path / os.fsdecode(b"caf\xe9.py")
+    fixture.write_bytes(b"x = 1  # one\n")
+    hits = mutants.kind_hits(fixture, "python", "comment")
+    assert [h["text"] for h in hits] == ["# one"]
 
 
 def test_ast_grep_routes_gdscript_through_scan_with_the_custom_language_config(tmp_path):
