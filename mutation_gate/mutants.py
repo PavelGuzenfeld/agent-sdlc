@@ -342,23 +342,35 @@ def _kind_spans(path: Path, lang: str, config: Path | None = None) -> list[tuple
     ]
 
 
+FSTRING_START = getattr(tokenize, "FSTRING_START", None)
+FSTRING_END = getattr(tokenize, "FSTRING_END", None)
+
+
 def masked_spans(path: Path, lang: str, config: Path | None = None) -> list[tuple[int, int]]:
-    """Byte spans where a literal perturbation cannot be observed: strings and
-    comments, which are not code, and the compile-time extents of MASK_KINDS.
-    Mutating inside one yields a guaranteed meaningless survivor."""
+    """Byte spans a literal mutant cannot land in: strings, comments, whole
+    f-strings (PEP 701 splits their expression tokens apart from 3.12 on;
+    masking the span matches 3.11's single STRING token), and MASK_KINDS."""
     if lang in MASK_KINDS:
         return _kind_spans(path, lang, config)
     if lang != "python":
         return []
     spans, starts = [], _line_starts(path.read_bytes())
+    depth, fstring_start = 0, None
     try:
         with path.open("rb") as fh:
             for tok in tokenize.tokenize(fh.readline):
+                start = starts[tok.start[0] - 1] + tok.start[1]
+                end = starts[tok.end[0] - 1] + tok.end[1]
                 if tok.type in (tokenize.STRING, tokenize.COMMENT):
-                    spans.append(
-                        (starts[tok.start[0] - 1] + tok.start[1],
-                         starts[tok.end[0] - 1] + tok.end[1])
-                    )
+                    spans.append((start, end))
+                elif tok.type == FSTRING_START:
+                    if depth == 0:
+                        fstring_start = start
+                    depth += 1
+                elif tok.type == FSTRING_END:
+                    depth -= 1
+                    if depth == 0:
+                        spans.append((fstring_start, end))
     except (tokenize.TokenError, IndentationError, SyntaxError, IndexError, ValueError):
         return []
     return spans
