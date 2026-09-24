@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .commit_msg import _strip_editor_cruft, _word_pattern
-from .repo import DIFF_PREFIX_PIN_ARGS, GateError, Repo, discover, git, post_image_path
+from .repo import DIFF_PREFIX_PIN_ARGS, GateError, Repo, discover, git, git_bytes, post_image_path
 
 _OCTET = r"[0-9]{1,3}"
 _IDENTITY_RE = re.compile(
@@ -33,6 +33,9 @@ _BULLET_RE = re.compile(r"^\s*-\s*")
 _ARROW = "→"
 
 _FIXTURE_EXCLUDE_PATHSPEC = ":!tests/fixtures/**"
+
+_BINARY_DIFFERS_RE = re.compile(r'^Binary files (?:/dev/null|"?a/.+) and ("?b/.+|/dev/null) differ$')
+_INDEX_SHA_RE = re.compile(r"^index [0-9a-f]+\.\.([0-9a-f]+)")
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,17 @@ def _banned_hit(line: str, name: BannedName) -> bool:
     return bool(_word_pattern(name.token).search(line))
 
 
+def _binary_marked_text_hits(repo: Repo, sha: str, path: str) -> list[tuple[str, int, str]]:
+    """By blob sha, not path: the Binary-files line cannot name a quoted or
+    ` and `-split path reliably. Whole post-image, as a binary diff has no
+    hunks; revisit if an old hit starts blocking unrelated edits."""
+    blob = git_bytes("cat-file", "-p", sha, cwd=repo.root)
+    if b"\x00" in blob:
+        return []
+    text = blob.decode("utf-8", errors="replace")
+    return [(path, i, line) for i, line in enumerate(text.splitlines(), start=1)]
+
+
 def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]:
     out = git(
         "diff", "-U0", "--no-color", "--no-renames", *DIFF_PREFIX_PIN_ARGS,
@@ -100,11 +114,17 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
     current: str | None = None
     in_hunk = False
     next_line = 0
+    pending_sha: str | None = None
+    binary_entries: list[tuple[str, str]] = []
     for raw in out.splitlines():
         if raw.startswith("diff --git "):
-            current, in_hunk = None, False
+            current, in_hunk, pending_sha = None, False, None
         elif not in_hunk and raw.startswith("+++ "):
             current = post_image_path(raw[4:])
+        elif not in_hunk and raw.startswith("index "):
+            m = _INDEX_SHA_RE.match(raw)
+            if m:
+                pending_sha = m.group(1)
         elif raw.startswith("@@"):
             in_hunk = True
             m = re.search(r"\+(\d+)", raw)
@@ -112,6 +132,14 @@ def _diff_added_lines(repo: Repo, *diff_args: str) -> list[tuple[str, int, str]]
         elif in_hunk and current is not None and raw.startswith("+"):
             hits.append((current, next_line, raw[1:]))
             next_line += 1
+        else:
+            m = _BINARY_DIFFERS_RE.match(raw)
+            if m and pending_sha is not None:
+                path = post_image_path(m.group(1))
+                if path is not None:
+                    binary_entries.append((path, pending_sha))
+    for path, sha in binary_entries:
+        hits.extend(_binary_marked_text_hits(repo, sha, path))
     return hits
 
 
