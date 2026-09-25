@@ -1,6 +1,6 @@
 {
   "name": "agent-sdlc",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Skills, rules and a diff-scoped mutation gate for a ticket-to-PR software development lifecycle.",
   "author": {
     "name": "Pavel Guzenfeld",
