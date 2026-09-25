@@ -271,7 +271,8 @@ def test_kata_queue_and_dispatch_require_an_assignee():
 def test_tickets_rule_names_the_assignee_convention():
     content = (Path(__file__).parents[2] / "rules" / "tickets.md").read_text()
     normalized = " ".join(content.split())
-    assert "one responsible person: the `gh`-authenticated user, `@me`" in normalized
+    assert "name one responsible person as assignee" in normalized
+    assert "An agent works only tickets assigned to the `gh` user it runs as, `@me`" in normalized
     assert "never born with a `model:<name>` label or an assignee" in normalized
 
 
