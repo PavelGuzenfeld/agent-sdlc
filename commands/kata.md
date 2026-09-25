@@ -9,25 +9,30 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
 ## Queue
 
 - `/kata` — every open issue labelled `model:haiku`, `model:sonnet`,
-  `model:opus` or `model:fable`. An unlabelled ticket was never in the queue.
-  Follow-ups also labelled size:tiny that share one `model:<name>` label group
-  into batches of at most five, each batch taking its oldest ticket's queue
-  position — a longer tiny queue splits into more batches. Kata's own
-  judgment may pull a ticket out of a batch it finds not tiny; it never adds
-  an unlabelled ticket to one.
+  `model:opus` or `model:fable`, assigned to `@me`. An unlabelled ticket, or
+  one not assigned to `@me`, was never in the queue. Follow-ups also labelled
+  size:tiny that share one `model:<name>` label group into batches of at most
+  five, each batch taking its oldest ticket's queue position — a longer tiny
+  queue splits into more batches. Kata's own judgment may pull a ticket out
+  of a batch it finds not tiny; it never adds an unlabelled or unassigned
+  ticket to one.
 - `/kata <N>` — just ticket `N`, alone, even when it carries size:tiny.
   Batching only happens in whole-queue `/kata`. Naming a ticket in plain
   English is the same authorisation as the label.
 
-A run works the queue as it stood when it started. A ticket filed while it
-runs waits for the next `/kata`.
+A run works the queue as it stood when it started, assignees included; a
+mid-run reassignment takes effect on the next `/kata`. A ticket filed while
+it runs waits for the next `/kata`.
 
 Read each ticket's `model:<name>` label before dispatch. Triage adding it is
 the approval, so kata never creates or adds a `model:*` label at dispatch —
 it only creates repo config and labels on demand the way the labels
 `rules/tickets.md`'s Follow-ups section requires get created if missing.
 `/kata <N>` on a ticket with no model label asks which model; that answer is
-the triage, so kata adds its `model:<name>` label, then dispatches.
+the triage, so kata adds its `model:<name>` label, then dispatches. `/kata
+<N>` on an unassigned ticket asks whether to take it; that answer is the
+triage, so kata assigns `@me`, then dispatches. On a ticket assigned to
+someone else, kata stops, names the assignee, and never reassigns.
 
 ## Dispatch
 
@@ -58,9 +63,10 @@ needs. The agent:
    still carrying findings, the agent reports back instead of running a third
    gated commit. A waiver is fine only when it is an equivalence waiver proved
    by rebuild-and-diff — any other waiver stops the agent the same way.
-4. Pushes, then opens one PR with a `Closes #N` line per ticket still in it,
-   at most three plain sentences on what changed, and a Human-testing section
-   when the change is user-observable. No how-it-works paragraph.
+4. Pushes, then opens one PR with `--assignee @me`, a `Closes #N` line per
+   ticket still in it, at most three plain sentences on what changed, and a
+   Human-testing section when the change is user-observable. No how-it-works
+   paragraph.
 5. Waits for CI with one blocking call — `gh pr checks <PR> --watch`, output
    to a file — never polling turn by turn. No `.github/workflows/` in the
    repo means no checks to wait for — skip straight to exit. Red: fix, push,
@@ -102,9 +108,11 @@ must never reach into another lane's live agents.
 
 ## Acceptance
 
-`/kata 3` against a `model:sonnet` ticket #3 ends with an open PR whose body
-has `Closes #3` and, when applicable, a Human-testing section — and a
-worktree that is gone once that PR merges.
+Every ticket below is assigned to `@me` unless it says otherwise.
+
+`/kata 3` against a `model:sonnet` ticket #3 ends with an open PR assigned to
+`@me` whose body has `Closes #3` and, when applicable, a Human-testing
+section — and a worktree that is gone once that PR merges.
 
 `/kata` over three size:tiny `model:sonnet` tickets and one plain
 `model:sonnet` ticket opens two PRs, one of them with a `Closes #N` line for
@@ -112,3 +120,6 @@ all three tiny tickets.
 
 `/kata` over one `model:haiku` ticket and one unlabelled ticket dispatches
 only the first, on haiku.
+
+`/kata` over one `model:sonnet` ticket assigned to `@me` and one
+`model:sonnet` ticket assigned to someone else dispatches only the first.
