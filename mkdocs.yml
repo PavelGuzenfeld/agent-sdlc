@@ -44,6 +44,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Usage: usage.md
   - Techniques: techniques.md
   - SDLC: sdlc.md
   - Gate: gate.md
