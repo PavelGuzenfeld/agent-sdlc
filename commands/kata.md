@@ -14,8 +14,8 @@ The main session's ticket-to-merge loop. It dispatches; it never implements.
   size:tiny that share one `model:<name>` label group into batches of at most
   five, each batch taking its oldest ticket's queue position — a longer tiny
   queue splits into more batches. Kata's own judgment may pull a ticket out
-  of a batch it finds not tiny; it never adds an unlabelled or unassigned
-  ticket to one.
+  of a batch it finds not tiny; it never adds an unlabelled ticket to one,
+  nor a ticket not assigned to `@me`.
 - `/kata <N>` — just ticket `N`, alone, even when it carries size:tiny.
   Batching only happens in whole-queue `/kata`. Naming a ticket in plain
   English is the same authorisation as the label.
