@@ -951,6 +951,7 @@ def test_masked_spans_covers_a_nested_fstring_as_one_span_on_every_python(tmp_pa
     "if __name__ == '__main__':",
     'if __name__ != "__main__":',
     'if "__main__" == __name__:',
+    'if "__main__" != __name__:',
 ])
 def test_a_main_guard_is_never_mutated_so_importing_the_module_cannot_run_its_script(
     tmp_path, guard
