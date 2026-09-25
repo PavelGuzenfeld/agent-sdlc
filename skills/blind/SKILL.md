@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Blind
 
+`<skill-dir>` is `${CLAUDE_SKILL_DIR}`, the directory this SKILL.md was read from.
+
 Two ranked lists of mechanisms, produced under different information, and the
 difference between them.
 
@@ -103,7 +105,7 @@ git -C <repo> archive --format=tar <pin> -- . \
 cd <work> && claude -p \
   --restricted --disable-slash-commands --strict-mcp-config \
   --tools Read Grep Glob \
-  --system-prompt-file ~/.claude/skills/blind/references/blind-prompt.md \
+  --system-prompt-file <skill-dir>/references/blind-prompt.md \
   "$(cat manifest.md)" < /dev/null > <record>/blind.md
 ```
 

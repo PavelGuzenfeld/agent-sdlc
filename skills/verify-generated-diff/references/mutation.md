@@ -37,25 +37,25 @@ re-emit it with an injected return.
 
 ```bash
 # C++
-scripts/mutate.sh src/trk/gate.cpp \
+<skill-dir>/scripts/mutate.sh src/trk/gate.cpp \
   'bool Gate::accept(const Meas& m) const {' \
   'bool Gate::accept(const Meas& m) const { return true;' \
   trk_gate
 
 # Python
-scripts/mutate.sh gate.py \
+<skill-dir>/scripts/mutate.sh gate.py \
   'def accept(self, d2, thresh):' \
   $'def accept(self, d2, thresh):\n        return True' \
   test_gate.py
 
 # Rust
-scripts/mutate.sh src/gate.rs \
+<skill-dir>/scripts/mutate.sh src/gate.rs \
   'pub fn accept(&self, d2: f64) -> bool {' \
   'pub fn accept(&self, d2: f64) -> bool { return true;' \
   gate
 
 # Go
-scripts/mutate.sh gate.go \
+<skill-dir>/scripts/mutate.sh gate.go \
   'func (g *Gate) Accept(d2 float64) bool {' \
   'func (g *Gate) Accept(d2 float64) bool { return true;' \
   TestGate

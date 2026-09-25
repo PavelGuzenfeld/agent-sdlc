@@ -34,7 +34,7 @@ constraint. "I couldn't think of one" is row 4, not row 3.
 ## Enumerating candidates
 
 ```bash
-scripts/survey.sh reviewed          # swallowed-exception section is exactly this
+<skill-dir>/scripts/survey.sh reviewed          # swallowed-exception section is exactly this
 ```
 
 Or directly:
@@ -56,7 +56,7 @@ string on the command line. Include enough surrounding text that the match is
 unique, and keep the trailing newline so you don't leave a blank line behind.
 
 ```bash
-scripts/mutate.sh src/trk/track.cpp '  if (!m.valid) return;
+<skill-dir>/scripts/mutate.sh src/trk/track.cpp '  if (!m.valid) return;
 ' '' trk_track
 ```
 

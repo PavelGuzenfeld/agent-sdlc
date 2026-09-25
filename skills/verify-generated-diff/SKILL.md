@@ -5,6 +5,10 @@ description: "Verify a diff whose tests were written alongside it, so tests can'
 
 # Verifying a Generated Diff
 
+`<skill-dir>` is `${CLAUDE_SKILL_DIR}`, the directory this SKILL.md was read from.
+Every command below runs with the reviewed repo as cwd and reaches this skill's
+own scripts through `<skill-dir>`.
+
 Code written together with its own tests has a specific failure mode: the tests
 encode what the code *does* rather than what it *should* do. Green means the two
 agree, which they always will. So the normal reviewer heuristic — read the
@@ -99,7 +103,7 @@ Also run the orientation survey, which is cheap and catches things reading
 misses:
 
 ```bash
-scripts/survey.sh reviewed
+<skill-dir>/scripts/survey.sh reviewed
 ```
 
 It reports scope (files, new files), reinvention candidates (new symbols whose
@@ -121,8 +125,8 @@ Write four mutants per target function, one of each kind:
 Put them in a TSV and run:
 
 ```bash
-scripts/mutate.sh <file> '<literal-old>' '<literal-new>' [test-filter]
-scripts/run_mutants.sh mutants.tsv
+<skill-dir>/scripts/mutate.sh <file> '<literal-old>' '<literal-new>' [test-filter]
+<skill-dir>/scripts/run_mutants.sh mutants.tsv
 ```
 
 Classify:
@@ -212,7 +216,7 @@ If `perf/budget.md` exists and the diff touches a file the budget names, these t
 passes say nothing about whether it is still fast enough. Run the performance gate:
 
 ```
-python3 ~/.claude/skills/sol-budget/scripts/budget_check.py --perf perf
+python3 <skill-dir>/../sol-budget/scripts/budget_check.py --perf perf
 ```
 
 `PERF_GATE: fail` is a finding like any other — report it with the node and the
