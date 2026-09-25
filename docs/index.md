@@ -136,6 +136,7 @@ Details: [Getting started](getting-started.md) and
 | You want to | Read |
 |---|---|
 | Install and see it work | [Getting started](getting-started.md) |
+| Go from install to a merged PR, step by step | [Usage](usage.md) |
 | Understand the ideas | [Techniques](techniques.md) |
 | Follow the ticket-to-merge flow | [SDLC](sdlc.md) |
 | Get unblocked by the gate | [Gate](gate.md) |
