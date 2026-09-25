@@ -116,9 +116,16 @@ printf '#!/usr/bin/env sh\nexit 0\n' > "$gate_stub/mutation-gate"
 chmod +x "$gate_stub/mutation-gate"
 
 uninstall_home=$(mktemp -d)
+mkdir -p "$uninstall_home/.claude"
+printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}]}}\n' \
+    > "$uninstall_home/.claude/settings.json"
 PATH="$gate_stub:$PATH" HOME="$uninstall_home" sh "$dir/install.sh" --target all >/dev/null
-expect "[pre-uninstall] mutation-gate Stop hook was added" \
-    jq -e '.hooks.Stop | tostring | contains("mutation-gate --worktree")' "$uninstall_home/.claude/settings.json"
+expect "[pre-uninstall] mutation-gate-hook.sh Stop hook was added" \
+    jq -e '.hooks.Stop | tostring | contains("mutation-gate-hook.sh")' "$uninstall_home/.claude/settings.json"
+expect "[pre-uninstall] mutation-gate-hook.sh is linked into the bin dir" \
+    test -L "$uninstall_home/.claude/bin/mutation-gate-hook.sh"
+expect "[migration] the old bare mutation-gate entry was replaced, not kept alongside" \
+    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$uninstall_home/.claude/settings.json")" = 0
 
 settings="$uninstall_home/.claude/settings.json"
 tmp=$(mktemp)
@@ -144,7 +151,7 @@ expect "[uninstall] a bin symlink pointing at a different clone survives" \
 expect "[uninstall] settings.json drops the say hook" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("say-hook.sh"))] | length' "$settings")" = 0
 expect "[uninstall] settings.json drops the mutation-gate hook" \
-    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$settings")" = 0
+    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate-hook.sh"))] | length' "$settings")" = 0
 expect "[uninstall] the not-owned git-guardrail hook survives" \
     jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$settings"
 expect "[uninstall] an unrelated Stop entry survives" \
