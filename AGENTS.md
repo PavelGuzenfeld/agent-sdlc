@@ -216,6 +216,11 @@ repo defaults to squash-only merges with delete-branch-on-merge.
 The one carve-out: a batch of confirmed `size:tiny` follow-ups may share one
 worker, one branch and one PR, with a `Closes #N` line per ticket.
 
+Every ticket and its PR name one responsible person as assignee. Triage
+sets it alongside the `model:*` label — the label approves, the assignee
+names who works it. An agent works only tickets assigned to the `gh` user
+it runs as, `@me`, and its PR carries that same assignee.
+
 ## Follow-ups
 
 A follow-up starts from `/done`, a kata worker, any agent mid-task, or the
@@ -230,8 +235,9 @@ form's label.
 The filer proposes `size:tiny` when the ticket is tiny: its evidence names
 one location, it leaves no design choice open, and it needs no new file,
 dependency or config key. The maintainer confirms the proposal by adding its
-model label. A follow-up is never born with a `model:<name>` label, and a
-label-creation step must never add one to an untriaged follow-up.
+model label. A follow-up is never born with a `model:<name>` label or an
+assignee — triage sets both — and a label-creation step must never add the
+label to an untriaged follow-up.
 
 Labels are created if missing; if creation is refused, file without them
 rather than drop the item.

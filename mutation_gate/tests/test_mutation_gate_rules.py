@@ -256,6 +256,32 @@ def test_kata_batches_confirmed_tiny_tickets_onto_one_batch_branch():
     assert "opens two PRs" in normalized
 
 
+def test_kata_queue_and_dispatch_require_an_assignee():
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "`model:opus` or `model:fable`, assigned to `@me`" in normalized
+    assert "one not assigned to `@me`, was never in the queue" in normalized
+    assert "nor a ticket not assigned to `@me`" in normalized
+    assert "asks whether to take it; that answer is the triage" in normalized
+    assert "stops, names the assignee, and never reassigns" in normalized
+    assert "opens one PR with `--assignee @me`" in normalized
+    assert "assigned to someone else dispatches only the first" in normalized
+
+
+def test_tickets_rule_names_the_assignee_convention():
+    content = (Path(__file__).parents[2] / "rules" / "tickets.md").read_text()
+    normalized = " ".join(content.split())
+    assert "name one responsible person as assignee" in normalized
+    assert "An agent works only tickets assigned to the `gh` user it runs as, `@me`" in normalized
+    assert "never born with a `model:<name>` label or an assignee" in normalized
+
+
+def test_grill_plan_assigns_its_step_tickets_to_me():
+    content = (Path(__file__).parents[2] / "commands" / "grill.md").read_text()
+    normalized = " ".join(content.split())
+    assert "labeled `model:<name>`, assigned to `@me`" in normalized
+
+
 def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
     core_words = set(vocabulary.load(Path("."), "").concepts)
     content = (rules.RULES_DIR / "naming.md").read_text()
