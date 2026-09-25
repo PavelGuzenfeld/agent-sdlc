@@ -66,6 +66,21 @@ cd agent-sdlc
 - `ast-grep-cli` adds an `sg` shim that can shadow the system `sg`; call
   `ast-grep`.
 
+## Use it
+
+In Claude Code (Codex: `$name` instead of `/name`):
+
+1. `./install.sh --target claude --deps`
+2. In your repo: `touch .mutation-gate.toml && mutation-gate rules sync`
+3. `claude`, then `/grill <idea>` or `gh issue create …`
+4. Approve the ticket: `gh issue edit 42 --add-label model:sonnet`
+5. `/kata 42`: a worker writes the failing test, implements, gates, opens the PR
+6. Review, then type `LGTM`: it squash-merges and cleans up
+7. `/done` to close out the session
+
+Full walkthrough, and what differs in Codex:
+<https://pavelguzenfeld.com/agent-sdlc/usage/>
+
 ## What's inside
 
 | Path | What |
