@@ -159,6 +159,12 @@ class Golden:
     artifact: str
 
 
+@dataclass(frozen=True)
+class PathTimeout:
+    path: str
+    mutant_timeout: float
+
+
 @dataclass
 class Config:
     enabled: bool = True
@@ -197,6 +203,7 @@ class Config:
     # baseline, which is right only where a mutant costs what the baseline cost;
     # where a build sits between the edit and the tests it does not (#78).
     mutant_timeout: float | None = None
+    timeout: list[PathTimeout] = field(default_factory=list)
     # Import hops from a test to the mutated file. 1 = direct import; raising it
     # selects nearly the whole suite once a common module sits in the path.
     closure_depth: int = 1
@@ -237,9 +244,10 @@ class Config:
         model_exclude = _load_model_exclude(raw.pop("model_exclude", []))
         golden = _load_golden(raw.pop("golden", []))
         doc_allow = _load_doc_allow(raw.pop("doc_allow", []))
+        timeout = _load_timeout(raw.pop("timeout", []))
         # Named, not silently dropped: a key that does nothing is how a repo
         # believes it is scoping the gate while the gate ignores it.
-        nested = {"languages", "model_exclude", "golden", "doc_allow"}
+        nested = {"languages", "model_exclude", "golden", "doc_allow", "timeout"}
         unknown = sorted(set(raw) - {f.name for f in fields(cls) if f.name not in nested})
         if unknown:
             raise GateError(
@@ -247,13 +255,19 @@ class Config:
                 "nothing reads them. Scope the gate with exclude_paths."
             )
         cfg = cls(**raw, languages=languages, model_exclude=model_exclude, golden=golden,
-                  doc_allow=doc_allow)
+                  doc_allow=doc_allow, timeout=timeout)
         if cfg.model_paths and not cfg.model_spec.startswith("issue:"):
             raise GateError(
                 f'{CONFIG_NAME}: model_spec must be "issue:N" naming a pinned issue once '
                 "model_paths is set; a file path, including the default, is refused"
             )
         return cfg
+
+    def mutant_timeout_for(self, rel: str) -> float | None:
+        matching = [t for t in self.timeout if rel.startswith(t.path)]
+        if not matching:
+            return self.mutant_timeout
+        return max(matching, key=lambda t: len(t.path)).mutant_timeout
 
     def test_prefixes(self) -> set[str]:
         paths = set(self.test_paths)
@@ -305,6 +319,20 @@ def _load_golden(raw: list) -> list[Golden]:
                 f"{CONFIG_NAME}: every [[golden]] needs exactly `source` and `artifact`"
             )
         out.append(Golden(source=entry["source"], artifact=entry["artifact"]))
+    return out
+
+
+def _load_timeout(raw: list) -> list[PathTimeout]:
+    out: list[PathTimeout] = []
+    for entry in raw:
+        cap = entry.get("mutant_timeout")
+        if (set(entry) != {"path", "mutant_timeout"} or isinstance(cap, bool)
+                or not isinstance(cap, (int, float)) or cap <= 0):
+            raise GateError(
+                f"{CONFIG_NAME}: every [[timeout]] needs exactly `path` and a positive "
+                "`mutant_timeout` in seconds"
+            )
+        out.append(PathTimeout(path=entry["path"], mutant_timeout=float(cap)))
     return out
 
 

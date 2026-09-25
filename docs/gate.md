@@ -109,7 +109,7 @@ reason = "REPLACE ME — why no test can or should kill this"
   the mutation.
 - A waiver that no longer matches a mutant after an edit is reported as stale.
 - A mutant that times out counts as killed; the gate says so and suggests
-  setting `mutant_timeout`.
+  setting `mutant_timeout`, or a `[[timeout]]` entry for one slow path.
 
 ## Model paths
 

@@ -169,3 +169,57 @@ def test_mutant_timeout_is_configurable_because_the_derived_one_assumes_no_build
 def test_an_unset_mutant_timeout_leaves_the_gate_deriving_one(tmp_path):
     (tmp_path / repo_mod.CONFIG_NAME).write_text("language = 'python'\n")
     assert repo_mod.Config.load(tmp_path).mutant_timeout is None
+
+
+SLOW_PATH_CONFIG = (
+    "mutant_timeout = 20.0\n"
+    "[[timeout]]\npath = \"src/golden/\"\nmutant_timeout = 900.0\n"
+)
+
+
+def test_a_file_under_a_timeout_path_gets_that_paths_cap_not_the_global_one(gated, tmp_path):
+    (tmp_path / repo_mod.CONFIG_NAME).write_text(SLOW_PATH_CONFIG)
+    config = repo_mod.Config.load(tmp_path)
+    seen = gated([runner.KILLED], config, baseline=1.0, rel="src/golden/gen.py")
+    assert seen["timeout"] == 900.0
+    assert any("900s (configured)" in line for line in seen["lines"])
+
+
+def test_a_file_outside_every_timeout_path_falls_back_to_the_global_cap(gated, tmp_path):
+    (tmp_path / repo_mod.CONFIG_NAME).write_text(SLOW_PATH_CONFIG)
+    config = repo_mod.Config.load(tmp_path)
+    seen = gated([runner.KILLED], config, baseline=1.0, rel="src/fast.py")
+    assert seen["timeout"] == 20.0
+
+
+def test_a_file_outside_every_timeout_path_with_no_global_cap_derives_one(gated):
+    config = repo_mod.Config(timeout=[repo_mod.PathTimeout("src/golden/", 900.0)])
+    seen = gated([runner.KILLED], config, baseline=100.0, rel="src/fast.py")
+    assert seen["timeout"] == 600.0
+
+
+@pytest.mark.parametrize("order", [1, -1])
+def test_the_longest_matching_timeout_path_wins_whatever_the_listed_order(gated, order):
+    entries = [repo_mod.PathTimeout("src/", 60.0), repo_mod.PathTimeout("src/golden/", 900.0)]
+    config = repo_mod.Config(timeout=entries[::order])
+    seen = gated([runner.KILLED], config, baseline=1.0, rel="src/golden/gen.py")
+    assert seen["timeout"] == 900.0
+
+
+@pytest.mark.parametrize("entry", [
+    'path = "src/"\n',
+    "mutant_timeout = 60.0\n",
+    'path = "src/"\nmutant_timeout = 60.0\nreason = "slow"\n',
+    'path = "src/"\nmutant_timeout = 0\n',
+    'path = "src/"\nmutant_timeout = true\n',
+    'path = "src/"\nmutant_timeout = "60"\n',
+])
+def test_a_timeout_entry_without_exactly_a_path_and_a_positive_cap_is_refused(tmp_path, entry):
+    (tmp_path / repo_mod.CONFIG_NAME).write_text(f"[[timeout]]\n{entry}")
+    with pytest.raises(repo_mod.GateError, match=r"\[\[timeout\]\]"):
+        repo_mod.Config.load(tmp_path)
+
+
+def test_a_sub_second_timeout_cap_is_accepted_as_positive(tmp_path):
+    (tmp_path / repo_mod.CONFIG_NAME).write_text('[[timeout]]\npath = "src/"\nmutant_timeout = 0.5\n')
+    assert repo_mod.Config.load(tmp_path).timeout == [repo_mod.PathTimeout("src/", 0.5)]

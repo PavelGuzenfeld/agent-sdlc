@@ -121,7 +121,7 @@ def _gate_file(
     all_tests = [str(p.relative_to(repo.root)) for p in cands]
 
     baseline = runner.baseline_green(repo, all_tests, lang_cfg.test_command)
-    configured = repo.config.mutant_timeout
+    configured = repo.config.mutant_timeout_for(rel)
     timeout = configured if configured else max(30.0, baseline * TIMEOUT_FACTOR)
     source = "configured" if configured else "from baseline"
     _emit(f"  {rel}: baseline {baseline:.1f}s, per-mutant timeout {timeout:.0f}s ({source})")
