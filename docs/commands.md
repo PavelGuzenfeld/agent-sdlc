@@ -7,7 +7,7 @@ Slash commands live in `commands/`. `install.sh` links them into
 
 | Command | Use it when | Writes anything? |
 |---|---|---|
-| `/kata` | Work the `model:*`-labelled ticket queue to merge | Branches, PRs, merges on `LGTM` |
+| `/kata` | Work the `model:*`-labelled, `@me`-assigned ticket queue to merge | Branches, PRs, merges on `LGTM` |
 | `/done` | Close out a bit of work and hand off to a fresh session | One commit; offers follow-up issues |
 | `/grill` | Resolve an open design question by question | With `plan`: a decision record and step tickets |
 | `/goon` | Approve the recommendation just proposed | Whatever that proposal named |
@@ -41,8 +41,8 @@ Slash commands live in `commands/`. `install.sh` links them into
 
 ### /kata
 
-- `/kata` runs every open issue with a `model:haiku|sonnet|opus|fable` label.
-  `/kata 42` runs just #42.
+- `/kata` runs every open issue with a `model:haiku|sonnet|opus|fable` label
+  assigned to `@me`. `/kata 42` runs just #42.
 - Each ticket gets its own locked worktree, branch `42-slug`, and a fresh
   worker on the labelled model.
 - The worker writes the slice test first, implements, runs the gate, opens a
