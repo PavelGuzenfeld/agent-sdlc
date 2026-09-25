@@ -57,6 +57,9 @@ nav:
   - Rules: rules.md
   - Skills: skills.md
 
+hooks:
+  - scripts/mkdocs_toc.py
+
 validation:
   links:
     not_found: info
