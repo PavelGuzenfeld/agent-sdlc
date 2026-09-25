@@ -405,6 +405,17 @@ def _literal_mutants(
     return out
 
 
+MAIN_MODULE_LITERALS = frozenset({'"__main__"', "'__main__'"})
+
+
+def _is_main_guard(hit: dict) -> bool:
+    """Flipped, the guard runs the script at import with the test runner's argv
+    (#315); a subprocess test covers the entry point instead."""
+    operands = hit.get("metaVariables", {}).get("single", {})
+    texts = {operands.get(name, {}).get("text") for name in ("A", "B")}
+    return "__name__" in texts and bool(texts & MAIN_MODULE_LITERALS)
+
+
 def _gdscript_config(root: Path) -> Path | None:
     from . import vocabulary_check
     return vocabulary_check._gdscript_ready(root)
@@ -436,6 +447,8 @@ def generate(root: Path, files: dict[str, set[int]], language: str) -> list[Muta
                 # `$A in $B` also matches `not in` and rewrites it to itself; skipped
                 # BEFORE `seen`, or the identity shadows the real `not in => in` mutant.
                 if hit["replacement"] == hit["text"]:
+                    continue
+                if _is_main_guard(hit):
                     continue
                 if lineno not in lines or span in seen:
                     continue

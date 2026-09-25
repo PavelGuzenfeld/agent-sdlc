@@ -944,3 +944,36 @@ def test_masked_spans_covers_a_nested_fstring_as_one_span_on_every_python(tmp_pa
     path = tmp_path / "a.py"
     path.write_bytes(b"label = f\"{f'{y}'}\"\n")
     assert mutants.masked_spans(path, "python") == [(8, 19)]
+
+
+@pytest.mark.parametrize("guard", [
+    'if __name__ == "__main__":',
+    "if __name__ == '__main__':",
+    'if __name__ != "__main__":',
+    'if "__main__" == __name__:',
+])
+def test_a_main_guard_is_never_mutated_so_importing_the_module_cannot_run_its_script(
+    tmp_path, guard
+):
+    (tmp_path / "s.py").write_text(f"{guard}\n    pass\n")
+    assert mutants.generate(tmp_path, {"s.py": {1}}, "python") == []
+
+
+@pytest.mark.parametrize("source,equality_line", [
+    ('x = 1 == 2\nif __name__ == "__main__":\n    pass\n', 1),
+    ('if __name__ == "__main__":\n    x = 1 == 2\n', 2),
+])
+def test_an_equality_before_or_after_a_main_guard_is_still_mutated(
+    tmp_path, source, equality_line
+):
+    (tmp_path / "s.py").write_text(source)
+    generated = mutants.generate(tmp_path, {"s.py": {1, 2}}, "python")
+    assert [(m.line, m.old, m.new) for m in generated if m.kind == "operator"] == [
+        (equality_line, "1 == 2", "1 != 2")
+    ]
+
+
+def test_a_name_compared_to_another_string_is_still_mutated(tmp_path):
+    (tmp_path / "s.py").write_text('if __name__ == "mod":\n    pass\n')
+    generated = mutants.generate(tmp_path, {"s.py": {1}}, "python")
+    assert ('__name__ == "mod"', '__name__ != "mod"') in [(m.old, m.new) for m in generated]
