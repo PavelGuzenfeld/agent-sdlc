@@ -157,18 +157,6 @@ def test_golden_source_and_artifact_are_vv_artefacts(monkeypatch, tmp_path):
     assert _local(monkeypatch, tmp_path, config=config) == 0
 
 
-def test_a_file_model_spec_is_a_vv_artefact(monkeypatch, tmp_path):
-    config = Config(model_spec="docs/model-spec.md")
-    _stub_git(monkeypatch, numstat=_numstat({"docs/model-spec.md": 41}))
-    assert _local(monkeypatch, tmp_path, config=config) == 0
-
-
-def test_an_issue_model_spec_excludes_no_file(monkeypatch, tmp_path):
-    config = Config(model_spec="issue:24")
-    _stub_git(monkeypatch, numstat=_numstat({"issue:24": 41}))
-    assert _local(monkeypatch, tmp_path, config=config) == 1
-
-
 def test_model_paths_are_production_code_not_artefacts(monkeypatch, tmp_path):
     config = Config(model_paths=["model"])
     _stub_git(monkeypatch, numstat=_numstat({"model/filter.py": 41}))

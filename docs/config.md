@@ -15,7 +15,7 @@ or `[[golden]]` key is a `GateError` at load time.
 | `languages` | `{}` | `[languages.<name>]` tables, each a `test_paths`/`test_globs`/`test_command`/`coverage_command`/`coverage_data_file` override, for a repo gating more than one language. |
 | `exclude_paths` | `[]` | Path prefixes the gate never touches; announced on every skip. |
 | `model_paths` | `[]` | Path prefixes in scope for model V&V, declared, never inferred; `rules sync` also builds `model-vv.md`'s `paths:` frontmatter from this. |
-| `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live. The rules require `issue:N`, a GitHub issue; the file default is legacy and the gate still reads it. |
+| `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live: `issue:N`, a GitHub issue. Required once `model_paths` is set; a file path, including this default, is refused there. |
 | `model_test_paths` | `[]` | Test paths that must cite an `MS-n` spec line. |
 | `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a keyword-probe hit outside `model_paths` that isn't model code. |
 | `golden` | `[]` | `[[golden]]` entries, each a `source` and an `artifact`: a generated F/Q artefact and the SymPy source its hash is checked against. |

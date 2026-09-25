@@ -182,8 +182,6 @@ class Config:
     # blocks on false positives or misses, both silently. Same prefix semantics
     # as exclude_paths. Tests under model_test_paths must cite a spec line.
     model_paths: list[str] = field(default_factory=list)
-    # Where the MS-n lines live: a repo-relative file, or "issue:N" for a GitHub issue
-    # of the repo read through `gh` (a repo that keeps its spec in tickets, not files).
     model_spec: str = "docs/model-spec.md"
     model_test_paths: list[str] = field(default_factory=list)
     model_exclude: list[ModelExclude] = field(default_factory=list)
@@ -248,8 +246,14 @@ class Config:
                 f"{CONFIG_NAME}: unknown key(s) {', '.join(unknown)} — delete them; "
                 "nothing reads them. Scope the gate with exclude_paths."
             )
-        return cls(**raw, languages=languages, model_exclude=model_exclude, golden=golden,
-                   doc_allow=doc_allow)
+        cfg = cls(**raw, languages=languages, model_exclude=model_exclude, golden=golden,
+                  doc_allow=doc_allow)
+        if cfg.model_paths and not cfg.model_spec.startswith("issue:"):
+            raise GateError(
+                f'{CONFIG_NAME}: model_spec must be "issue:N" naming a pinned issue once '
+                "model_paths is set; a file path, including the default, is refused"
+            )
+        return cfg
 
     def test_prefixes(self) -> set[str]:
         paths = set(self.test_paths)

@@ -1,6 +1,6 @@
 """`mutation-gate diff-discipline` (#71 decision 9): over LINE_LIMIT added production
 lines against the default branch's merge-base needs a `N-slug` branch or `#N` in a
-branch commit message. V&V artefacts: model_test_paths, [[golden]], a file model_spec."""
+branch commit message. V&V artefacts: model_test_paths, [[golden]]."""
 
 from __future__ import annotations
 
@@ -49,8 +49,6 @@ def default_branch(root: Path) -> str | None:
 
 def is_vv_artefact(config: Config, rel: str) -> bool:
     files = {g.source for g in config.golden} | {g.artifact for g in config.golden}
-    if not config.model_spec.startswith("issue:"):
-        files.add(config.model_spec)
     return rel in files or _under(rel, config.model_test_paths)
 
 

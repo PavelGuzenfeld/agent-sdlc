@@ -139,7 +139,8 @@ def test_model_exclude_without_reason_is_refused(tmp_path):
 
 
 def test_model_paths_key_loads_from_config(tmp_path):
-    _write(tmp_path, ".mutation-gate.toml", 'model_paths = ["filters/"]\nmodel_test_paths = ["tests/model"]\n')
+    _write(tmp_path, ".mutation-gate.toml",
+           'model_paths = ["filters/"]\nmodel_test_paths = ["tests/model"]\nmodel_spec = "issue:24"\n')
     cfg = Config.load(tmp_path)
     assert (cfg.model_paths, cfg.model_test_paths) == (["filters/"], ["tests/model"])
 
@@ -283,6 +284,29 @@ def test_model_spec_key_loads_from_config_and_defaults_to_the_file(tmp_path):
     (tmp_path / ".mutation-gate.toml").write_text('model_paths = ["filters/"]\nmodel_spec = "issue:24"\n')
     assert Config.load(tmp_path).model_spec == "issue:24"
     assert Config().model_spec == SPEC
+
+
+def test_model_paths_with_no_model_spec_key_is_refused_for_issue_n(tmp_path):
+    _write(tmp_path, ".mutation-gate.toml", 'model_paths = ["filters/"]\n')
+    with pytest.raises(GateError, match="issue:N"):
+        Config.load(tmp_path)
+
+
+def test_model_paths_with_an_explicit_file_model_spec_is_refused(tmp_path):
+    _write(tmp_path, ".mutation-gate.toml",
+           'model_paths = ["filters/"]\nmodel_spec = "docs/other-spec.md"\n')
+    with pytest.raises(GateError, match="issue:N"):
+        Config.load(tmp_path)
+
+
+def test_no_model_paths_leaves_the_default_file_model_spec_unrefused(tmp_path):
+    _write(tmp_path, ".mutation-gate.toml", 'test_paths = ["tests"]\n')
+    assert Config.load(tmp_path).model_spec == SPEC
+
+
+def test_no_model_paths_permits_an_explicit_file_model_spec(tmp_path):
+    _write(tmp_path, ".mutation-gate.toml", 'model_spec = "docs/other-spec.md"\n')
+    assert Config.load(tmp_path).model_spec == "docs/other-spec.md"
 
 
 def test_untagged_line_in_the_spec_issue_passes(tmp_path, monkeypatch):
