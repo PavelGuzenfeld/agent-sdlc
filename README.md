@@ -2,47 +2,83 @@
 
 [![CI](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml/badge.svg)](https://github.com/PavelGuzenfeld/agent-sdlc/actions/workflows/ci.yml)
 
-A software development lifecycle shipped as agent config: rules, skills, slash
-commands and a diff-scoped mutation gate, installable into Claude Code and
-Codex.
+A software development lifecycle shipped as agent config for Claude Code and
+Codex: rules, skills, slash commands, hooks, and a diff-scoped mutation gate.
+
+Docs: <https://pavelguzenfeld.com/agent-sdlc/>
+
+## Why
+
+A coding agent writes the code and the tests for it, and tests written next
+to the code tend to agree with it, bugs included. On a mature suite, 57% of
+real bug-class mutants survived. agent-sdlc puts that check, plus scope,
+intent and git safety, into hooks and a gate instead of leaving them to the
+agent's memory.
+
+| Problem | What catches it |
+|---|---|
+| Tests that pass but assert nothing | `mutation-gate`: a surviving mutant blocks the commit |
+| Tests shaped to the code | An adversary review that sees intent and tests, never the code |
+| Scope creep | 40-line limit without a ticket; one ticket, one branch, one PR |
+| Design notes rotting in the tree | New `.md` files are blocked; intent lives in the tracker |
+| Destructive git | A hook that denies `reset --hard`, `add -A`, force-push |
+| AI tells and leaked identity in commits | `commit-msg` and `no-leaks` hooks |
+
+## Example
+
+```python
+def is_adult(age):
+    return age >= 18
+
+def test_adult():
+    assert is_adult(30)
+
+def test_child():
+    assert not is_adult(5)
+```
+
+```text
+BLOCKED: 2 mutant(s) survived with no waiver.
+  age.py:2:11:operator:age >= 18 => age > 18
+  age.py:2:18:literal:18 => 19
+```
+
+Add `assert is_adult(18)` and `assert not is_adult(17)`, and the gate passes.
 
 ## Install
 
-`./install.sh --target claude|codex|all [--deps|--deps=say]` symlinks
-`skills/` into `~/.claude` and `~/.codex`, `commands/` and `bin/` into
-`~/.claude`, renders `commands/` as Codex skills, merges the hooks from `settings.example.json`
-and, with `--deps`, installs the tooling (`--deps=say` adds the Kokoro TTS
-stack). A second run changes nothing. It installs `ast-grep-cli` via pipx,
-which puts an `sg` shim on `$PATH`; if `~/.local/bin` precedes `/usr/bin`, it
-shadows the system `sg` (execute as a different group).
+```bash
+git clone https://github.com/PavelGuzenfeld/agent-sdlc
+cd agent-sdlc
+./install.sh --target all --deps
+```
 
-Rules aren't installed globally: run `mutation-gate rules sync` inside a repo
-that opts in. `mutation-gate rules check` catches drift from that sync and
-runs automatically as the `rules-check` pre-commit hook.
+| Want | Do |
+|---|---|
+| The whole pack | `./install.sh --target all --deps` (targets: `claude`, `codex`, `all`; `--deps=say` adds voice) |
+| Only the gate | `pip install agent-sdlc` (WordNet check: `agent-sdlc[vocabulary]`) |
+| A plugin | `claude --plugin-dir /path/to/agent-sdlc`, or add the repo as a Codex marketplace source |
+| The gate on a repo | Add `.mutation-gate.toml`, wire the pre-commit hooks |
 
-The `mutation-gate` CLI alone can be installed with `pip install agent-sdlc`,
-or from a tagged [release](https://github.com/PavelGuzenfeld/agent-sdlc/releases)'s
-wheel: `pip install <release .whl URL>`.
-
-Plugin install: `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` and
-`.agents/plugins/marketplace.json` ship at the repo root.
-
-- Claude Code: `claude --plugin-dir /path/to/agent-sdlc`
-- Codex: add this repo as a marketplace source; its
-  `.agents/plugins/marketplace.json` lists one plugin entry with
-  `source.path` set to the repo root.
+- `install.sh` links `skills/` into `~/.claude` and `~/.codex`, links
+  `commands/` and `bin/` into `~/.claude`, renders `commands/` as Codex
+  skills and merges the hooks. A second run changes nothing.
+- `ast-grep-cli` adds an `sg` shim that can shadow the system `sg`; call
+  `ast-grep`.
 
 ## What's inside
 
-`skills/ commands/ rules/ bin/ mutation_gate/` at the root, no agent home
-baked in. CI runs `scripts/no-leaks.sh` on every PR — it flags emails, RFC1918
+| Path | What |
+|---|---|
+| `rules/` | How to work; synced into a repo with `mutation-gate rules sync` |
+| `commands/` | Slash commands: `/kata`, `/done`, `/grill`, `/rectify` … |
+| `skills/` | On-demand playbooks: `/diagnose`, `/sol-budget`, `/verify-generated-diff` … |
+| `bin/` | Hooks and helpers: `git-guardrail.sh`, the `/say` stack |
+| `mutation_gate/` | The gate and the `mutation-gate` CLI |
+
+CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918
 addresses, user-at-host references, `/home/<user>/` paths and non-personal
 `ghcr.io/` paths, and prints only `file:line`.
-
-## Docs
-
-The SDLC, the gate, debugging, reporting, rules and skills, in depth:
-<https://pavelguzenfeld.com/agent-sdlc/>.
 
 MIT, see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for one vendored
 third-party skill. Contributions: [CONTRIBUTING.md](CONTRIBUTING.md), bound

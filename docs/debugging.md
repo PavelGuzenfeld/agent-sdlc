@@ -1,5 +1,11 @@
 # Debugging
 
+How `/diagnose` works a bug that resisted one look.
+
+[TOC]
+
+## The loop
+
 ```text
 +-----------------------------+
 | 1  build a red loop         |   one command, already run, red on this bug
@@ -32,13 +38,29 @@
 +-----------------------------+
 ```
 
-`/diagnose` is for bugs that resisted one look. Phase 1 is the skill: a
-command that drives the real code path and asserts the exact symptom, fast
-and deterministic, run at least once before any theory. No red-capable
-command, no hypotheses. The repro shrinks until every element is
-load-bearing, then three to five ranked, falsifiable hypotheses are tested one
-variable at a time. The regression test goes in before the fix, at a seam
-that reaches the real bug pattern; when no such seam exists, that is the
-finding.
+## Phase 1 is the skill
+
+- A red loop is one command that drives the real code path and asserts the
+  exact symptom. It is fast, deterministic, and has been run at least once.
+- No red-capable command, no hypotheses.
+
+```bash
+pytest -q tests/test_parser.py::test_empty_header_is_rejected
+```
+
+- Good: it names the symptom, runs in seconds, and is red on this bug today.
+- Not a loop: "run the app and look at the log", or a test that passes.
+
+## Then
+
+| Phase | Rule |
+|---|---|
+| Minimise | Cut one thing at a time until every element is load-bearing |
+| Hypotheses | Three to five, ranked, each with a falsifiable prediction |
+| Test | One variable at a time |
+| Regression test | Before the fix, at a seam that reaches the real bug pattern |
+| Clean up | The original loop is green; every `[DEBUG-...]` line is gone |
+
+- When no test seam reaches the bug, that is the finding.
 
 Source: [`skills/diagnose/SKILL.md`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/skills/diagnose/SKILL.md).

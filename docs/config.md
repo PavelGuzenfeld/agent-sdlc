@@ -3,6 +3,49 @@
 Every key `.mutation-gate.toml` accepts. An unknown top-level, `languages.*`
 or `[[golden]]` key is a `GateError` at load time.
 
+[TOC]
+
+## A starting file
+
+An empty `.mutation-gate.toml` works: every key below has a default. A typical
+Python repo with tests in Docker:
+
+```toml
+test_paths = ["tests"]
+test_command = 'docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/repo -w /repo my-image python -m pytest -q {tests}'
+exclude_paths = ["vendor/"]
+
+[[doc_allow]]
+glob = "docs/**/*"
+reason = "mkdocs site content"
+```
+
+A repo with model code:
+
+```toml
+model_paths = ["filters/"]
+model_spec = "issue:19"
+model_test_paths = ["tests/filters/"]
+```
+
+A repo gating two languages:
+
+```toml
+[languages.python]
+test_paths = ["tests"]
+test_command = "python -m pytest -q {tests}"
+
+[languages.typescript]
+test_paths = ["web/tests"]
+test_command = "npm --prefix web run test"
+```
+
+- Each table overrides `test_paths`, `test_globs`, `test_command`,
+  `coverage_command` and `coverage_data_file` for that language.
+- `.tsx` files are their own language, `tsx`, and need their own table.
+
+## Keys
+
 | Key | Default | What it does |
 |---|---|---|
 | `enabled` | `true` | Opts this repo out of the gate entirely when `false`. |
