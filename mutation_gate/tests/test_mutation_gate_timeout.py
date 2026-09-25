@@ -38,7 +38,6 @@ def test_a_mutant_that_timed_out_is_not_reported_as_an_ordinary_kill(verdict):
 
 def test_a_mutant_that_timed_out_still_counts_as_killed_and_does_not_block(verdict):
     # A hang is a hang; blocking the gate on it is worse than a wrong verdict.
-    assert runner.KILLED_TIMEOUT in (runner.KILLED, runner.KILLED_TIMEOUT)
     assert verdict(runner.TIMED_OUT) != runner.SURVIVED
 
 
@@ -92,7 +91,7 @@ def gated(tmp_path, monkeypatch):
 
         monkeypatch.setattr(cli.runner, "classify", fake_classify)
         monkeypatch.setattr(cli, "_emit", lambda line="": seen["lines"].append(line))
-        blocked, _survivors, _cands = cli._gate_file(repo, rel, {1}, [])
+        blocked, seen["survivors"], _cands = cli._gate_file(repo, rel, {1}, [])
         seen["blocked"] = blocked
         return seen
 
@@ -153,6 +152,7 @@ def test_a_survivor_alongside_a_timeout_still_blocks_and_both_are_reported(gated
     seen = gated([runner.KILLED_TIMEOUT, runner.SURVIVED], repo_mod.Config(), baseline=1.0)
     assert seen["blocked"] is True
     assert any("1/2 mutant(s) timed out" in line for line in seen["lines"])
+    assert seen["survivors"] == [MUTANT]
 
 
 def test_a_surviving_mutant_is_not_counted_as_a_timeout(gated):
