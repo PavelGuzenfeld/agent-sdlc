@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from mutation_gate.repo import Config, DocAllow, Golden, LanguageConfig, ModelExclude
+from mutation_gate.repo import Config, DocAllow, Golden, LanguageConfig, ModelExclude, PathTimeout
 
 CONFIG_DOCS_PATH = Path(__file__).parents[2] / "docs" / "config.md"
 
@@ -15,7 +15,12 @@ TOP_LEVEL_FIELDS = sorted(
     {f.name for f in fields(Config)} | {f.name for f in fields(LanguageConfig)}
 )
 
-NESTED_TABLES = {"model_exclude": ModelExclude, "golden": Golden, "doc_allow": DocAllow}
+NESTED_TABLES = {
+    "model_exclude": ModelExclude,
+    "golden": Golden,
+    "doc_allow": DocAllow,
+    "timeout": PathTimeout,
+}
 NESTED_FIELDS = [
     (table, f.name) for table, cls in NESTED_TABLES.items() for f in fields(cls)
 ]

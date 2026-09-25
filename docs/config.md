@@ -64,6 +64,7 @@ test_command = "npm --prefix web run test"
 | `force_gate` | `false` | Gates a fork or an out-of-namespace checkout anyway. |
 | `baseline_timeout` | `900.0` | Seconds allowed for the unmutated baseline run, and for the coverage run that maps tests to lines. |
 | `mutant_timeout` | none (derived from the baseline) | Seconds allowed per mutant, when the derived cap is wrong. |
+| `timeout` | `[]` | `[[timeout]]` entries, each a `path` prefix and a `mutant_timeout` in seconds: the per-mutant cap for files under that path, where their tests run much slower than the rest. The longest matching `path` wins; a file under none falls back to the global `mutant_timeout`. |
 | `closure_depth` | `1` | Import hops from a test to the mutated file that still count as covering it. |
 | `import_roots` | `[]` | Extra repo-root-relative import roots for a src layout with no `sys.path.insert` in the test files. |
 | `no_comments` | `false` | Blocks on a comment line the diff added. |
