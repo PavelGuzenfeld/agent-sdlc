@@ -3,8 +3,6 @@
 The ideas the pack is built on, one section each: what it is, why it is here,
 and a small example.
 
-[TOC]
-
 ## Mutation testing
 
 - Seed small deliberate bugs (mutants) into the code and rerun the tests.

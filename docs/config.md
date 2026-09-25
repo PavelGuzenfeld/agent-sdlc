@@ -3,8 +3,6 @@
 Every key `.mutation-gate.toml` accepts. An unknown top-level, `languages.*`
 or `[[golden]]` key is a `GateError` at load time.
 
-[TOC]
-
 ## A starting file
 
 An empty `.mutation-gate.toml` works: every key below has a default. A typical

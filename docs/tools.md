@@ -2,8 +2,6 @@
 
 What runs without you asking, and the scripts behind it.
 
-[TOC]
-
 ## What runs when
 
 ```text
