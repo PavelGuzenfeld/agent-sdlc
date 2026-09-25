@@ -5,6 +5,10 @@ description: "Speed-of-light performance budgeting for a hot path. Use to optimi
 
 # Speed-of-light budgeting
 
+`<skill-dir>` is `${CLAUDE_SKILL_DIR}`, the directory this SKILL.md was read from.
+Every command below runs with the consumer repo as cwd and reaches this skill's
+own scripts through `<skill-dir>`.
+
 An optimisation with no floor under it is a guess. This skill puts the floor in the
 repo first — derived from what the machine was *measured* to do, not what the vendor
 says it does — and then refuses the work that the floor says is not there.
@@ -82,7 +86,7 @@ Exit condition: every unit and mechanism the hot path touches has a measured row
    a p99. Append to `measurements.csv` with the build and the graph digest.
 
 ```
-python3 scripts/sol.py --perf perf
+python3 <skill-dir>/scripts/sol.py --perf perf
 ```
 
 ## Phase 3 — decide and gate
@@ -109,7 +113,7 @@ digest in `budget.md` and `measurements.csv` enforces it: a row measured against
 different graph is refused, not compared.
 
 ```
-python3 scripts/budget_check.py --perf perf   # PERF_GATE: pass|fail
+python3 <skill-dir>/scripts/budget_check.py --perf perf   # PERF_GATE: pass|fail
 ```
 
 Gate: a node p99 over budget, or the sum of node p99s (the serial upper bound) over the window minus margin, fails
@@ -122,8 +126,8 @@ the revision.
 is about a cold machine:
 
 ```
-g++ -O2 -std=c++17 -pthread -o tax_bench scripts/tax_bench.cpp && ./tax_bench
-python3 scripts/tax_bench.py     # ffi_crossing and gil_acquire only
+g++ -O2 -std=c++17 -pthread -o tax_bench <skill-dir>/scripts/tax_bench.cpp && ./tax_bench
+python3 <skill-dir>/scripts/tax_bench.py     # ffi_crossing and gil_acquire only
 ```
 
 A real-NIC crossing needs a peer host, so no row here can measure it. It stays
@@ -133,8 +137,8 @@ A real-NIC crossing needs a peer host, so no row here can measure it. It stays
 (one pinned core), plus `cpu_python` for a stage the interpreter runs:
 
 ```
-g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o unit_bench scripts/unit_bench.cpp && ./unit_bench
-python3 scripts/unit_bench.py    # the cpu_python unit
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o unit_bench <skill-dir>/scripts/unit_bench.cpp && ./unit_bench
+python3 <skill-dir>/scripts/unit_bench.py    # the cpu_python unit
 ```
 
 **-O3 is load-bearing.** gcc only auto-vectorises there, and on the JP6 Orin the same
@@ -155,13 +159,13 @@ unit cannot carry both.
 needs `nvcc`, everything else needs a compiler and Python:
 
 ```
-nvcc -O3 -std=c++17 -o fabric_bw scripts/fabric_bw.cu && ./fabric_bw   # §2 + the gpu unit
-g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o load_gen scripts/load_gen.cpp
-nvcc -O3 -std=c++17 -o load_gen_cuda scripts/load_gen.cu
-python3 scripts/contention_sweep.py --load-gen ./load_gen \
+nvcc -O3 -std=c++17 -o fabric_bw <skill-dir>/scripts/fabric_bw.cu && ./fabric_bw   # §2 + the gpu unit
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o load_gen <skill-dir>/scripts/load_gen.cpp
+nvcc -O3 -std=c++17 -o load_gen_cuda <skill-dir>/scripts/load_gen.cu
+python3 <skill-dir>/scripts/contention_sweep.py --load-gen ./load_gen \
         --load-gen-cuda ./load_gen_cuda                               # §5, the knee
-g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o sched_bench scripts/sched_bench.cpp && ./sched_bench  # §6
-python3 scripts/thermal_watch.py                                      # §7, run this first
+g++ -O3 -DBENCH_OPTIMIZATION_LEVEL=3 -std=c++17 -pthread -o sched_bench <skill-dir>/scripts/sched_bench.cpp && ./sched_bench  # §6
+python3 <skill-dir>/scripts/thermal_watch.py                                      # §7, run this first
 ```
 
 **Run §7 first.** It reports the equilibrium the other benches that take

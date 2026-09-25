@@ -103,7 +103,7 @@ The **stub** is the important one and the awkward one to express as a string
 substitution. Match the line right after the signature:
 
 ```bash
-BUILD_TARGET=trk_filter_test scripts/mutate.sh src/trk/gate.cpp \
+BUILD_TARGET=trk_filter_test <skill-dir>/scripts/mutate.sh src/trk/gate.cpp \
   'bool Gate::accept(const Meas& m) const {' \
   'bool Gate::accept(const Meas& m) const { return true;' \
   trk_gate
@@ -115,7 +115,7 @@ For a `void` function, stub with a bare `return;`. For one returning a struct,
 ### Step 3: run and classify
 
 ```bash
-BUILD_TARGET=trk_filter_test scripts/run_mutants.sh
+BUILD_TARGET=trk_filter_test <skill-dir>/scripts/run_mutants.sh
 ```
 
 Four outcomes, three of which are informative:
@@ -173,7 +173,7 @@ Same harness, `new` is the empty string. Substitution must be exactly one
 occurrence, so include enough surrounding text:
 
 ```bash
-scripts/mutate.sh src/trk/track.cpp \
+<skill-dir>/scripts/mutate.sh src/trk/track.cpp \
   '  if (!m.valid) return;
 ' \
   '' \
@@ -387,12 +387,12 @@ git tag -f reviewed                          # read pointer
 git diff --stat -M reviewed | tail -1        # comprehension debt
 
 # Pass A — do the tests test anything?
-BUILD_TARGET=x_test scripts/run_mutants.sh     # boundary / constant / branch / stub
+BUILD_TARGET=x_test <skill-dir>/scripts/run_mutants.sh     # boundary / constant / branch / stub
 #   SURVIVED on a stub  = test is worthless
 #   SURVIVED otherwise  = write the killing test, from the spec
 
 # Pass B — is it load-bearing?
-scripts/mutate.sh <file> '<guard>' '' <tests>
+<skill-dir>/scripts/mutate.sh <file> '<guard>' '' <tests>
 #   SURVIVED + breaking input exists  = untested, write the test
 #   SURVIVED + invariant guaranteed   = delete
 #   SURVIVED + unsure                 = assert + counter
