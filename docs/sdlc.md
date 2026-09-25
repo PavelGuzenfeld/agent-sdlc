@@ -2,8 +2,6 @@
 
 From an approved ticket to a squash merge.
 
-[TOC]
-
 ## The flow
 
 ```text

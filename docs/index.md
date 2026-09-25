@@ -3,8 +3,6 @@
 A software development lifecycle shipped as agent config for Claude Code and
 Codex: rules, skills, slash commands, hooks, and a diff-scoped mutation gate.
 
-[TOC]
-
 ## Why it exists
 
 A coding agent writes the code and the tests for it. Tests written next to

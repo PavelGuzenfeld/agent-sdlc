@@ -3,8 +3,6 @@
 Everything `mutation-gate` does from the command line. Install it with the
 pack's `--deps`, or alone with `pip install agent-sdlc`.
 
-[TOC]
-
 ## At a glance
 
 | Command | What it does | Hook id |

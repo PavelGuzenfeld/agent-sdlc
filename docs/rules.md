@@ -4,8 +4,6 @@ How the agent is told to work. The files live in `rules/`; `mutation-gate
 rules sync` writes them into a repo as `.claude/rules/*.md` and an
 `AGENTS.md` block.
 
-[TOC]
-
 ## At a glance
 
 | Rule | In one line | Enforced by |

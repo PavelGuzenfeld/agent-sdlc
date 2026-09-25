@@ -4,8 +4,6 @@ Playbooks the agent loads on demand. Each is a `SKILL.md` under `skills/`.
 Script paths inside them are written `<skill-dir>/scripts/...`, where
 `<skill-dir>` is the directory the `SKILL.md` was read from.
 
-[TOC]
-
 ## At a glance
 
 | Skill | Use it to | Invoked by |

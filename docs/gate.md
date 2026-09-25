@@ -3,8 +3,6 @@
 `mutation-gate` mutates the lines your diff changed, reruns the tests, and
 blocks when a mutant survives.
 
-[TOC]
-
 ## How it fires
 
 ```text

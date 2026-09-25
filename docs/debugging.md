@@ -2,8 +2,6 @@
 
 How `/diagnose` works a bug that resisted one look.
 
-[TOC]
-
 ## The loop
 
 ```text

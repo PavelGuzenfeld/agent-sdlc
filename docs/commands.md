@@ -3,8 +3,6 @@
 Slash commands live in `commands/`. `install.sh` links them into
 `~/.claude/commands` and renders each one as a Codex skill.
 
-[TOC]
-
 ## At a glance
 
 | Command | Use it when | Writes anything? |

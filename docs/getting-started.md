@@ -2,8 +2,6 @@
 
 From clone to a first gated commit.
 
-[TOC]
-
 ## Clone and install
 
 ```bash

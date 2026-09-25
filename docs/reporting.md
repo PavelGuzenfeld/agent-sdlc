@@ -2,8 +2,6 @@
 
 How to file a bug, a feature request or a question, and what happens next.
 
-[TOC]
-
 ## Pick the form
 
 ```text
