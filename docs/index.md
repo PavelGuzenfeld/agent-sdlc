@@ -144,3 +144,4 @@ Details: [Getting started](getting-started.md) and
 | Configure a repo | [Config](config.md) |
 | Pick a slash command | [Commands](commands.md) |
 | See what runs on its own | [Hooks and tools](tools.md) |
+| Look up a term | [Glossary](glossary.md) |
