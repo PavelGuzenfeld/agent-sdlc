@@ -58,9 +58,9 @@ nav:
   - Hooks and tools: tools.md
   - Debugging: debugging.md
   - Reporting: reporting.md
-  - Glossary: glossary.md
   - Rules: rules.md
   - Skills: skills.md
+  - Glossary: glossary.md
 
 hooks:
   - scripts/mkdocs_toc.py
