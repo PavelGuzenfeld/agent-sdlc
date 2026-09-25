@@ -25,12 +25,14 @@ theme:
     - navigation.top
     - content.code.copy
     - search.suggest
+    - toc.follow
 
 markdown_extensions:
   - admonition
   - tables
   - toc:
       permalink: true
+      toc_depth: 3
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -42,9 +44,13 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Techniques: techniques.md
   - SDLC: sdlc.md
   - Gate: gate.md
+  - CLI: cli.md
   - Config: config.md
+  - Commands: commands.md
+  - Hooks and tools: tools.md
   - Debugging: debugging.md
   - Reporting: reporting.md
   - Rules: rules.md
