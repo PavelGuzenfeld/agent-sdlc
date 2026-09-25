@@ -6,8 +6,8 @@ From an approved ticket to a squash merge.
 
 ```text
 +--------------------------+
-| ticket                   |   labelled `model:*`: the approved ticket is the plan
-+--------------------------+
+| ticket                   |   labelled `model:*`, assigned to `@me`:
++--------------------------+   the approved ticket is the plan
              |
              v
 +--------------------------+
@@ -45,8 +45,9 @@ From an approved ticket to a squash merge.
 | Rule | What it means in practice |
 |---|---|
 | Intent lives in the tracker | Design notes go in the ticket; a new `.md` file in the tree is blocked |
-| An approved ticket is the plan | The `model:*` label is the approval |
+| An approved ticket is the plan | The `model:*` label is the approval; the assignee names who works it |
 | One ticket, one branch, one PR | Branch `42-slug`, PR body `Closes #42` |
+| Every ticket names an assignee | Triage sets it alongside the `model:*` label |
 | No ticket, no change past ~40 lines | `diff-discipline` blocks the commit |
 | Red slice test first | Watched failing for the right reason before any code |
 | The gate runs before the commit lands | A survivor blocks |
@@ -56,8 +57,8 @@ From an approved ticket to a squash merge.
 
 ```bash
 gh issue create -t "is_adult accepts 17" -b "Expected: 18 is the first adult age."
-# triage: add the label, which is the approval
-gh issue edit 42 --add-label model:sonnet
+# triage: add the label (approval) and assignee
+gh issue edit 42 --add-label model:sonnet --add-assignee @me
 ```
 
 ```text
@@ -68,7 +69,7 @@ gh issue edit 42 --add-label model:sonnet
 - It writes `test_eighteen_is_the_first_adult_age`, watches it fail, then
   fixes the code.
 - The commit runs the gate; a survivor sends it back to the test.
-- It opens the PR with `Closes #42` and waits for CI.
+- It opens the PR assigned to `@me` with `Closes #42` and waits for CI.
 - You read it and type `LGTM`; it squash-merges and removes the worktree.
 
 ## Vertical slice
