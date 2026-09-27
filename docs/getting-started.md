@@ -16,11 +16,10 @@ cd agent-sdlc
   default; `--scope project` or `--scope local` limits it to one repo.
 - To turn a user-scope install off in one repo, put
   `{"enabledPlugins": {"agent-sdlc@agent-sdlc": false}}` in that repo's
-  `.claude/settings.local.json` or `.claude/settings.json`. Other repos keep
-  it. Checked with `claude plugin list` on Claude Code 2.1.283:
-  `settings.local.json` applied in subdirectories too, while
-  `.claude/settings.json` applied only when run from the directory holding
-  `.claude/`.
+  `.claude/settings.local.json`. Other repos keep it. Checked with
+  `claude plugin list` on Claude Code 2.1.283: it holds from every
+  subdirectory. The same line in `.claude/settings.json` held only when run
+  from the directory holding `.claude/`, so don't rely on it.
 - `--deps` installs `git gh jq docker python3 ast-grep pytest pre-commit`,
   plus `mutation-gate` itself.
 - `install.sh` also renders the commands as Codex skills under
