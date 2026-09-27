@@ -159,6 +159,12 @@ home=$(mktemp -d)
 spawn_scenario say-key.sh "say-key.sh legacy install" \
     "$(legacy_install "$home" say-key.sh)" "$home" positional
 
+if grep -q 'CLAUDE_PLUGIN_ROOT:-' "$dir/commands/say.md"; then
+    fail "commands/say.md uses a \${CLAUDE_PLUGIN_ROOT:-...} default; only the bare token is substituted in command bodies"
+fi
+grep -q 'sh "${CLAUDE_PLUGIN_ROOT}/bin/say-trigger.sh"' "$dir/commands/say.md" \
+    || fail "commands/say.md does not run say-trigger.sh from \${CLAUDE_PLUGIN_ROOT}/bin"
+
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
     exit 1
