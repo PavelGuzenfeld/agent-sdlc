@@ -47,22 +47,34 @@ Add `assert is_adult(18)` and `assert not is_adult(17)`, and the gate passes.
 
 ## Install
 
+Claude Code:
+
+```bash
+claude plugin marketplace add PavelGuzenfeld/agent-sdlc
+claude plugin install agent-sdlc@agent-sdlc
+```
+
+Tools the gate needs, and Codex:
+
 ```bash
 git clone https://github.com/PavelGuzenfeld/agent-sdlc
 cd agent-sdlc
-./install.sh --target all --deps
+./install.sh --deps
 ```
 
 | Want | Do |
 |---|---|
-| The whole pack | `./install.sh --target all --deps` (targets: `claude`, `codex`, `all`; `--deps=say` adds voice) |
+| Claude Code | The plugin above; `--scope local` or `--scope project` keeps it to one repo |
+| Codex | `./install.sh --target codex`, or add the repo as a Codex marketplace source |
+| Gate dependencies | `./install.sh --deps` (`--deps=say` adds voice) |
 | Only the gate | `pip install agent-sdlc` (WordNet check: `agent-sdlc[vocabulary]`) |
-| A plugin | `claude --plugin-dir /path/to/agent-sdlc`, or add the repo as a Codex marketplace source |
 | The gate on a repo | Add `.mutation-gate.toml`, wire the pre-commit hooks |
 
-- `install.sh` links `skills/` into `~/.claude` and `~/.codex`, links
-  `commands/` and `bin/` into `~/.claude`, renders `commands/` as Codex
-  skills and merges the hooks. A second run changes nothing.
+- `install.sh` links `skills/` into `~/.codex` and renders `commands/` as
+  Codex skills. It installs nothing into `~/.claude`. A second run changes
+  nothing.
+- Installed an older `install.sh` into `~/.claude`? `./install.sh
+  --uninstall-legacy` removes those links and hooks, or every hook fires twice.
 - `ast-grep-cli` adds an `sg` shim that can shadow the system `sg`; call
   `ast-grep`.
 
@@ -70,7 +82,7 @@ cd agent-sdlc
 
 In Claude Code (Codex: `$name` instead of `/name`):
 
-1. `./install.sh --target claude --deps`
+1. Install the plugin and `./install.sh --deps`
 2. In your repo: `touch .mutation-gate.toml && mutation-gate rules sync`
 3. `claude`, then `/grill <idea>` or `gh issue create …`
 4. Approve the ticket: `gh issue edit 42 --add-label model:sonnet`

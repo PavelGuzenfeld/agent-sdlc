@@ -17,11 +17,11 @@ What runs without you asking, and the scripts behind it.
 
 ## Claude hooks
 
-| Event | Script | Plugin install | `install.sh` install |
-|---|---|---|---|
-| `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` | merged from `settings.example.json` |
-| `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` | added when `mutation-gate` is on `PATH` |
-| `Stop` | `say-hook.sh` | `hooks/hooks.json` | merged from `settings.example.json` |
+| Event | Script | Declared in |
+|---|---|---|
+| `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
+| `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
+| `Stop` | `say-hook.sh` | `hooks/hooks.json` |
 
 - `mutation-gate-hook.sh` exits quietly unless the repo has a
   `.mutation-gate.toml`, then runs `mutation-gate --worktree`.
@@ -110,17 +110,17 @@ bin/mutation-gate --dry-run             # run the gate from a checkout
 ## install.sh
 
 ```text
-usage: ./install.sh [--target claude|codex|all] [--deps | --deps=say] [--uninstall-legacy]
+usage: ./install.sh [--target codex|all] [--deps | --deps=say] [--uninstall-legacy]
 ```
 
 | Flag | Effect |
 |---|---|
-| `--target claude` | Link `skills/`, `commands/`, `bin/` into `~/.claude`; merge hooks |
+| `--target claude` | Refused: prints the `claude plugin install` commands and exits 2 |
 | `--target codex` | Link `skills/` into `~/.codex/skills`; render each command as a Codex skill |
-| `--target all` | Both |
+| `--target all` | Same as `codex`; the default |
 | `--deps` | Install `git gh jq docker python3 ast-grep pytest pre-commit` and the gate |
 | `--deps=say` | Also the Kokoro voice stack |
-| `--uninstall-legacy` | Remove the `~/.claude` links and hooks this script added, then exit |
+| `--uninstall-legacy` | Remove the `~/.claude` links and hooks an older `install.sh` added, then exit |
 
 - Rerunning changes nothing.
 - `ast-grep-cli` also installs an `sg` shim. If `~/.local/bin` comes before
@@ -130,7 +130,7 @@ usage: ./install.sh [--target claude|codex|all] [--deps | --deps=say] [--uninsta
 
 | Agent | Manifest | Load it |
 |---|---|---|
-| Claude Code | `.claude-plugin/plugin.json` | `claude --plugin-dir /path/to/agent-sdlc` |
+| Claude Code | `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` | `claude plugin install agent-sdlc@agent-sdlc`, or `claude --plugin-dir /path/to/agent-sdlc` for one session |
 | Codex | `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json` | Add the repo as a marketplace source |
 
 - The Claude plugin ships skills, commands and hooks. The Codex plugin ships

@@ -2,43 +2,47 @@
 
 From clone to a first gated commit.
 
-## Clone and install
+## Install
 
 ```bash
+claude plugin marketplace add PavelGuzenfeld/agent-sdlc
+claude plugin install agent-sdlc@agent-sdlc
 git clone https://github.com/PavelGuzenfeld/agent-sdlc
 cd agent-sdlc
-./install.sh --target claude --deps
+./install.sh --deps
 ```
 
-- `--target` takes `claude`, `codex` or `all`.
-- It links `skills/` into the agent's config directory and `commands/*.md`
-  into `~/.claude/commands`, or renders each command as
-  `~/.codex/skills/<name>/SKILL.md` for Codex.
-- It merges the hook lines from `settings.example.json` into
-  `~/.claude/settings.json`.
+- The plugin ships the skills, commands and hooks. `--scope user` is the
+  default; `--scope project` or `--scope local` limits it to one repo.
+- To turn a user-scope install off in one repo, put
+  `{"enabledPlugins": {"agent-sdlc@agent-sdlc": false}}` in that repo's
+  `.claude/settings.local.json` or `.claude/settings.json`. Other repos keep
+  it. Checked with `claude plugin list` on Claude Code 2.1.283:
+  `settings.local.json` applied in subdirectories too, while
+  `.claude/settings.json` applied only when run from the directory holding
+  `.claude/`.
 - `--deps` installs `git gh jq docker python3 ast-grep pytest pre-commit`,
   plus `mutation-gate` itself.
+- `install.sh` also renders the commands as Codex skills under
+  `~/.codex/skills`. It installs nothing into `~/.claude`; `--target claude`
+  exits and prints the plugin commands above.
+- An older `install.sh` linked into `~/.claude` and merged hooks into
+  `~/.claude/settings.json`. Alongside the plugin those hooks fire twice.
+  `./install.sh --uninstall-legacy` removes only what it added.
 - Rerunning it changes nothing.
 
 ## Verify it worked
 
 ```bash
-ls -la ~/.claude/skills/
+claude plugin list
 ```
-
-Every entry is a symlink back into the clone, not a real directory:
 
 ```text
-lrwxrwxrwx  diagnose -> /path/to/agent-sdlc/skills/diagnose
+  ❯ agent-sdlc@agent-sdlc
+    Status: ✔ enabled
 ```
 
-If `mutation-gate` was on `PATH` at install time, the Stop hook is there:
-
-```bash
-jq '.hooks.Stop' ~/.claude/settings.json
-```
-
-- `tests/install.sh` runs all of these checks, plus the Codex tree, against a
+- `tests/install.sh` checks the Codex tree and the legacy uninstall against a
   throwaway `$HOME`. Read it if something here doesn't match.
 
 ## First real use
