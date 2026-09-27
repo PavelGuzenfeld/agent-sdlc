@@ -2,7 +2,7 @@
 # /say entrypoint. Always speaks the pane's latest answer, preempting anything playing.
 set -eu
 
-BIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin"
+BIN="$(cd "$(dirname "$0")" && pwd)"
 DIR="${XDG_RUNTIME_DIR:-/tmp}/claude-say"
 PANE="${WEZTERM_PANE:?not running under WezTerm}"
 P="$DIR/p$PANE"
