@@ -95,7 +95,6 @@ pre-commit install --hook-type commit-msg
 | `git-guardrail.sh` | The PreToolUse hook above |
 | `mutation-gate-hook.sh` | Stop hook: finds the repo root from the hook payload, runs the gate if opted in |
 | `mutation-gate` | Runs the gate from this checkout without `pip install` |
-| `merge-claude-hook.sh` | Adds one hook to `settings.json` if it isn't there already; `install.sh` uses it |
 | `install-gdscript-parser` | Builds the tree-sitter GDScript parser in Docker so ast-grep can read `.gd` files |
 | `say.sh`, `ksay.py` | Speak a text file through Kokoro |
 | `say-trigger.sh`, `say-narrate.py`, `say-prompt.md`, `say-extract.jq` | The `/say` pipeline: pick the last answer, rewrite it for listening, speak it |

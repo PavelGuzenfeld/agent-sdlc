@@ -45,8 +45,6 @@ if [ -n "$collisions" ]; then
     exit 1
 fi
 
-wants() { [ "$target" = all ] || [ "$target" = "$1" ]; }
-
 link() {
     src="$1"
     dst="$2"
@@ -244,5 +242,5 @@ if [ -n "$uninstall_legacy" ]; then
 fi
 
 [ -n "$deps" ] && install_deps
-wants codex && install_codex
+install_codex
 exit "$status"
