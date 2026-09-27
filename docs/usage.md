@@ -8,15 +8,17 @@ Codex.
 ### 1. Install
 
 ```bash
+claude plugin marketplace add PavelGuzenfeld/agent-sdlc
+claude plugin install agent-sdlc@agent-sdlc
 git clone https://github.com/PavelGuzenfeld/agent-sdlc
 cd agent-sdlc
-./install.sh --target claude --deps
+./install.sh --deps
 ```
 
-- Links skills, commands and `bin/` into `~/.claude`, and merges the
-  git-guardrail and `/say` hooks into `~/.claude/settings.json`.
-- Adds the Stop-time gate hook when `mutation-gate` is on `PATH`.
-- Or load it as a plugin, without installing: `claude --plugin-dir /path/to/agent-sdlc`.
+- The plugin ships skills, commands, `bin/` and the git-guardrail, `/say` and
+  Stop-time gate hooks.
+- `--deps` installs `mutation-gate` and the tools it calls.
+- Or load it for one session, without installing: `claude --plugin-dir /path/to/agent-sdlc`.
 
 ### 2. Opt a repo in
 
@@ -166,11 +168,11 @@ $done
 
 | | Claude Code | Codex |
 |---|---|---|
-| Install | `--target claude` or `--plugin-dir` | `--target codex` or marketplace |
+| Install | Plugin, or `--plugin-dir` | `--target codex` or marketplace |
 | Rules read from | `.claude/rules/*.md` | `AGENTS.md` |
 | Call a command | `/kata 42` | `$kata 42` |
 | Call a skill | `/diagnose`, or loads on match | `$diagnose` |
 | git guardrail | Yes, PreToolUse hook | Not with `install.sh` |
 | Gate at session Stop | Yes, with `.mutation-gate.toml` | Not with `install.sh` |
 | Gate at commit | Pre-commit hooks | Pre-commit hooks |
-| `/say` voice | Yes | No: its scripts live in `~/.claude/bin` |
+| `/say` voice | Yes | No: its scripts ship in the Claude plugin |

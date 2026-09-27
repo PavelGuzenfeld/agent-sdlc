@@ -116,12 +116,15 @@ mutation-gate: pass
 ## Install
 
 ```bash
+claude plugin marketplace add PavelGuzenfeld/agent-sdlc
+claude plugin install agent-sdlc@agent-sdlc
 git clone https://github.com/PavelGuzenfeld/agent-sdlc
 cd agent-sdlc
-./install.sh --target all --deps
+./install.sh --deps
 ```
 
-- `--target claude|codex|all` picks the agent home.
+- The plugin is the Claude Code install. `install.sh` covers Codex
+  (`--target codex`) and dependencies, never `~/.claude`.
 - `--deps` installs `git gh jq docker python3 ast-grep pytest pre-commit` and
   the gate; `--deps=say` adds the Kokoro voice stack.
 - A second run changes nothing.

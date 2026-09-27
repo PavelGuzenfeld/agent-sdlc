@@ -12,3 +12,5 @@ ssh clone bitbucket|clone with git@bitbucket.org:owner/repo.git
 npm install pinned version|npm i pkg@1.2.3
 npm install scoped pinned version|npm install @scope/pkg@2.0.0-beta.1
 npm install caret range|npm i pkg@^1.2.3
+claude plugin id|claude plugin install agent-sdlc@agent-sdlc
+claude plugin id as a settings key|{"enabledPlugins": {"agent-sdlc@agent-sdlc": false}}

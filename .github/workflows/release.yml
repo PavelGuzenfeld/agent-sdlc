@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sh tests/git-guardrail.sh && sh tests/merge-claude-hook.sh
+      - run: sh tests/git-guardrail.sh
 
   install:
     runs-on: ubuntu-latest

@@ -23,38 +23,31 @@ expect "marketplace.json's plugin source is this repo" \
 
 assert_tree() {
     label="$1"
-    expect "[$label] claude skill is a symlink" test -L "$home/.claude/skills/diagnose"
     expect "[$label] codex skill is a symlink" test -L "$home/.codex/skills/diagnose"
-    expect "[$label] claude command is a symlink" test -L "$home/.claude/commands/done.md"
-    expect "[$label] no global claude rules dir" test ! -e "$home/.claude/rules"
-    expect "[$label] claude bin script is a symlink" test -L "$home/.claude/bin/git-guardrail.sh"
-    expect "[$label] claude bin script is executable" test -x "$home/.claude/bin/git-guardrail.sh"
-    expect "[$label] claude bin subdirectory reachable" test -f "$home/.claude/bin/say-tones/arm.raw"
     expect "[$label] codex command rendered as a skill file" test -f "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill is not a symlink" test ! -L "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill names itself" grep -qx 'name: done' "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill carries a description" grep -q '^description: Finalize the smallest coherent' "$home/.codex/skills/done/SKILL.md"
     expect "[$label] codex command skill keeps the body" grep -qx '# Done' "$home/.codex/skills/done/SKILL.md"
     expect "[$label] no global codex AGENTS.md" test ! -e "$home/.codex/AGENTS.md"
-    expect "[$label] CLAUDE.md copied" test -f "$home/.claude/CLAUDE.md"
-    expect "[$label] settings.json has the guardrail hook" \
-        jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$home/.claude/settings.json"
-    expect "[$label] settings.json has the say hook exactly once" \
-        test "$(jq '[.hooks.Stop[].hooks[].command | select(contains("say-hook.sh"))] | length' "$home/.claude/settings.json")" = 1
+    expect "[$label] nothing installed into ~/.claude, the plugin owns it" test ! -e "$home/.claude"
 }
 
 HOME="$home" sh "$dir/install.sh" --target all
 assert_tree "first run"
 
-printf 'mine\n' > "$home/.claude/CLAUDE.md"
 second=$(HOME="$home" sh "$dir/install.sh" --target all 2>&1)
 expect "second run exits clean and prints nothing" test -z "$second"
 assert_tree "second run"
-expect "existing CLAUDE.md is never overwritten" test "$(cat "$home/.claude/CLAUDE.md")" = "mine"
 
 claude_only=$(mktemp -d)
-HOME="$claude_only" sh "$dir/install.sh" --target claude
-expect "[claude only] claude skill present" test -L "$claude_only/.claude/skills/diagnose"
+if HOME="$claude_only" sh "$dir/install.sh" --target claude >"$claude_only.out" 2>&1; then
+    echo "FAIL: --target claude exited zero" >&2
+    failures=$((failures + 1))
+fi
+expect "[claude only] points at the plugin install" \
+    grep -q 'claude plugin install agent-sdlc@agent-sdlc' "$claude_only.out"
+expect "[claude only] no claude tree" test ! -e "$claude_only/.claude"
 expect "[claude only] no codex tree" test ! -e "$claude_only/.codex"
 
 codex_only=$(mktemp -d)
@@ -62,7 +55,7 @@ HOME="$codex_only" sh "$dir/install.sh" --target codex
 expect "[codex only] codex skill present" test -L "$codex_only/.codex/skills/diagnose"
 expect "[codex only] no claude tree" test ! -e "$codex_only/.claude"
 
-rm -rf "$home" "$claude_only" "$codex_only"
+rm -rf "$home" "$claude_only" "$claude_only.out" "$codex_only"
 
 collide=$(mktemp -d)
 mkdir -p "$collide/skills/dup" "$collide/commands"
@@ -111,21 +104,23 @@ expect "an already-pinned ast-grep version is left alone" test -z "$(cat "$pipx_
 
 rm -rf "$stubs" "$deps_home"
 
-gate_stub=$(mktemp -d)
-printf '#!/usr/bin/env sh\nexit 0\n' > "$gate_stub/mutation-gate"
-chmod +x "$gate_stub/mutation-gate"
-
 uninstall_home=$(mktemp -d)
-mkdir -p "$uninstall_home/.claude"
-printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}]}}\n' \
-    > "$uninstall_home/.claude/settings.json"
-PATH="$gate_stub:$PATH" HOME="$uninstall_home" sh "$dir/install.sh" --target all >/dev/null
-expect "[pre-uninstall] mutation-gate-hook.sh Stop hook was added" \
-    jq -e '.hooks.Stop | tostring | contains("mutation-gate-hook.sh")' "$uninstall_home/.claude/settings.json"
-expect "[pre-uninstall] mutation-gate-hook.sh is linked into the bin dir" \
-    test -L "$uninstall_home/.claude/bin/mutation-gate-hook.sh"
-expect "[migration] the old bare mutation-gate entry was replaced, not kept alongside" \
-    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$uninstall_home/.claude/settings.json")" = 0
+mkdir -p "$uninstall_home/.claude/skills" "$uninstall_home/.claude/commands" "$uninstall_home/.claude/bin"
+for d in "$dir"/skills/*/; do
+    ln -s "${d%/}" "$uninstall_home/.claude/skills/$(basename "$d")"
+done
+for f in "$dir"/commands/*.md; do
+    ln -s "$f" "$uninstall_home/.claude/commands/$(basename "$f")"
+done
+for f in "$dir"/bin/*; do
+    ln -s "$f" "$uninstall_home/.claude/bin/$(basename "$f")"
+done
+jq '{hooks: .hooks}
+    | .hooks.Stop += [{"hooks":[{"type":"command","command":"sh $HOME/.claude/bin/mutation-gate-hook.sh"}]},
+                      {"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}]' \
+    "$dir/settings.example.json" > "$uninstall_home/.claude/settings.json"
+printf 'mine\n' > "$uninstall_home/.claude/CLAUDE.md"
+HOME="$uninstall_home" sh "$dir/install.sh" --target codex >/dev/null
 
 settings="$uninstall_home/.claude/settings.json"
 tmp=$(mktemp)
@@ -152,6 +147,8 @@ expect "[uninstall] settings.json drops the say hook" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("say-hook.sh"))] | length' "$settings")" = 0
 expect "[uninstall] settings.json drops the mutation-gate hook" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate-hook.sh"))] | length' "$settings")" = 0
+expect "[uninstall] settings.json drops the bare mutation-gate entry" \
+    test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$settings")" = 0
 expect "[uninstall] the not-owned git-guardrail hook survives" \
     jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$settings"
 expect "[uninstall] an unrelated Stop entry survives" \
@@ -169,7 +166,7 @@ expect "[uninstall] a second run is a no-op" test -z "$second_uninstall"
 expect "[uninstall] a second run changes nothing in settings.json" \
     test "$(jq -c . "$settings")" = "$before_second"
 
-rm -rf "$gate_stub" "$uninstall_home" "$foreign"
+rm -rf "$uninstall_home" "$foreign"
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2

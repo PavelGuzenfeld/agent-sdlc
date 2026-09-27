@@ -116,6 +116,7 @@ carveout_sample() {
     case "$1" in
         public_git_ssh_clone_url) printf '%s' 'git@github.com:' ;;
         npm_version_specifier) printf '%s' 'pkg@1.2.3 ' ;;
+        claude_plugin_id) printf '%s' 'agent-sdlc@agent-sdlc ' ;;
         *)
             echo "FAIL: no boundary sample declared for carve-out: $1" >&2
             failures=$((failures + 1))
@@ -128,6 +129,7 @@ carveout_expected_output() {
     case "$1" in
         public_git_ssh_clone_url) printf '%s%s' 'public-git-ssh-clone-url' "$adjacent_identity" ;;
         npm_version_specifier) printf '%s %s' 'npm-package-version' "$adjacent_identity" ;;
+        claude_plugin_id) printf '%s %s' 'claude-plugin-id' "$adjacent_identity" ;;
         *)
             echo "FAIL: no expected boundary output declared for carve-out: $1" >&2
             failures=$((failures + 1))

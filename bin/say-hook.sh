@@ -4,7 +4,7 @@ set -eu
 
 [ -n "${WEZTERM_PANE:-}" ] || exit 0
 
-BIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin"
+BIN="$(cd "$(dirname "$0")" && pwd)"
 DIR="${XDG_RUNTIME_DIR:-/tmp}/claude-say"
 mkdir -p "$DIR"
 P="$DIR/p$WEZTERM_PANE"

@@ -3,11 +3,12 @@
 set -eu
 
 PYTHON="$HOME/.local/share/kokoro-venv/bin/python"
-KSAY="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin/ksay.py"
+BIN="$(cd "$(dirname "$0")" && pwd)"
+KSAY="$BIN/ksay.py"
 SAMPLE_RATE=24000
 
 usage() {
-    echo "usage: sh ~/.claude/bin/say.sh <text-file> [voice] [speed]  # default af_heart 1.0, higher speed is faster" >&2
+    echo "usage: sh $BIN/say.sh <text-file> [voice] [speed]  # default af_heart 1.0, higher speed is faster" >&2
     exit 2
 }
 
@@ -25,7 +26,7 @@ case "$SPEED" in
 esac
 
 if [ ! -x "$PYTHON" ]; then
-    echo "say.sh: kokoro missing — run: ${CLAUDE_PLUGIN_ROOT:-.}/install.sh --deps=say" >&2
+    echo "say.sh: kokoro missing — run: $(dirname "$BIN")/install.sh --deps=say" >&2
     exit 1
 fi
 

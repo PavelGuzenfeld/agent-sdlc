@@ -12,7 +12,10 @@ public_git_ssh_clone_url_replacement='\1public-git-ssh-clone-url'
 npm_version_specifier_pattern='(^|[^A-Za-z0-9._%+/-])[A-Za-z0-9._%+-]+@[0-9]+\.[0-9]+\.[0-9]+([^0-9.]|$)'
 npm_version_specifier_replacement='\1npm-package-version\2'
 
-identity_carve_outs='public_git_ssh_clone_url npm_version_specifier'
+claude_plugin_id_pattern='(^|[^A-Za-z0-9._%+/-])[A-Za-z0-9._-]+@[a]gent-sdlc([^A-Za-z0-9.-]|$)'
+claude_plugin_id_replacement='\1claude-plugin-id\2'
+
+identity_carve_outs='public_git_ssh_clone_url npm_version_specifier claude_plugin_id'
 
 carve_out_sed_program() {
     program=''

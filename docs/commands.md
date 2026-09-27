@@ -1,7 +1,7 @@
 # Commands
 
-Slash commands live in `commands/`. `install.sh` links them into
-`~/.claude/commands` and renders each one as a Codex skill.
+Slash commands live in `commands/`. The Claude plugin ships them;
+`install.sh` renders each one as a Codex skill.
 
 ## At a glance
 

@@ -8,7 +8,7 @@ uninstall_legacy=
 status=0
 
 usage() {
-    echo "usage: ./install.sh [--target claude|codex|all] [--deps | --deps=say] [--uninstall-legacy]" >&2
+    echo "usage: ./install.sh [--target codex|all] [--deps | --deps=say] [--uninstall-legacy]" >&2
     exit 2
 }
 
@@ -22,7 +22,15 @@ while [ $# -gt 0 ]; do
         *) usage ;;
     esac
 done
-case "$target" in claude|codex|all) ;; *) usage ;; esac
+case "$target" in
+    codex|all) ;;
+    claude)
+        echo "install.sh: Claude Code installs agent-sdlc as a plugin:" >&2
+        echo "  claude plugin marketplace add PavelGuzenfeld/agent-sdlc" >&2
+        echo "  claude plugin install agent-sdlc@agent-sdlc" >&2
+        exit 2 ;;
+    *) usage ;;
+esac
 
 collisions=
 for d in "$repo"/skills/*/; do
@@ -36,8 +44,6 @@ if [ -n "$collisions" ]; then
     echo "install.sh: name used by both a skill and a command:$collisions" >&2
     exit 1
 fi
-
-wants() { [ "$target" = all ] || [ "$target" = "$1" ]; }
 
 link() {
     src="$1"
@@ -101,16 +107,6 @@ render_codex_command() {
     echo "write $dst"
 }
 
-merge_hook() {
-    hook_type="$1"
-    guard="$2"
-    entry="$3"
-    before=$(jq -c . "$settings")
-    "$repo/bin/merge-claude-hook.sh" "$settings" "$hook_type" "$guard" \
-        '.hooks[$t] = ((.hooks[$t] // []) + [$e])' --arg t "$hook_type" --argjson e "$entry"
-    [ "$before" = "$(jq -c . "$settings")" ] || echo "hook $hook_type $guard"
-}
-
 unmerge_hook() {
     hook_type="$1"
     entry="$2"
@@ -132,41 +128,6 @@ example_hook_entries() {
 hook_entry_guard() {
     printf '%s' "$1" | jq -r \
         '.entry.hooks[0].command | split(" ") | ((map(select(contains("/"))) | first) // .[0]) | split("/") | last'
-}
-
-install_claude() {
-    for d in "$repo"/skills/*/; do
-        link "${d%/}" "$HOME/.claude/skills/$(basename "$d")"
-    done
-    for f in "$repo"/commands/*.md; do
-        link "$f" "$HOME/.claude/commands/$(basename "$f")"
-    done
-    for f in "$repo"/bin/*; do
-        link "$f" "$HOME/.claude/bin/$(basename "$f")"
-    done
-
-    settings="$HOME/.claude/settings.json"
-    if [ ! -f "$settings" ]; then
-        mkdir -p "$HOME/.claude"
-        printf '{}\n' > "$settings"
-        echo "write $settings"
-    fi
-    example_hook_entries |
-    while IFS= read -r line; do
-        merge_hook \
-            "$(printf '%s' "$line" | jq -r .type)" \
-            "$(hook_entry_guard "$line")" \
-            "$(printf '%s' "$line" | jq -c .entry)"
-    done
-    unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
-    if command -v mutation-gate >/dev/null 2>&1; then
-        merge_hook Stop mutation-gate-hook.sh '{"hooks":[{"type":"command","command":"sh $HOME/.claude/bin/mutation-gate-hook.sh"}]}'
-    fi
-
-    if [ ! -e "$HOME/.claude/CLAUDE.md" ]; then
-        cp "$repo/CLAUDE.md.example" "$HOME/.claude/CLAUDE.md"
-        echo "write $HOME/.claude/CLAUDE.md"
-    fi
 }
 
 uninstall_claude() {
@@ -281,6 +242,5 @@ if [ -n "$uninstall_legacy" ]; then
 fi
 
 [ -n "$deps" ] && install_deps
-wants claude && install_claude
-wants codex && install_codex
+install_codex
 exit "$status"

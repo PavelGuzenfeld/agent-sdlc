@@ -39,6 +39,9 @@ _GIT_SSH_CLONE_RE = re.compile(
 _NPM_VERSION_RE = re.compile(
     r"(^|[^A-Za-z0-9._%+/-])[A-Za-z0-9._%+-]+@[0-9]+\.[0-9]+\.[0-9]+([^0-9.]|$)"
 )
+_CLAUDE_PLUGIN_ID_RE = re.compile(
+    r"(^|[^A-Za-z0-9._%+/-])[A-Za-z0-9._-]+@[a]gent-sdlc([^A-Za-z0-9.-]|$)"
+)
 
 _BULLET_RE = re.compile(r"^\s*-\s*")
 _ARROW = "→"
@@ -54,7 +57,8 @@ class BannedName:
 
 def _carve_out(line: str) -> str:
     line = _GIT_SSH_CLONE_RE.sub(r"\1public-git-ssh-clone-url", line)
-    return _NPM_VERSION_RE.sub(r"\1npm-package-version\2", line)
+    line = _NPM_VERSION_RE.sub(r"\1npm-package-version\2", line)
+    return _CLAUDE_PLUGIN_ID_RE.sub(r"\1claude-plugin-id\2", line)
 
 
 def generic_hit(line: str) -> bool:

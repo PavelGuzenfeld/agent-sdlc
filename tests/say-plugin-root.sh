@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 set -eu
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE CLAUDE_PLUGIN_ROOT
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 failures=0
@@ -19,17 +19,6 @@ chmod +x "$stubbin/aplay"
 PATH="$stubbin:$PATH"
 export PATH
 
-narrate_stub() {
-    dest="$1"
-    marker="$2"
-    mkdir -p "$dest"
-    cat > "$dest/say-narrate.py" <<SH
-#!/usr/bin/env sh
-printf '%s' "\$*" > "$marker"
-SH
-    chmod +x "$dest/say-narrate.py"
-}
-
 wait_for() {
     file="$1"
     i=0
@@ -39,12 +28,37 @@ wait_for() {
     done
 }
 
-# --- say.sh: KSAY resolves under ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin ---
+plugin_install() {
+    root=$(mktemp -d)
+    mkdir -p "$root/bin"
+    cp "$dir/bin/$1" "$dir/bin/say-extract.jq" "$root/bin/"
+    printf '%s' "$root/bin"
+}
+
+legacy_install() {
+    home="$1"
+    script="$2"
+    mkdir -p "$home/.claude/bin"
+    ln -s "$dir/bin/$script" "$home/.claude/bin/$script"
+    ln -s "$dir/bin/say-extract.jq" "$home/.claude/bin/say-extract.jq"
+    printf '%s' "$home/.claude/bin"
+}
+
+narrate_stub() {
+    bin="$1"
+    marker="$2"
+    rm -f "$bin/say-narrate.py"
+    cat > "$bin/say-narrate.py" <<SH
+#!/usr/bin/env sh
+printf '%s' "\$*" > "$marker"
+SH
+    chmod +x "$bin/say-narrate.py"
+}
+
 say_sh_scenario() {
     label="$1"
-    plugin_root="$2"
+    bin="$2"
     home="$3"
-    want="$4"
 
     mkdir -p "$home/.local/share/kokoro-venv/bin"
     marker="$home/argv0"
@@ -58,35 +72,25 @@ SH
 
     txt=$(mktemp)
     printf 'hi\n' > "$txt"
-
-    if [ -n "$plugin_root" ]; then
-        env CLAUDE_PLUGIN_ROOT="$plugin_root" HOME="$home" PATH="$PATH" \
-            sh "$dir/bin/say.sh" "$txt" >/dev/null 2>&1 || true
-    else
-        env HOME="$home" PATH="$PATH" \
-            sh "$dir/bin/say.sh" "$txt" >/dev/null 2>&1 || true
-    fi
+    env HOME="$home" PATH="$PATH" sh "$bin/say.sh" "$txt" >/dev/null 2>&1 || true
 
     got=$(cat "$marker" 2>/dev/null || echo MISSING)
-    [ "$got" = "$want" ] || fail "[$label] say.sh KSAY: want $want got $got"
+    [ "$got" = "$bin/ksay.py" ] || fail "[$label] say.sh KSAY: want $bin/ksay.py got $got"
 }
 
-say_sh_scenario "say.sh plugin root" "/fake/plugin/root" "$(mktemp -d)" \
-    "/fake/plugin/root/bin/ksay.py"
+home=$(mktemp -d)
+say_sh_scenario "say.sh plugin-only install" "$(plugin_install say.sh)" "$home"
 
-legacy_home=$(mktemp -d)
-say_sh_scenario "say.sh legacy fallback" "" "$legacy_home" "$legacy_home/.claude/bin/ksay.py"
+home=$(mktemp -d)
+say_sh_scenario "say.sh legacy install" "$(legacy_install "$home" say.sh)" "$home"
 
-# --- say-hook.sh: $BIN/say-extract.jq must resolve to find the real filter ---
 say_hook_scenario() {
     label="$1"
-    plugin_root="$2"
+    bin="$2"
     home="$3"
-    bin_root="$4"
 
     xdg=$(mktemp -d)
-    mkdir -p "$xdg/claude-say" "$bin_root"
-    cp "$dir/bin/say-extract.jq" "$bin_root/say-extract.jq"
+    mkdir -p "$xdg/claude-say"
 
     pane="probe$$"
     p="$xdg/claude-say/p$pane"
@@ -98,38 +102,29 @@ say_hook_scenario() {
     } > "$transcript"
     printf '{"transcript_path":"%s"}' "$transcript" > "$p.stdin"
 
-    if [ -n "$plugin_root" ]; then
-        env CLAUDE_PLUGIN_ROOT="$plugin_root" HOME="$home" WEZTERM_PANE="$pane" \
-            XDG_RUNTIME_DIR="$xdg" PATH="$PATH" \
-            sh "$dir/bin/say-hook.sh" < "$p.stdin" >/dev/null 2>&1 || true
-    else
-        env HOME="$home" WEZTERM_PANE="$pane" XDG_RUNTIME_DIR="$xdg" PATH="$PATH" \
-            sh "$dir/bin/say-hook.sh" < "$p.stdin" >/dev/null 2>&1 || true
-    fi
+    env HOME="$home" WEZTERM_PANE="$pane" XDG_RUNTIME_DIR="$xdg" PATH="$PATH" \
+        sh "$bin/say-hook.sh" < "$p.stdin" >/dev/null 2>&1 || true
 
-    [ -f "$p.txt" ] || fail "[$label] say-hook.sh never wrote $p.txt — \$BIN/say-extract.jq did not resolve to $bin_root"
+    [ -f "$p.txt" ] || fail "[$label] say-hook.sh never wrote $p.txt — say-extract.jq did not resolve next to $bin"
 }
 
-plugin_root=$(mktemp -d)
-home_without_legacy=$(mktemp -d)
-say_hook_scenario "say-hook.sh plugin root" "$plugin_root" "$home_without_legacy" "$plugin_root/bin"
+home=$(mktemp -d)
+say_hook_scenario "say-hook.sh plugin-only install" "$(plugin_install say-hook.sh)" "$home"
 
-legacy_home2=$(mktemp -d)
-say_hook_scenario "say-hook.sh legacy fallback" "" "$legacy_home2" "$legacy_home2/.claude/bin"
+home=$(mktemp -d)
+say_hook_scenario "say-hook.sh legacy install" "$(legacy_install "$home" say-hook.sh)" "$home"
 
-# --- say-trigger.sh / say-key.sh: spawn ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/bin/say-narrate.py ---
 spawn_scenario() {
     script="$1"
     label="$2"
-    plugin_root="$3"
+    bin="$3"
     home="$4"
-    bin_root="$5"
-    arg_mode="$6"
+    arg_mode="$5"
 
     xdg=$(mktemp -d)
     mkdir -p "$xdg/claude-say"
     marker="$xdg/marker"
-    narrate_stub "$bin_root" "$marker"
+    narrate_stub "$bin" "$marker"
 
     pane="probe$$"
     p="$xdg/claude-say/p$pane"
@@ -141,35 +136,34 @@ spawn_scenario() {
         set --
     fi
 
-    if [ -n "$plugin_root" ]; then
-        env CLAUDE_PLUGIN_ROOT="$plugin_root" HOME="$home" WEZTERM_PANE="$pane" \
-            XDG_RUNTIME_DIR="$xdg" PATH="$PATH" sh "$dir/bin/$script" "$@" >/dev/null 2>&1 || true
-    else
-        env HOME="$home" WEZTERM_PANE="$pane" XDG_RUNTIME_DIR="$xdg" PATH="$PATH" \
-            sh "$dir/bin/$script" "$@" >/dev/null 2>&1 || true
-    fi
+    env HOME="$home" WEZTERM_PANE="$pane" XDG_RUNTIME_DIR="$xdg" PATH="$PATH" \
+        sh "$bin/$script" "$@" >/dev/null 2>&1 || true
 
     wait_for "$marker"
-    [ -f "$marker" ] || fail "[$label] $script never launched \$BIN/say-narrate.py from $bin_root"
+    [ -f "$marker" ] || fail "[$label] $script never launched say-narrate.py next to $bin"
 }
 
-plugin_root2=$(mktemp -d)
-home_without_legacy2=$(mktemp -d)
-spawn_scenario say-trigger.sh "say-trigger.sh plugin root" \
-    "$plugin_root2" "$home_without_legacy2" "$plugin_root2/bin" wezterm
+home=$(mktemp -d)
+spawn_scenario say-trigger.sh "say-trigger.sh plugin-only install" \
+    "$(plugin_install say-trigger.sh)" "$home" wezterm
 
-legacy_home3=$(mktemp -d)
-spawn_scenario say-trigger.sh "say-trigger.sh legacy fallback" \
-    "" "$legacy_home3" "$legacy_home3/.claude/bin" wezterm
+home=$(mktemp -d)
+spawn_scenario say-trigger.sh "say-trigger.sh legacy install" \
+    "$(legacy_install "$home" say-trigger.sh)" "$home" wezterm
 
-plugin_root3=$(mktemp -d)
-home_without_legacy3=$(mktemp -d)
-spawn_scenario say-key.sh "say-key.sh plugin root" \
-    "$plugin_root3" "$home_without_legacy3" "$plugin_root3/bin" positional
+home=$(mktemp -d)
+spawn_scenario say-key.sh "say-key.sh plugin-only install" \
+    "$(plugin_install say-key.sh)" "$home" positional
 
-legacy_home4=$(mktemp -d)
-spawn_scenario say-key.sh "say-key.sh legacy fallback" \
-    "" "$legacy_home4" "$legacy_home4/.claude/bin" positional
+home=$(mktemp -d)
+spawn_scenario say-key.sh "say-key.sh legacy install" \
+    "$(legacy_install "$home" say-key.sh)" "$home" positional
+
+if grep -q 'CLAUDE_PLUGIN_ROOT:-' "$dir/commands/say.md"; then
+    fail "commands/say.md uses a \${CLAUDE_PLUGIN_ROOT:-...} default; only the bare token is substituted in command bodies"
+fi
+grep -q 'sh "${CLAUDE_PLUGIN_ROOT}/bin/say-trigger.sh"' "$dir/commands/say.md" \
+    || fail "commands/say.md does not run say-trigger.sh from \${CLAUDE_PLUGIN_ROOT}/bin"
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
