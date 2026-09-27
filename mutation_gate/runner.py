@@ -45,18 +45,24 @@ TERM_GRACE_SECONDS = 15.0
 
 DOCKER_RUN_RE = re.compile(r"\bdocker\s+run\b")
 
+UNWRITTEN_PYCACHE = "/nonexistent/mutation-gate-pycache"
+
 # Root in the container writes these into the bind-mounted repo as directories a
 # host user then cannot rm without starting another container (#74).
-NO_ROOT_CACHE = "-e PYTHONDONTWRITEBYTECODE=1 -e PYTEST_ADDOPTS='-p no:cacheprovider'"
+NO_ROOT_CACHE = (
+    f"-e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX={UNWRITTEN_PYCACHE}"
+    " -e PYTEST_ADDOPTS='-p no:cacheprovider'"
+)
 
 GIT_REPO_SCOPED = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")
+NO_BYTECODE = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": UNWRITTEN_PYCACHE}
 
 
 def _test_env() -> dict[str, str]:
     """The environment a repo's own command runs in. Git exports these into every
     hook and they override `-C`, so a suite that builds a temp repo stages into
     the commit being gated instead (flowdiff#83)."""
-    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED}
+    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED} | NO_BYTECODE
 
 
 @dataclass
