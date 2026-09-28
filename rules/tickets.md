@@ -30,6 +30,12 @@ sets it alongside the `model:*` label — the label approves, the assignee
 names who works it. An agent works only tickets assigned to the `gh` user
 it runs as, `@me`, and its PR carries that same assignee.
 
+A PR waits for CI in one foreground call — `gh pr checks <PR> --watch
+--fail-fast` or `gh run watch <run> --exit-status` — with the Bash timeout at
+its 600000 ms maximum and the output to a file, re-issued on timeout. The call
+blocks until CI settles, so no turn is spent on a status check: every turn
+re-reads the whole context.
+
 ## Follow-ups
 
 A follow-up starts from `/done`, a kata worker, any agent mid-task, or the

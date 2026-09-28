@@ -276,6 +276,21 @@ def test_tickets_rule_names_the_assignee_convention():
     assert "never born with a `model:<name>` label or an assignee" in normalized
 
 
+def test_tickets_rule_waits_for_ci_with_one_foreground_watch_at_the_max_timeout():
+    content = (rules.RULES_DIR / "tickets.md").read_text()
+    normalized = " ".join(content.split())
+    assert "`gh pr checks <PR> --watch --fail-fast` or `gh run watch <run> --exit-status`" in normalized
+    assert "Bash timeout at its 600000 ms maximum" in normalized
+    assert "re-issued on timeout" in normalized
+
+
+def test_kata_waits_for_ci_by_the_tickets_rule_instead_of_restating_it():
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "Waits for CI per `rules/tickets.md`" in normalized
+    assert "600000" not in normalized
+
+
 def test_grill_plan_assigns_its_step_tickets_to_me():
     content = (Path(__file__).parents[2] / "commands" / "grill.md").read_text()
     normalized = " ".join(content.split())

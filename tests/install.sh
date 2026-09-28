@@ -126,6 +126,7 @@ settings="$uninstall_home/.claude/settings.json"
 tmp=$(mktemp)
 jq '.permissions = {"allow": ["Bash(ls *)"]}
     | .hooks.Stop += [{"hooks":[{"type":"command","command":"echo unrelated-stop"}]}]
+    | .hooks.Stop += [{"hooks":[{"type":"command","command":"echo sibling-stop"},{"type":"command","command":"/opt/legacy/bin/mutation-gate --worktree"}]}]
     | .hooks.PreToolUse += [{"matcher":"Bash","hooks":[{"type":"command","command":"echo unrelated-pretooluse"}]}]' \
     "$settings" > "$tmp"
 mv "$tmp" "$settings"
@@ -147,8 +148,10 @@ expect "[uninstall] settings.json drops the say hook" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("say-hook.sh"))] | length' "$settings")" = 0
 expect "[uninstall] settings.json drops the mutation-gate hook" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate-hook.sh"))] | length' "$settings")" = 0
-expect "[uninstall] settings.json drops the bare mutation-gate entry" \
+expect "[uninstall] settings.json drops every mutation-gate --worktree entry" \
     test "$(jq '[.hooks.Stop[]?.hooks[]?.command | select(contains("mutation-gate --worktree"))] | length' "$settings")" = 0
+expect "[uninstall] a sibling hook sharing the absolute-path gate entry's group survives" \
+    jq -e '[.hooks.Stop[]?.hooks[]?.command | select(contains("sibling-stop"))] | length == 1' "$settings"
 expect "[uninstall] the not-owned git-guardrail hook survives" \
     jq -e '.hooks.PreToolUse | tostring | contains("git-guardrail.sh")' "$settings"
 expect "[uninstall] an unrelated Stop entry survives" \

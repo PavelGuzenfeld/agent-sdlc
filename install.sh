@@ -121,6 +121,20 @@ unmerge_hook() {
     [ "$before" = "$(jq -c . "$settings")" ] || echo "unhook $hook_type"
 }
 
+unhook_gate_worktree() {
+    before=$(jq -c . "$settings")
+    tmp=$(mktemp)
+    jq '
+        .hooks.Stop = [(.hooks.Stop // [])[]
+            | .hooks = ((.hooks // []) | map(select((.command // "") | test("(^|/)mutation-gate --worktree$") | not)))
+            | select(.hooks != [])]
+        | if .hooks.Stop == [] then .hooks |= del(.Stop) else . end
+        | if .hooks == {} then del(.hooks) else . end
+    ' "$settings" > "$tmp"
+    mv "$tmp" "$settings"
+    [ "$before" = "$(jq -c . "$settings")" ] || echo "unhook Stop"
+}
+
 example_hook_entries() {
     jq -c '.hooks | to_entries[] | .key as $t | .value[] | {type: $t, entry: .}' "$repo/settings.example.json"
 }
@@ -153,7 +167,7 @@ uninstall_claude() {
             grep -qx "$guard" "$owned_bins" || continue
             unmerge_hook "$(printf '%s' "$line" | jq -r .type)" "$(printf '%s' "$line" | jq -c .entry)"
         done
-        unmerge_hook Stop '{"hooks":[{"type":"command","command":"mutation-gate --worktree"}]}'
+        unhook_gate_worktree
         if grep -qx mutation-gate-hook.sh "$owned_bins"; then
             unmerge_hook Stop '{"hooks":[{"type":"command","command":"sh $HOME/.claude/bin/mutation-gate-hook.sh"}]}'
         fi
