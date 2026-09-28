@@ -67,8 +67,7 @@ needs. The agent:
    ticket still in it, at most three plain sentences on what changed, and a
    Human-testing section when the change is user-observable. No how-it-works
    paragraph.
-5. Waits for CI with one blocking call — `gh pr checks <PR> --watch`, output
-   to a file — never polling turn by turn. No `.github/workflows/` in the
+5. Waits for CI per `rules/tickets.md`. No `.github/workflows/` in the
    repo means no checks to wait for — skip straight to exit. Red: fix, push,
    and watch again.
 6. Exits only once CI is green on the pushed sha, never before, reporting the
