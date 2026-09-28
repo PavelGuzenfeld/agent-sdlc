@@ -286,7 +286,7 @@ def test_grill_dates_its_context_from_the_os_clock():
     content = (Path(__file__).parents[2] / "commands" / "grill.md").read_text()
     normalized = " ".join(content.split())
     assert "read today's date from the OS with `date`" in normalized
-    assert "anchored to that year, not to your training cutoff" in normalized
+    assert "search the web for its state as of that date and cite what you found" in normalized
 
 
 def test_grill_roots_the_tree_in_problem_audience_and_goal():

@@ -43,8 +43,10 @@ report what you found. Never ask the user for something you could look up.
 
 Open by grounding the interview in the latest context: read today's date from the OS
 with `date`, then survey the current state of what is being grilled — code, git
-log, open issues, docs. Every "latest version" or "current practice" claim is
-anchored to that year, not to your training cutoff; look it up rather than recall it.
+log, open issues, docs. Your training data is stale by an unknown margin, so when
+the design touches anything outside the repo — a library, a tool, an API, a standard,
+current practice — search the web for its state as of that date and cite what you
+found. A version, a feature or a best practice recalled from memory is a guess.
 
 A running exploration is an unsettled prerequisite: it blocks only the questions
 downstream of it. Ask the rest of the frontier while it runs.
