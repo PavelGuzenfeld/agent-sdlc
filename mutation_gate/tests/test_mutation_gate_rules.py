@@ -282,6 +282,20 @@ def test_grill_plan_assigns_its_step_tickets_to_me():
     assert "labeled `model:<name>`, assigned to `@me`" in normalized
 
 
+def test_grill_dates_its_context_from_the_os_clock():
+    content = (Path(__file__).parents[2] / "commands" / "grill.md").read_text()
+    normalized = " ".join(content.split())
+    assert "read today's date from the OS with `date`" in normalized
+    assert "anchored to that year, not to your training cutoff" in normalized
+
+
+def test_grill_roots_the_tree_in_problem_audience_and_goal():
+    content = (Path(__file__).parents[2] / "commands" / "grill.md").read_text()
+    normalized = " ".join(content.split())
+    assert "The root of the tree is the problem, the audience and the goal" in normalized
+    assert "- **Problem and audience**" in content
+
+
 def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
     core_words = set(vocabulary.load(Path("."), "").concepts)
     content = (rules.RULES_DIR / "naming.md").read_text()
