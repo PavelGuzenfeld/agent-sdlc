@@ -20,6 +20,10 @@ Track the decisions as a tree: every decision branches into the ones that hang o
 it. The **frontier** is every decision whose prerequisites are settled — the
 questions answerable now, without guessing at answers you have not heard yet.
 
+The root of the tree is the problem, the audience and the goal: what hurts, who it
+hurts, and the vision of done. Every other decision hangs off them, so they are the
+first questions on the frontier, asked even when the request seems to imply them.
+
 - Ask **one question at a time**, taking the sharpest question on the frontier.
 - Give your recommended answer to every question, with the reason in a line or two.
 - A question whose answer depends on one still open is not on the frontier. Hold it.
@@ -36,6 +40,13 @@ frontier is not empty.
 Finding facts is your job. A question answerable from the environment — the
 filesystem, git history, a tool, the transcripts — you answer by exploring, then
 report what you found. Never ask the user for something you could look up.
+
+Open by grounding the interview in the latest context: read today's date from the OS
+with `date`, then survey the current state of what is being grilled — code, git
+log, open issues, docs. Your training data is stale by an unknown margin, so when
+the design touches anything outside the repo — a library, a tool, an API, a standard,
+current practice — search the web for its state as of that date and cite what you
+found. A version, a feature or a best practice recalled from memory is a guess.
 
 A running exploration is an unsettled prerequisite: it blocks only the questions
 downstream of it. Ask the rest of the frontier while it runs.
@@ -59,6 +70,7 @@ Draft the material in the scratchpad first. Then, in the repo's own tracker:
 
 - File one decision-record issue and pin it, the interview not retold, with
   sections:
+  - **Problem and audience**
   - **Goal**
   - **Non-goals**
   - **Decisions** — a flat numbered list; each settled decision as one line,
