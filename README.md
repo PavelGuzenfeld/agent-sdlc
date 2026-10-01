@@ -23,6 +23,7 @@ memory.
 | Tests shaped to the code | An adversary review that sees intent and tests, never the code |
 | Unit tests green, feature broken | One vertical-slice test per ticket, entered where a real consumer enters, red before any code |
 | Scope creep | 40-line limit without a ticket; one ticket, one branch, one PR |
+| Code bloat | Smallest-change and zero-comment rules; a `no-comments` hook; every added line must kill its mutants |
 | Design notes rotting in the tree | New `.md` files are blocked; intent lives in the tracker |
 | Destructive git | A hook that denies `reset --hard`, `add -A`, force-push |
 | AI tells and leaked identity in commits | `commit-msg` and `no-leaks` hooks |
