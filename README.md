@@ -10,15 +10,18 @@ Docs: <https://pavelguzenfeld.com/agent-sdlc/>
 ## Why
 
 A coding agent writes the code and the tests for it, and tests written next
-to the code tend to agree with it, bugs included. On a mature suite, 57% of
-real bug-class mutants survived. agent-sdlc puts that check, plus scope,
-intent and git safety, into hooks and a gate instead of leaving them to the
-agent's memory.
+to the code tend to agree with it, bugs included. We planted small realistic
+bugs in a mature, well-tested project, and the suite stayed green for 57% of
+them. Unit tests can each pass while the feature, entered the way a user
+enters it, still fails. agent-sdlc puts those checks, plus scope, intent and
+git safety, into hooks and a gate instead of leaving them to the agent's
+memory.
 
 | Problem | What catches it |
 |---|---|
 | Tests that pass but assert nothing | `mutation-gate`: a surviving mutant blocks the commit |
 | Tests shaped to the code | An adversary review that sees intent and tests, never the code |
+| Unit tests green, feature broken | One vertical-slice test per ticket, entered where a real consumer enters, red before any code |
 | Scope creep | 40-line limit without a ticket; one ticket, one branch, one PR |
 | Design notes rotting in the tree | New `.md` files are blocked; intent lives in the tracker |
 | Destructive git | A hook that denies `reset --hard`, `add -A`, force-push |
@@ -86,7 +89,7 @@ In Claude Code (Codex: `$name` instead of `/name`):
 2. In your repo: `touch .mutation-gate.toml && mutation-gate rules sync`
 3. `claude`, then `/grill <idea>` or `gh issue create …`
 4. Approve the ticket: `gh issue edit 42 --add-label model:sonnet`
-5. `/kata 42`: a worker writes the failing test, implements, gates, opens the PR
+5. `/kata 42`: a worker writes the failing slice test, implements, gates, opens the PR
 6. Review, then type `LGTM`: it squash-merges and cleans up
 7. `/done` to close out the session
 
