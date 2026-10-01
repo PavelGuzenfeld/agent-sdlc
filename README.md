@@ -154,6 +154,22 @@ In Claude Code (Codex: `$name` instead of `/name`):
 Full walkthrough, and what differs in Codex:
 <https://pavelguzenfeld.com/agent-sdlc/usage/>
 
+## With standard
+
+[standard](https://github.com/PavelGuzenfeld/standard) runs C++ and Python
+quality gates on the PR. agent-sdlc runs before the commit. Use both:
+
+```text
+ agent session  ->  git commit  ->  PR  ->  merge
+ '------ agent-sdlc -------'       '-- standard --'
+```
+
+Run standard's setup first, then `mutation-gate rules sync`. Copying its
+`AGENTS.md` afterwards drops the rules block. In CI, the agent-sdlc diff
+checks need `--range`, because `pre-commit run --from-ref` doesn't enforce
+them. Setup order, the CI job and the `docs/` allowlist:
+<https://pavelguzenfeld.com/agent-sdlc/usage/#with-standard>
+
 ## What's inside
 
 | Path | What |

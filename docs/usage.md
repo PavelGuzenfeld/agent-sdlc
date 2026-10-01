@@ -176,3 +176,72 @@ $done
 | Gate at session Stop | Yes, with `.mutation-gate.toml` | Not with `install.sh` |
 | Gate at commit | Pre-commit hooks | Pre-commit hooks |
 | `/say` voice | Yes | No: its scripts ship in the Claude plugin |
+
+## With standard
+
+[standard](https://github.com/PavelGuzenfeld/standard) ships reusable GitHub
+Actions for C++ and Python: clang-tidy, ruff, SAST, sanitizers and fuzzing on
+the PR diff. agent-sdlc covers the session and the commit; standard covers the
+PR.
+
+```text
+ agent session  ->  git commit  ->  PR  ->  merge
+ '------ agent-sdlc -------'       '-- standard --'
+```
+
+### Setup order
+
+```bash
+standard-ci init --preset recommended
+cp <standard>/configs/AGENTS.md AGENTS.md
+cp <standard>/configs/.pre-commit-config.yaml .pre-commit-config.yaml
+# then add the agent-sdlc repo: entry from Hooks and tools
+touch .mutation-gate.toml
+mutation-gate rules sync
+pre-commit install
+pre-commit install --hook-type commit-msg
+```
+
+- standard's copies go first. Copying its `AGENTS.md` after `rules sync`
+  drops the rules block, and `rules-check` fails until you sync again.
+- An mkdocs `docs/` folder needs an allowlist entry, or `no-new-docs` blocks
+  every new page:
+
+```toml
+[[doc_allow]]
+glob = "docs/**/*"
+reason = "mkdocs site content"
+```
+
+### Checking the PR in CI
+
+standard's reusable `pre-commit.yml` runs `pre-commit run --from-ref`. That
+does not enforce agent-sdlc's diff checks:
+
+- `mutation-gate` and `no-new-docs` read the staged index. In CI it is empty,
+  so they pass.
+- `commit-msg`, `diff-discipline` and `no-leaks` are commit-msg hooks and do
+  not run.
+- `rules-check` does run: it reads the tree.
+
+Run the range checks as their own job on `pull_request`, as this repo's CI
+does:
+
+```yaml
+  agent-sdlc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: pip install agent-sdlc==0.3.1
+      - run: |
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          mutation-gate commit-msg --range "$base..HEAD"
+          mutation-gate diff-discipline --range "$base..HEAD" --branch "${{ github.head_ref }}"
+          mutation-gate no-new-docs --range "$base..HEAD"
+          mutation-gate no-leaks --range "$base..HEAD"
+```
+
+The mutation gate has no CI mode. It needs the project's test environment, so
+it runs at commit and at session Stop only.
