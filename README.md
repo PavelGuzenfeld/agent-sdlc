@@ -23,7 +23,7 @@ memory.
 | Tests shaped to the code | An adversary review that sees intent and tests, never the code |
 | Unit tests green, feature broken | One vertical-slice test per ticket, entered where a real consumer enters, red before any code |
 | Scope creep | 40-line limit without a ticket; one ticket, one branch, one PR |
-| Code bloat | Every added line must kill its mutants, so speculative code gets a test or goes; `no-comments` (opt-in) blocks added comment lines; `diff-discipline` has the agent delete any added line the request does not need |
+| Code bloat | `diff-discipline` rule: smallest change that satisfies the request, standard library first, no new file, dependency, config knob or one-caller abstraction unasked, delete every added line the request does not need, shrink in its own commit. `code-clarity` rule: zero comments, docstrings capped at 3 lines; `no-comments` (opt-in) blocks added comment lines. Every added line must kill its mutants, so speculative code gets a test or goes |
 | Design notes rotting in the tree | New `.md` files are blocked; intent lives in the tracker |
 | Destructive git | A hook that denies `reset --hard`, `add -A`, force-push |
 | AI tells and leaked identity in commits | `commit-msg` and `no-leaks` hooks |
