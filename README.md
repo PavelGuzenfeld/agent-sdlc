@@ -27,6 +27,64 @@ memory.
 | Destructive git | A hook that denies `reset --hard`, `add -A`, force-push |
 | AI tells and leaked identity in commits | `commit-msg` and `no-leaks` hooks |
 
+## How it fits together
+
+`x` marks a blocker. `[name]` is the rule in `rules/` that applies.
+
+```text
+ rules/*.md sync into .claude/rules and AGENTS.md; every session loads them
+
+  idea
+   |  /grill, or gh issue create
+   v
+ +--------------------------+
+ | ticket                   |  intent lives here, not in the tree  [tickets]
+ +--------------------------+
+   |  triage: model:* label + assignee
+   v                       x assigned to someone else: /kata stops
+                           unlabelled or unassigned: /kata asks first
+ +--------------------------+
+ | /kata N                  |  one ticket, one branch, one PR      [tickets]
+ | branch off origin/main   |
+ +--------------------------+
+   v
+ +--------------------------+
+ | red slice test           |  enters where a user enters,         [testing]
+ |                          |  watched failing first
+ +--------------------------+
+   v
+ +--------------------------+
+ | implement                |  smallest change           [diff-discipline]
+ |                          |  no comments, canonical names
+ +--------------------------+         [code-clarity] [naming]
+   |  every Bash call: git-guardrail  x reset --hard, add -A, force-push
+   v
+ +--------------------------+
+ | git commit               |
+ |  pre-commit              |
+ |   rules-check            |  x .claude/rules drifted from the pack
+ |   mutation-gate ---------+- x surviving mutant --> new test, or waiver
+ |   no-new-docs            |  x new .md file not allowlisted
+ |  commit-msg              |
+ |   commit-msg             |  x banned words, AI attribution    [voice]
+ |   diff-discipline        |  x over 40 lines, no ticket ref
+ |   no-leaks               |  x email, private IP, home path
+ +--------------------------+
+   |  gate green -> adversary review: sees intent and tests, never
+   |  the code; reports, never blocks; answer every finding
+   |  Stop hook: runs the same gate if no commit did
+   v
+ +--------------------------+
+ | push, PR "Closes #N"     |  x CI red
+ +--------------------------+
+   v
+ +--------------------------+
+ | you review, type LGTM    |  squash merge, branch deleted
+ +--------------------------+
+   v
+  /done: handoff, follow-up tickets --> back to "ticket"
+```
+
 ## Example
 
 ```python
