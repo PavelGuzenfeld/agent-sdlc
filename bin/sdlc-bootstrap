@@ -26,4 +26,37 @@ wanted_labels | while IFS='|' read -r name color description; do
     gh label create "$name" --color "$color" --description "$description" >/dev/null \
         || echo "sdlc-bootstrap: could not create label $name, continuing without it" >&2
 done
+
+pack_root=$(cd "$(dirname "$0")/.." && pwd)
+
+install_templates() {
+    toplevel=$(git rev-parse --show-toplevel) || {
+        echo "sdlc-bootstrap: not inside a git repo, no templates written" >&2
+        return
+    }
+    slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || slug=""
+    if [ -n "$(ls -A "$toplevel/.github/ISSUE_TEMPLATE" 2>/dev/null)" ]; then
+        echo "skipped .github/ISSUE_TEMPLATE (repo has its own templates)"
+    else
+        mkdir -p "$toplevel/.github/ISSUE_TEMPLATE"
+        for form in bug.yml feature.yml; do
+            cp "$pack_root/.github/ISSUE_TEMPLATE/$form" "$toplevel/.github/ISSUE_TEMPLATE/$form"
+            echo "wrote .github/ISSUE_TEMPLATE/$form"
+        done
+        if [ -n "$slug" ]; then
+            sed "s#PavelGuzenfeld/agent-sdlc#$slug#" "$pack_root/.github/ISSUE_TEMPLATE/config.yml" > "$toplevel/.github/ISSUE_TEMPLATE/config.yml"
+            echo "wrote .github/ISSUE_TEMPLATE/config.yml"
+        else
+            echo "skipped .github/ISSUE_TEMPLATE/config.yml (repo lookup failed)"
+        fi
+    fi
+    if find "$toplevel" "$toplevel/docs" "$toplevel/.github" -maxdepth 1 -iname 'pull_request_template*' 2>/dev/null | grep -q .; then
+        echo "skipped .github/pull_request_template.md (repo has its own template)"
+    else
+        cp "$pack_root/.github/pull_request_template.md" "$toplevel/.github/pull_request_template.md"
+        echo "wrote .github/pull_request_template.md"
+    fi
+}
+
+install_templates
 exit 0
