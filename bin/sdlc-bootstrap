@@ -35,23 +35,27 @@ install_templates() {
         return
     }
     slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || slug=""
-    for template in ISSUE_TEMPLATE/bug.yml ISSUE_TEMPLATE/feature.yml ISSUE_TEMPLATE/config.yml pull_request_template.md; do
-        target="$toplevel/.github/$template"
-        if [ -e "$target" ]; then
-            echo "skipped .github/$template (already exists)"
-            continue
-        fi
-        mkdir -p "$(dirname "$target")"
-        if [ "$template" != ISSUE_TEMPLATE/config.yml ]; then
-            cp "$pack_root/.github/$template" "$target"
-        elif [ -n "$slug" ]; then
-            sed "s#PavelGuzenfeld/agent-sdlc#$slug#" "$pack_root/.github/$template" > "$target"
+    if [ -n "$(ls -A "$toplevel/.github/ISSUE_TEMPLATE" 2>/dev/null)" ]; then
+        echo "skipped .github/ISSUE_TEMPLATE (repo has its own templates)"
+    else
+        mkdir -p "$toplevel/.github/ISSUE_TEMPLATE"
+        for form in bug.yml feature.yml; do
+            cp "$pack_root/.github/ISSUE_TEMPLATE/$form" "$toplevel/.github/ISSUE_TEMPLATE/$form"
+            echo "wrote .github/ISSUE_TEMPLATE/$form"
+        done
+        if [ -n "$slug" ]; then
+            sed "s#PavelGuzenfeld/agent-sdlc#$slug#" "$pack_root/.github/ISSUE_TEMPLATE/config.yml" > "$toplevel/.github/ISSUE_TEMPLATE/config.yml"
+            echo "wrote .github/ISSUE_TEMPLATE/config.yml"
         else
-            echo "skipped .github/$template (repo lookup failed)"
-            continue
+            echo "skipped .github/ISSUE_TEMPLATE/config.yml (repo lookup failed)"
         fi
-        echo "wrote .github/$template"
-    done
+    fi
+    if find "$toplevel" "$toplevel/docs" "$toplevel/.github" -maxdepth 1 -iname 'pull_request_template*' 2>/dev/null | grep -q .; then
+        echo "skipped .github/pull_request_template.md (repo has its own template)"
+    else
+        cp "$pack_root/.github/pull_request_template.md" "$toplevel/.github/pull_request_template.md"
+        echo "wrote .github/pull_request_template.md"
+    fi
 }
 
 install_templates

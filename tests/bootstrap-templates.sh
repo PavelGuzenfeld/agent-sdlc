@@ -58,15 +58,10 @@ grep -q 'acme/widgets/discussions' "$scratch/repo/.github/ISSUE_TEMPLATE/config.
 [ -z "$(git -C "$scratch/repo" log --oneline 2>/dev/null)" ] || fail "bootstrap committed"
 
 printf 'mine\n' > "$scratch/repo/.github/pull_request_template.md"
-rm "$scratch/repo/.github/ISSUE_TEMPLATE/bug.yml"
 run_bootstrap || fail "rerun exited non-zero"
 [ "$(cat "$scratch/repo/.github/pull_request_template.md")" = mine ] || fail "existing file overwritten"
-grep -q -x 'skipped .github/pull_request_template.md (already exists)' "$scratch/out" \
+grep -q -x 'skipped .github/pull_request_template.md (repo has its own template)' "$scratch/out" \
     || fail "existing file not reported as skipped"
-cmp -s "$dir/.github/ISSUE_TEMPLATE/bug.yml" "$scratch/repo/.github/ISSUE_TEMPLATE/bug.yml" \
-    || fail "missing file not restored beside an existing one"
-grep -q -x 'wrote .github/ISSUE_TEMPLATE/bug.yml' "$scratch/out" || fail "restored file not listed"
-! grep -q -x 'wrote .github/ISSUE_TEMPLATE/feature.yml' "$scratch/out" || fail "untouched file listed as written"
 
 fresh_repo
 run_bootstrap . "" || fail "failed lookup made the script exit non-zero"
@@ -75,6 +70,25 @@ grep -q -x 'skipped .github/ISSUE_TEMPLATE/config.yml (repo lookup failed)' "$sc
     || fail "config.yml skip not reported"
 cmp -s "$dir/.github/pull_request_template.md" "$scratch/repo/.github/pull_request_template.md" \
     || fail "other templates not written when lookup fails"
+
+fresh_repo
+mkdir -p "$scratch/repo/.github/ISSUE_TEMPLATE"
+printf 'old\n' > "$scratch/repo/.github/ISSUE_TEMPLATE/bug_report.md"
+run_bootstrap || fail "own-template run exited non-zero"
+[ "$(ls "$scratch/repo/.github/ISSUE_TEMPLATE")" = bug_report.md ] || fail "issue forms written beside the repo's own template"
+grep -q -x 'skipped .github/ISSUE_TEMPLATE (repo has its own templates)' "$scratch/out" \
+    || fail "own issue templates not reported as skipped"
+
+for existing in pull_request_template.md docs/PULL_REQUEST_TEMPLATE.md docs/PULL_REQUEST_TEMPLATE/team.md .github/PULL_REQUEST_TEMPLATE/team.md PULL_REQUEST_TEMPLATE.md; do
+    fresh_repo
+    mkdir -p "$scratch/repo/$(dirname "$existing")"
+    printf 'old\n' > "$scratch/repo/$existing"
+    run_bootstrap || fail "run exited non-zero beside $existing"
+    [ ! -e "$scratch/repo/.github/pull_request_template.md" ] || fail "PR template written beside $existing"
+    grep -q -x 'skipped .github/pull_request_template.md (repo has its own template)' "$scratch/out" \
+        || fail "PR template skip not reported beside $existing"
+    [ -e "$scratch/repo/.github/ISSUE_TEMPLATE/bug.yml" ] || fail "issue forms skipped because of $existing"
+done
 
 (cd "$dir" && STUB_SLUG=acme/widgets sh bin/sdlc-bootstrap > "$scratch/out" 2>&1)
 ! grep -q '^wrote ' "$scratch/out" || fail "bootstrap in the pack itself wrote files"
