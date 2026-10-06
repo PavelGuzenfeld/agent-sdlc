@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+set -u
+
+wanted_labels() {
+    cat <<'LABELS'
+model:haiku|006B75|run with Haiku
+model:sonnet|1D76DB|run with Sonnet
+model:opus|FEF2C0|run with Opus
+model:fable|5319E7|run with Fable
+follow-up|FBCA04|noticed during another ticket, not yet triaged
+correctness|FEF2C0|follow-up category: correctness
+clarity|C5DEF5|follow-up category: clarity
+security|C5DEF5|follow-up category: security
+performance|D93F0B|follow-up category: performance
+scope|D93F0B|follow-up category: scope, deferred with nothing broken
+size:tiny|006B75|one location, no design choice, no new file
+bug|d73a4a|Something isn't working
+enhancement|C5DEF5|Feature request from the issue form
+LABELS
+}
+
+existing=$(gh label list --limit 200 --json name --jq '.[].name')
+
+wanted_labels | while IFS='|' read -r name color description; do
+    printf '%s\n' "$existing" | grep -qxF -- "$name" && continue
+    gh label create "$name" --color "$color" --description "$description" >/dev/null \
+        || echo "sdlc-bootstrap: could not create label $name, continuing without it" >&2
+done
+exit 0

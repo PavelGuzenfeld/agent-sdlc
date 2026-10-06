@@ -55,7 +55,8 @@ Evidence: mutation-gate 0.1.1, clean clone of main
 ## Triage
 
 - Triage adds a `model:*` label once the ticket is the plan. The label names
-  who runs it and is itself the approval.
+  who runs it and is itself the approval. Run the plugin script `sh "${CLAUDE_PLUGIN_ROOT}/bin/sdlc-bootstrap"` first so
+  the label exists; if creation is refused, triage without it and say so.
 - A raw idea with open questions goes through
   [`/grill`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/commands/grill.md):
   one question at a time, recommended answer first. `/grill plan` files a

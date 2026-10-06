@@ -80,5 +80,7 @@ Draft the material in the scratchpad first. Then, in the repo's own tracker:
   - **Rejected** — one line per alternative considered and why it lost, so a
     decision is not silently reversed later.
 - File one issue per implementation step, each labeled `model:<name>`,
-  assigned to `@me`, each linking back to the decision-record issue.
+  assigned to `@me`, each linking back to the decision-record issue. Run
+  `sh "${CLAUDE_PLUGIN_ROOT}/bin/sdlc-bootstrap"` before filing them so the
+  labels exist; if creation is refused, file without the label and say so.
 - Print the numbers of every issue filed.
