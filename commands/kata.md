@@ -25,10 +25,11 @@ mid-run reassignment takes effect on the next `/kata`. A ticket filed while
 it runs waits for the next `/kata`.
 
 Read each ticket's `model:<name>` label before dispatch. Triage adding it is
-the approval, so kata never adds a `model:*` label at dispatch. Before
-dispatch it runs `bin/sdlc-bootstrap`, which creates any missing `model:*`,
-follow-up and category labels in the repo; that is repo config, not approval,
-and a refused creation never stops dispatch.
+the approval, so kata never adds a `model:*` label at dispatch. Before it
+adds any `model:*` label and before any dispatch it runs
+`sh "${CLAUDE_PLUGIN_ROOT}/bin/sdlc-bootstrap"`, which creates any missing
+`model:*`, follow-up and category labels in the repo; that is repo config, not
+approval, and a refused creation never stops dispatch.
 `/kata <N>` on a ticket with no model label asks which model; that answer is
 the triage, so kata adds its `model:<name>` label, then dispatches. `/kata
 <N>` on an unassigned ticket asks whether to take it; that answer is the

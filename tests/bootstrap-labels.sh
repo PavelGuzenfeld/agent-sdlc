@@ -15,7 +15,9 @@ cat > "$scratch/bin/gh" <<'SH'
 #!/usr/bin/env sh
 case "$1 $2" in
 "label list")
-    cat "$STUB_EXISTING"
+    limit=30
+    [ "${3:-}" = "--limit" ] && limit="$4"
+    head -n "$limit" "$STUB_EXISTING"
     ;;
 "label create")
     echo "$*" >> "$STUB_CALLS"
@@ -55,6 +57,18 @@ run_bootstrap || fail "rerun exited non-zero"
 run_bootstrap model:opus || fail "refused create made the script exit non-zero"
 [ "$(wc -l < "$STUB_CALLS")" -eq 13 ] || fail "script stopped after the refused create"
 grep -q 'model:opus' "$scratch/out" || fail "refused label not reported"
+
+printf '%s\n' bugfix model:sonnet-old > "$STUB_EXISTING"
+run_bootstrap || fail "substring run exited non-zero"
+grep -q ' bug --color' "$STUB_CALLS" || fail "bug skipped because bugfix contains it"
+grep -q ' model:sonnet --color' "$STUB_CALLS" || fail "model:sonnet skipped because model:sonnet-old contains it"
+
+{
+    seq 1 40 | sed 's/^/filler-/'
+    echo scope
+} > "$STUB_EXISTING"
+run_bootstrap || fail "long-list run exited non-zero"
+! grep -q ' scope --color' "$STUB_CALLS" || fail "scope recreated though it sits past the default page of 30"
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
