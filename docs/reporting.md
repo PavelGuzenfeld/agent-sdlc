@@ -35,7 +35,7 @@ How to file a bug, a feature request or a question, and what happens next.
 
 | Form | Title | Body |
 |---|---|---|
-| Bug | The defect, stated flat | Repro, expected vs actual, ref or version |
+| Bug | The defect, stated flat | Repro, expected vs actual, evidence, ref or version |
 | Feature | The outcome you want | Why; never the change you would make |
 | Question | — | Discussions, not the tracker |
 
