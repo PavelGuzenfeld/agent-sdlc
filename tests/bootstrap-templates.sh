@@ -13,10 +13,16 @@ required_ids() {
     awk '/^    id: /{id=$2} /required: true/{print id}' "$dir/.github/ISSUE_TEMPLATE/$1.yml" | tr '\n' ' '
 }
 
-[ "$(required_ids bug)" = "what-happened repro expected-actual " ] \
+[ "$(required_ids bug)" = "what-happened repro expected-actual ref " ] \
     || fail "bug form required fields are '$(required_ids bug)'"
 [ "$(required_ids feature)" = "outcome why " ] \
     || fail "feature form required fields are '$(required_ids feature)'"
+grep -q '^    id: code-context$' "$dir/.github/ISSUE_TEMPLATE/feature.yml" \
+    || fail "feature form has no code-context field"
+for doc in done grill; do
+    grep -q 'Ref: <branch-or-tag>@<sha>' "$dir/commands/$doc.md" \
+        || fail "commands/$doc.md does not file tickets with a Ref line"
+done
 
 scratch=$(mktemp -d)
 mkdir "$scratch/bin"

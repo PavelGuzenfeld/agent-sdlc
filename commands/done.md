@@ -113,18 +113,18 @@ Unset or missing: block filing and say so — never file unscanned.
 Never restate the tokens here — this file is committed.
 
 Title states the defect or the task flat — no prefix tag, no Overview, no closing
-line. Body is these four fields and nothing else, `Noticed in` being the commit that
-touched the evidence path, or the run's last commit when it is not a path:
+line. Body is these four fields and nothing else, `Ref` being the branch or tag and the
+commit that touched the evidence path, or the run's last commit when it is not a path:
 
 ```
 <what was observed, one or two lines>
 
 Evidence: <path:line, test name, waiver entry, or a quoted session line>
-Noticed in: <commit SHA>
+Ref: <branch-or-tag>@<sha>
 Deferred because: <one line>
 ```
 
-A public remote gets the same content as prose, three lines at most: no field
+A public remote gets the same content as prose, three lines at most, the ref inline: no field
 labels, no bullets, no AI-attribution line ever. `gh issue create` with the
 labels `rules/tickets.md`'s Follow-ups section requires.
 

@@ -68,6 +68,8 @@ decisions.
 
 Draft the material in the scratchpad first. Then, in the repo's own tracker:
 
+- Every issue filed here carries `Ref: <branch-or-tag>@<sha>`, the ref the
+  interview read the code at; on a public remote it goes inline in the prose.
 - File one decision-record issue and pin it, the interview not retold, with
   sections:
   - **Problem and audience**

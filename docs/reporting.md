@@ -35,7 +35,7 @@ How to file a bug, a feature request or a question, and what happens next.
 
 | Form | Title | Body |
 |---|---|---|
-| Bug | The defect, stated flat | Repro, expected vs actual, evidence |
+| Bug | The defect, stated flat | Repro, expected vs actual, ref or version |
 | Feature | The outcome you want | Why; never the change you would make |
 | Question | — | Discussions, not the tracker |
 
@@ -49,7 +49,7 @@ Title: rules check passes on a repo with no AGENTS.md
 Repro:    rm AGENTS.md && mutation-gate rules check; echo $?
 Expected: non-zero, "AGENTS.md: missing"
 Actual:   0
-Evidence: mutation-gate 0.1.1, clean clone of main
+Ref:      v0.1.1
 ```
 
 ## Triage
