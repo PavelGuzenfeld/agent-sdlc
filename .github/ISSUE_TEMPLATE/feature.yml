@@ -16,3 +16,8 @@ body:
       label: Why
     validations:
       required: true
+  - type: textarea
+    id: code-context
+    attributes:
+      label: Code context
+      placeholder: "Paths and the <branch-or-tag>@<sha> you looked at"

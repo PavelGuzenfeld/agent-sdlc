@@ -22,3 +22,10 @@ body:
       label: Expected vs actual
     validations:
       required: true
+  - type: input
+    id: ref
+    attributes:
+      label: Ref or version
+      placeholder: "<branch-or-tag>@<sha>, or a release version"
+    validations:
+      required: true
