@@ -28,8 +28,10 @@ Read each ticket's `model:<name>` label before dispatch. Triage adding it is
 the approval, so kata never adds a `model:*` label at dispatch. Before it
 adds any `model:*` label and before any dispatch it runs
 `sh "${CLAUDE_PLUGIN_ROOT}/bin/sdlc-bootstrap"`, which creates any missing
-`model:*`, follow-up and category labels in the repo; that is repo config, not
-approval, and a refused creation never stops dispatch.
+`model:*`, follow-up and category labels in the repo and writes any missing
+issue-form and PR-template files into the working tree; that is repo config,
+not approval, a refused creation never stops dispatch, and kata tells the user
+which template files were written but never commits them.
 `/kata <N>` on a ticket with no model label asks which model; that answer is
 the triage, so kata adds its `model:<name>` label, then dispatches. `/kata
 <N>` on an unassigned ticket asks whether to take it; that answer is the

@@ -26,4 +26,33 @@ wanted_labels | while IFS='|' read -r name color description; do
     gh label create "$name" --color "$color" --description "$description" >/dev/null \
         || echo "sdlc-bootstrap: could not create label $name, continuing without it" >&2
 done
+
+pack_root=$(cd "$(dirname "$0")/.." && pwd)
+
+install_templates() {
+    toplevel=$(git rev-parse --show-toplevel) || {
+        echo "sdlc-bootstrap: not inside a git repo, no templates written" >&2
+        return
+    }
+    slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || slug=""
+    for template in ISSUE_TEMPLATE/bug.yml ISSUE_TEMPLATE/feature.yml ISSUE_TEMPLATE/config.yml pull_request_template.md; do
+        target="$toplevel/.github/$template"
+        if [ -e "$target" ]; then
+            echo "skipped .github/$template (already exists)"
+            continue
+        fi
+        mkdir -p "$(dirname "$target")"
+        if [ "$template" != ISSUE_TEMPLATE/config.yml ]; then
+            cp "$pack_root/.github/$template" "$target"
+        elif [ -n "$slug" ]; then
+            sed "s#PavelGuzenfeld/agent-sdlc#$slug#" "$pack_root/.github/$template" > "$target"
+        else
+            echo "skipped .github/$template (repo lookup failed)"
+            continue
+        fi
+        echo "wrote .github/$template"
+    done
+}
+
+install_templates
 exit 0
