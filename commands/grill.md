@@ -78,11 +78,14 @@ Draft the material in the scratchpad first. Then, in the repo's own tracker:
   - **Decisions** — a flat numbered list; each settled decision as one line,
     one atomic, declarative statement (this is the set `/rectify` can later
     audit).
+  - **Diagram** — an ASCII box, flow or state chart of the decided design, in a
+    fenced `text` block.
   - **Open questions** — anything left unresolved.
   - **Rejected** — one line per alternative considered and why it lost, so a
     decision is not silently reversed later.
 - File one issue per implementation step, each labeled `model:<name>`,
-  assigned to `@me`, each linking back to the decision-record issue. Run
+  assigned to `@me`, each linking back to the decision-record issue. A step
+  that changes a flow or state carries a diagram. Run
   `sh "${CLAUDE_PLUGIN_ROOT}/bin/sdlc-bootstrap"` before filing them so the
   labels exist; if creation is refused, file without the label and say so.
 - Print the numbers of every issue filed.

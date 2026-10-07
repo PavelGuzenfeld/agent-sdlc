@@ -19,6 +19,14 @@ required_ids() {
     || fail "feature form required fields are '$(required_ids feature)'"
 grep -q '^    id: code-context$' "$dir/.github/ISSUE_TEMPLATE/feature.yml" \
     || fail "feature form has no code-context field"
+grep -q '^    id: diagram$' "$dir/.github/ISSUE_TEMPLATE/feature.yml" \
+    || fail "feature form has no diagram field"
+! grep -q '^    id: diagram$' "$dir/.github/ISSUE_TEMPLATE/bug.yml" \
+    || fail "bug form has a diagram field"
+grep -q '^  - \*\*Diagram\*\*' "$dir/commands/grill.md" \
+    || fail "grill decision record has no Diagram section"
+grep -q 'changes a flow or state carries a diagram' "$dir/commands/grill.md" \
+    || fail "grill step tickets are not required to carry a diagram"
 for doc in done grill; do
     grep -q 'Ref: <branch-or-tag>@<sha>' "$dir/commands/$doc.md" \
         || fail "commands/$doc.md does not file tickets with a Ref line"
