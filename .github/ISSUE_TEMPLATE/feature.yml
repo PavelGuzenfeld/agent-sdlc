@@ -21,3 +21,8 @@ body:
     attributes:
       label: Code context
       placeholder: "Paths and the <branch-or-tag>@<sha> you looked at"
+  - type: textarea
+    id: diagram
+    attributes:
+      label: Diagram
+      description: A box, flow or state chart of the change, in a fenced text block
