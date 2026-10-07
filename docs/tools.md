@@ -61,7 +61,7 @@ Wire the gate into a consuming repo's `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/PavelGuzenfeld/agent-sdlc
-    rev: v0.4.0
+    rev: v0.4.1
     hooks:
       - id: rules-check
       - id: mutation-gate
