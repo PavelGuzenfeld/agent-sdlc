@@ -12,8 +12,10 @@ rerun overwrites the header rather than appending to it."""
 import contextlib
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -998,19 +1000,21 @@ def test_stop_hook_payload_waits_one_second_for_stdin_before_giving_up(monkeypat
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_WORKTREE = "import sys; from mutation_gate.cli import main; sys.exit(main(['--worktree']))"
+INTERPRETER_START_BUDGET_SECONDS = 4.0
 
 
-def _worktree_subprocess(tmp_path: Path, process_cwd: Path, stdin_text: str | None):
+def _worktree_subprocess(tmp_path: Path, process_cwd: Path, stdin_text: str | None, stdin_source=subprocess.PIPE):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     fake_git = fake_bin / "git"
     fake_git.write_text('#!/bin/sh\necho "git ran in $(pwd)" >&2\nexit 1\n')
     fake_git.chmod(0o755)
+    started = time.monotonic()
     proc = subprocess.Popen(
         [sys.executable, "-c", RUN_WORKTREE],
         cwd=process_cwd,
         env={"PYTHONPATH": str(REPO_ROOT), "HOME": str(tmp_path), "PATH": f"{fake_bin}{os.pathsep}/usr/bin:/bin"},
-        stdin=subprocess.PIPE,
+        stdin=stdin_source,
         stderr=subprocess.PIPE,
         text=True,
     )
@@ -1019,18 +1023,31 @@ def _worktree_subprocess(tmp_path: Path, process_cwd: Path, stdin_text: str | No
             proc.stdin.write(stdin_text)
             proc.stdin.close()
         proc.wait(timeout=15)
+        elapsed = time.monotonic() - started
         err = proc.stderr.read()
     finally:
         proc.kill()
-    return proc.returncode, err
+    return proc.returncode, err, elapsed
 
 
-def test_worktree_returns_when_stdin_is_an_open_pipe_that_never_closes(tmp_path):
+def test_worktree_returns_within_the_payload_wait_when_stdin_is_an_open_pipe_that_never_closes(tmp_path):
     process_cwd = tmp_path / "process"
     process_cwd.mkdir()
-    code, err = _worktree_subprocess(tmp_path, process_cwd, None)
+    code, err, elapsed = _worktree_subprocess(tmp_path, process_cwd, None)
     assert code == 2, err
     assert f"git ran in {process_cwd.resolve()}" in err
+    assert elapsed < cli.STOP_HOOK_PAYLOAD_WAIT_SECONDS + INTERPRETER_START_BUDGET_SECONDS
+
+
+def test_worktree_returns_when_stdin_is_an_open_socket_that_never_writes(tmp_path):
+    process_cwd = tmp_path / "process"
+    process_cwd.mkdir()
+    held_end, stdin_end = socket.socketpair()
+    with held_end, stdin_end:
+        code, err, elapsed = _worktree_subprocess(tmp_path, process_cwd, None, stdin_end.fileno())
+    assert code == 2, err
+    assert f"git ran in {process_cwd.resolve()}" in err
+    assert elapsed < cli.STOP_HOOK_PAYLOAD_WAIT_SECONDS + INTERPRETER_START_BUDGET_SECONDS
 
 
 def test_worktree_reads_cwd_from_a_json_payload_on_a_real_stdin_pipe(tmp_path):
@@ -1038,6 +1055,17 @@ def test_worktree_reads_cwd_from_a_json_payload_on_a_real_stdin_pipe(tmp_path):
     process_cwd.mkdir()
     payload_cwd = tmp_path / "payload"
     payload_cwd.mkdir()
-    code, err = _worktree_subprocess(tmp_path, process_cwd, json.dumps({"cwd": str(payload_cwd)}))
+    code, err, _ = _worktree_subprocess(tmp_path, process_cwd, json.dumps({"cwd": str(payload_cwd)}))
     assert code == 2, err
     assert f"git ran in {payload_cwd.resolve()}" in err
+
+
+@pytest.mark.parametrize("select_error", [ValueError, OSError])
+def test_stop_hook_payload_reads_stdin_when_select_cannot_watch_it(monkeypatch, select_error):
+    def _unwatchable(readable, writable, errored, timeout):
+        raise select_error
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(cli.select, "select", _unwatchable)
+    monkeypatch.setattr(sys.stdin, "read", lambda: '{"cwd": "/payload"}')
+    assert cli._stop_hook_payload() == {"cwd": "/payload"}
