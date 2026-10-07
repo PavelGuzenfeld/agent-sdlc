@@ -100,6 +100,8 @@ pre-commit install --hook-type commit-msg
 | `say-trigger.sh`, `say-narrate.py`, `say-prompt.md`, `say-extract.jq` | The `/say` pipeline: pick the last answer, rewrite it for listening, speak it |
 | `say-key.sh` | Terminal key binding: stop, arm, or speak |
 | `say-hook.sh` | Stop hook that speaks the answer when armed |
+| `say-tones/` | The raw arm, stop and error tones `say-key.sh` and `say-narrate.py` play |
+| `sdlc-bootstrap` | Creates missing `model:*`, follow-up and category labels, and writes missing issue forms and PR template into the repo |
 
 ```bash
 install-gdscript-parser                 # writes ~/.local/share/ast-grep/gdscript.so
