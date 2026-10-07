@@ -57,7 +57,8 @@ From an approved ticket to a squash merge.
 
 ```bash
 gh issue create -t "is_adult accepts 17" -b "Expected: 18 is the first adult age."
-# triage: add the label (approval) and assignee
+# triage: create missing labels, then add the label (approval) and assignee
+sh <agent-sdlc checkout>/bin/sdlc-bootstrap
 gh issue edit 42 --add-label model:sonnet --add-assignee @me
 ```
 

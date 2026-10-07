@@ -65,7 +65,8 @@ gh issue create -t "Parser accepts an empty header" -b "Expected: rejected with 
 ### 5. Approve it
 
 ```bash
-gh issue edit 42 --add-label model:sonnet
+sh <agent-sdlc checkout>/bin/sdlc-bootstrap
+gh issue edit 42 --add-label model:sonnet --add-assignee @me
 ```
 
 - The `model:<name>` label is the approval and picks the model that runs it:
@@ -234,7 +235,7 @@ does:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: pip install agent-sdlc==0.3.1
+      - run: pip install agent-sdlc==0.4.0
       - run: |
           base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
           mutation-gate commit-msg --range "$base..HEAD"
