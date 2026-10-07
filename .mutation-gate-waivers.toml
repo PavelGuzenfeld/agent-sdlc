@@ -510,7 +510,7 @@ reason = "the sweep sleeps in half-second steps until the next sample time; a fl
 
 [[waiver]]
 file = "mutation_gate/cli.py"
-line = 57
+line = 59
 column = 15
 old = """w.file == rel and w.line and not w.uncovered"""
 new = """w.file == rel and w.line or not w.uncovered"""
@@ -518,7 +518,7 @@ reason = "regrouping the guard makes it admit some files it would have skipped; 
 
 [[waiver]]
 file = "mutation_gate/cli.py"
-line = 57
+line = 59
 column = 15
 old = """w.file == rel and w.line"""
 new = """w.file == rel or w.line"""
@@ -526,7 +526,7 @@ reason = "same short-circuit: a looser guard scans more files and stale() still 
 
 [[waiver]]
 file = "mutation_gate/cli.py"
-line = 57
+line = 59
 column = 44
 old = """not w.uncovered"""
 new = """w.uncovered"""
