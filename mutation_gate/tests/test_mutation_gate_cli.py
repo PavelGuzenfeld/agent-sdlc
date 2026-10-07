@@ -11,6 +11,8 @@ rerun overwrites the header rather than appending to it."""
 
 import contextlib
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -979,3 +981,63 @@ def test_session_prompt_ignores_a_non_text_block_even_if_it_carries_a_text_field
 def test_emit_falls_back_to_backslashreplace_on_an_unencodable_surrogate(capsys):
     cli._emit("caf\udce9.py")
     assert capsys.readouterr().err == "caf\\udce9.py\n"
+
+
+def test_stop_hook_payload_waits_one_second_for_stdin_before_giving_up(monkeypatch):
+    waits = []
+
+    def _never_ready(readable, writable, errored, timeout):
+        waits.append(timeout)
+        return [], [], []
+
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(cli.select, "select", _never_ready)
+    assert cli._stop_hook_payload() == {}
+    assert waits == [1.0]
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RUN_WORKTREE = "import sys; from mutation_gate.cli import main; sys.exit(main(['--worktree']))"
+
+
+def _worktree_subprocess(tmp_path: Path, process_cwd: Path, stdin_text: str | None):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text('#!/bin/sh\necho "git ran in $(pwd)" >&2\nexit 1\n')
+    fake_git.chmod(0o755)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", RUN_WORKTREE],
+        cwd=process_cwd,
+        env={"PYTHONPATH": str(REPO_ROOT), "HOME": str(tmp_path), "PATH": f"{fake_bin}{os.pathsep}/usr/bin:/bin"},
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        if stdin_text is not None:
+            proc.stdin.write(stdin_text)
+            proc.stdin.close()
+        proc.wait(timeout=15)
+        err = proc.stderr.read()
+    finally:
+        proc.kill()
+    return proc.returncode, err
+
+
+def test_worktree_returns_when_stdin_is_an_open_pipe_that_never_closes(tmp_path):
+    process_cwd = tmp_path / "process"
+    process_cwd.mkdir()
+    code, err = _worktree_subprocess(tmp_path, process_cwd, None)
+    assert code == 2, err
+    assert f"git ran in {process_cwd.resolve()}" in err
+
+
+def test_worktree_reads_cwd_from_a_json_payload_on_a_real_stdin_pipe(tmp_path):
+    process_cwd = tmp_path / "process"
+    process_cwd.mkdir()
+    payload_cwd = tmp_path / "payload"
+    payload_cwd.mkdir()
+    code, err = _worktree_subprocess(tmp_path, process_cwd, json.dumps({"cwd": str(payload_cwd)}))
+    assert code == 2, err
+    assert f"git ran in {payload_cwd.resolve()}" in err

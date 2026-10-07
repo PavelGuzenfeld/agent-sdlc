@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import select
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, git, skip_reason
 
 
 TIMEOUT_FACTOR = 6.0
+STOP_HOOK_PAYLOAD_WAIT_SECONDS = 1.0
 
 
 def _emit(line: str = "") -> None:
@@ -154,10 +156,19 @@ def _gate_file(
     return blocked, survivors, cands
 
 
+def _stdin_is_ready() -> bool:
+    try:
+        readable, _, _ = select.select([sys.stdin], [], [], STOP_HOOK_PAYLOAD_WAIT_SECONDS)
+    except (ValueError, OSError):
+        return True
+    return bool(readable)
+
+
 def _stop_hook_payload() -> dict:
     """The Stop hook's JSON on stdin carries `cwd` (#68 item 1) and
-    `transcript_path` (#100) — read once, since stdin is a one-shot stream."""
-    if sys.stdin.isatty():
+    `transcript_path` (#100) — read once, since stdin is a one-shot stream.
+    An agent shell's stdin is an open pipe that never writes or closes (#337)."""
+    if sys.stdin.isatty() or not _stdin_is_ready():
         return {}
     try:
         payload = json.loads(sys.stdin.read())
