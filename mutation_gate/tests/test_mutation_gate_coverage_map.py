@@ -14,6 +14,8 @@ import shlex
 import sqlite3
 import sys
 
+import pytest
+
 from mutation_gate import cli, coverage_map, runner, token
 from mutation_gate.repo import Config, LanguageConfig, Repo
 
@@ -173,7 +175,8 @@ def test_read_contexts_returns_empty_for_a_file_the_data_never_measured(tmp_path
     )
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
-    assert coverage_map._read_contexts(repo, "geo_frame.py", ".coverage") == {}
+    with pytest.raises(coverage_map.EmptyCoverageError, match=r"^no row in the data file matches geo_frame\.py$"):
+        coverage_map._read_contexts(repo, "geo_frame.py", ".coverage")
 
 
 def test_read_contexts_maps_a_mount_path_row_whose_components_end_in_the_target(tmp_path):
@@ -201,14 +204,27 @@ def test_read_contexts_returns_empty_when_two_mount_path_rows_end_in_the_target(
     _write_coverage_db(tmp_path / ".coverage", "/repo/pkg/mod.py", {"t::pkg": [2]})
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
-    assert coverage_map._read_contexts(repo, "mod.py", ".coverage") == {}
+    with pytest.raises(coverage_map.EmptyCoverageError, match=r"^2 rows in the data file end in mod\.py$"):
+        coverage_map._read_contexts(repo, "mod.py", ".coverage")
 
 
 def test_read_contexts_returns_empty_when_data_file_is_missing(tmp_path):
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
-    assert coverage_map._read_contexts(repo, "geo_frame.py", ".coverage") == {}
+    with pytest.raises(coverage_map.EmptyCoverageError, match=r"^no data file at \.coverage$"):
+        coverage_map._read_contexts(repo, "geo_frame.py", ".coverage")
+
+
+def test_read_contexts_names_a_data_file_that_is_not_a_coverage_database(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".coverage").write_text("not sqlite\n")
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+
+    with pytest.raises(
+        coverage_map.EmptyCoverageError, match=r"^\.coverage is not a readable coverage database$"
+    ):
+        coverage_map._read_contexts(repo, "geo_frame.py", ".coverage")
 
 
 def test_covering_tests_scopes_cov_to_the_targets_directory_not_the_file(tmp_path, monkeypatch):
@@ -226,7 +242,8 @@ def test_covering_tests_scopes_cov_to_the_targets_directory_not_the_file(tmp_pat
         coverage_map.runner, "run_capped", lambda repo, cmd, timeout: seen.setdefault("cmd", cmd)
     )
 
-    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    with pytest.raises(coverage_map.EmptyCoverageError, match=r"^no data file at \.coverage$"):
+        coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
     assert "--cov=pkg " in seen["cmd"]
     assert "--cov=pkg/mod.py" not in seen["cmd"]
@@ -327,9 +344,45 @@ def test_file_run_widens_to_all_candidates_when_the_coverage_run_fails_over_a_st
     _, *per_mutant = ran.read_text().splitlines()
     assert per_mutant and set(per_mutant) == {"tests/test_mod.py"}
     assert code == 0
-    assert "pkg/mod.py: coverage came back empty" in capsys.readouterr().err
+    assert (
+        "pkg/mod.py: coverage came back empty (the coverage run failed)" in capsys.readouterr().err
+    )
     coverage_cache = coverage_map._cache_path(repo, "pkg/mod.py", "any").parent
     assert not coverage_cache.exists() or not any(coverage_cache.iterdir())
+
+
+def test_file_run_names_a_path_mismatch_as_the_reason_coverage_came_back_empty(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "host"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "__init__.py").write_text("")
+    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f() == 1\n"
+    )
+    python = shlex.quote(sys.executable)
+    (root / ".mutation-gate.toml").write_text(
+        "force_gate = true\n"
+        f"test_command = '{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
+        "coverage_command = 'true {file} {tests}'\n"
+    )
+    _write_coverage_db(root / ".coverage", "/repo/lib/mod.py", {"tests/test_mod.py::test_f|run": [2]})
+    (root / ".git").mkdir()
+    repo = Repo(root=root, origin="", remotes=(), config=Config.load(root))
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(coverage_map, "git", lambda cmd, *rels, cwd: "\n".join(rels))
+    for mod in (cli, coverage_map, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+
+    cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
+
+    notices = [line for line in capsys.readouterr().err.splitlines() if "coverage came back empty" in line]
+    assert notices == [
+        "  pkg/mod.py: coverage came back empty (no row in the data file matches pkg/mod.py)"
+        " — every mutant runs against all candidate tests"
+    ]
 
 
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
@@ -384,10 +437,12 @@ def test_covering_tests_retries_a_run_that_came_back_empty(tmp_path, monkeypatch
     )
     monkeypatch.setattr(coverage_map, "_read_contexts", lambda repo, target, data_file: {})
 
-    first = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
-    second = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    for _ in range(2):
+        with pytest.raises(
+            coverage_map.EmptyCoverageError, match=r"^no test recorded a line of pkg/mod\.py$"
+        ):
+            coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
-    assert first == second == {}
     assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())
@@ -414,10 +469,10 @@ def test_covering_tests_retries_a_run_that_timed_out(tmp_path, monkeypatch):
         lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
     )
 
-    first = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
-    second = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    for _ in range(2):
+        with pytest.raises(coverage_map.EmptyCoverageError, match=r"^the coverage run timed out$"):
+            coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
-    assert first == second == {}
     assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())

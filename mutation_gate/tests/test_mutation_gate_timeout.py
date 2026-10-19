@@ -68,7 +68,7 @@ def gated(tmp_path, monkeypatch):
         outcomes: list[str],
         config: repo_mod.Config,
         baseline: float,
-        cover: dict | None = None,
+        cover: dict | Exception | None = None,
         rel: str = "src/x.py",
     ):
         repo = repo_mod.Repo(root=tmp_path, origin="", remotes=(), config=config)
@@ -77,7 +77,13 @@ def gated(tmp_path, monkeypatch):
 
         monkeypatch.setattr(cli.coverage_map, "candidates", lambda *a: [tmp_path / "t.py"])
         monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
-        monkeypatch.setattr(cli.coverage_map, "covering_tests", lambda *a: cover if cover is not None else {})
+
+        def fake_covering_tests(*_args):
+            if isinstance(cover, Exception):
+                raise cover
+            return cover if cover is not None else {}
+
+        monkeypatch.setattr(cli.coverage_map, "covering_tests", fake_covering_tests)
         monkeypatch.setattr(cli.token, "is_valid", lambda *a: False)
         monkeypatch.setattr(cli.token, "write", lambda *a: None)
         monkeypatch.setattr(cli.mutants, "generate", lambda *a: [MUTANT] * len(outcomes))
@@ -134,8 +140,9 @@ def test_a_run_with_no_timeouts_stays_quiet_about_them(gated):
 
 
 def test_empty_coverage_says_so_instead_of_silently_widening(gated):
-    seen = gated([runner.KILLED], repo_mod.Config(), baseline=1.0, cover={})
-    assert any("coverage came back empty" in line for line in seen["lines"])
+    empty = cli.coverage_map.EmptyCoverageError("the coverage run failed")
+    seen = gated([runner.KILLED], repo_mod.Config(), baseline=1.0, cover=empty)
+    assert any("coverage came back empty (the coverage run failed)" in line for line in seen["lines"])
 
 
 def test_nonempty_coverage_stays_quiet_about_the_empty_notice(gated):

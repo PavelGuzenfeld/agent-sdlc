@@ -235,6 +235,10 @@ def _cov_scope(target: str) -> str:
     return str(Path(target).parent)
 
 
+class EmptyCoverageError(Exception):
+    pass
+
+
 def covering_tests(
     repo: Repo, target: str, cands: list[Path], fingerprint: str
 ) -> dict[int, list[str]]:
@@ -253,12 +257,13 @@ def covering_tests(
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
     verdict = runner.run_capped(repo, cmd, repo.config.baseline_timeout)
     if verdict in (runner.FAILED, runner.TIMED_OUT):
-        return {}
+        raise EmptyCoverageError(f"the coverage run {verdict}")
 
     mapping = _read_contexts(repo, target, lang_cfg.coverage_data_file)
-    if mapping:
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps({str(k): v for k, v in mapping.items()}))
+    if not mapping:
+        raise EmptyCoverageError(f"no test recorded a line of {target}")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({str(k): v for k, v in mapping.items()}))
     return mapping
 
 
@@ -274,28 +279,30 @@ def _numbits_to_lines(numbits: bytes) -> list[int]:
     ]
 
 
-def _measured_file_id(repo: Repo, target: str, files: list[tuple[int, str]]) -> int | None:
+def _measured_file_id(repo: Repo, target: str, files: list[tuple[int, str]]) -> int:
     """A test_command run in docker records the container's mount path, not the host's
     (#358), so a lone row ending in `target`'s components stands in for an exact match.
-    Two such rows are ambiguous: none is safer than narrowing to the wrong file's tests."""
+    Two such rows are ambiguous: no mapping is safer than narrowing to the wrong file's tests."""
     target_path = (repo.root / target).resolve()
     exact = [fid for fid, path in files if Path(path).resolve() == target_path]
     if exact:
         return exact[0]
     parts = Path(target).parts
     tails = [fid for fid, path in files if PurePosixPath(path).parts[-len(parts):] == parts]
-    return tails[0] if len(tails) == 1 else None
+    if not tails:
+        raise EmptyCoverageError(f"no row in the data file matches {target}")
+    if len(tails) > 1:
+        raise EmptyCoverageError(f"{len(tails)} rows in the data file end in {target}")
+    return tails[0]
 
 
 def _read_contexts(repo: Repo, target: str, coverage_data_file: str) -> dict[int, list[str]]:
     data_file = repo.root / coverage_data_file
     if not data_file.exists():
-        return {}
+        raise EmptyCoverageError(f"no data file at {coverage_data_file}")
     con = sqlite3.connect(f"file:{data_file}?mode=ro", uri=True)
     try:
         file_id = _measured_file_id(repo, target, con.execute("SELECT id, path FROM file").fetchall())
-        if file_id is None:
-            return {}
         rows = con.execute(
             "SELECT line_bits.numbits, context.context FROM line_bits "
             "JOIN context ON context.id = line_bits.context_id "
@@ -303,7 +310,7 @@ def _read_contexts(repo: Repo, target: str, coverage_data_file: str) -> dict[int
             (file_id,),
         ).fetchall()
     except sqlite3.DatabaseError:
-        return {}
+        raise EmptyCoverageError(f"{coverage_data_file} is not a readable coverage database") from None
     finally:
         con.close()
     result: dict[int, list[str]] = {}
