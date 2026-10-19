@@ -251,11 +251,12 @@ def covering_tests(
     rels = " ".join(str(p.relative_to(repo.root)) for p in cands)
     cmd = lang_cfg.coverage_command.format(file=_cov_scope(target), tests=rels)
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
-    # Overrunning leaves no contexts, which widens selection to the whole suite.
     verdict = runner.run_capped(repo, cmd, repo.config.baseline_timeout)
+    if verdict in (runner.FAILED, runner.TIMED_OUT):
+        return {}
 
     mapping = _read_contexts(repo, target, lang_cfg.coverage_data_file)
-    if mapping and verdict != runner.TIMED_OUT:
+    if mapping:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps({str(k): v for k, v in mapping.items()}))
     return mapping
