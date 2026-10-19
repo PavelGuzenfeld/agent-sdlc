@@ -294,6 +294,44 @@ def test_file_run_narrows_coverage_recorded_under_a_container_mount_path(
     assert per_mutant and set(per_mutant) == {"tests/test_mod.py::test_f"}
 
 
+def test_file_run_widens_to_all_candidates_when_the_coverage_run_fails_over_a_stale_data_file(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "host"
+    ran = tmp_path / "ran.log"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "__init__.py").write_text("")
+    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n\n\ndef g():\n    return 2\n")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f, g\n\n\ndef test_f():\n    assert f() == 1\n\n\n"
+        "def test_g():\n    assert g() == 2\n"
+    )
+    python = shlex.quote(sys.executable)
+    (root / ".mutation-gate.toml").write_text(
+        "force_gate = true\n"
+        f"test_command = 'echo {{tests}} >> {ran} && "
+        f"{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
+        "coverage_command = 'false {file} {tests}'\n"
+    )
+    _write_coverage_db(root / ".coverage", "/repo/pkg/mod.py", {"tests/test_mod.py::test_g|run": [2]})
+    (root / ".git").mkdir()
+    repo = Repo(root=root, origin="", remotes=(), config=Config.load(root))
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(coverage_map, "git", lambda cmd, *rels, cwd: "\n".join(rels))
+    for mod in (cli, coverage_map, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+
+    code = cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
+
+    _, *per_mutant = ran.read_text().splitlines()
+    assert per_mutant and set(per_mutant) == {"tests/test_mod.py"}
+    assert code == 0
+    assert "pkg/mod.py: coverage came back empty" in capsys.readouterr().err
+    coverage_cache = coverage_map._cache_path(repo, "pkg/mod.py", "any").parent
+    assert not coverage_cache.exists() or not any(coverage_cache.iterdir())
+
+
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
     assert coverage_map._numbits_to_lines(b"\x02\x04") == [1, 10]
 
@@ -376,9 +414,10 @@ def test_covering_tests_retries_a_run_that_timed_out(tmp_path, monkeypatch):
         lambda repo, target, data_file: {2: ["tests/test_mod.py::test_f"]},
     )
 
-    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
-    coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    first = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+    second = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
+    assert first == second == {}
     assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())
