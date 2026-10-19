@@ -240,6 +240,14 @@ def _user_turn_text(content) -> str | None:
     return "\n".join(kept) if kept else None
 
 
+def _line_numbers(text: str) -> set[int]:
+    parts = text.split(",")
+    bad = next((part for part in parts if not part.strip().isdigit()), None)
+    if bad is not None:
+        raise argparse.ArgumentTypeError(f"invalid line number: {bad!r}")
+    return {int(part) for part in parts}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["rules"]:
@@ -261,10 +269,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-adversary", action="store_true")
     parser.add_argument("--file", default=None,
                         help="gate every line of one file (acceptance / on-demand)")
+    parser.add_argument("--lines", type=_line_numbers, default=None,
+                        help="with --file, gate only these comma-separated line numbers")
     parser.add_argument("--dry-run", action="store_true",
                         help="print candidates and mutants; run no tests")
     parser.add_argument("files", nargs="*", help="ignored; pre-commit passes filenames")
     args = parser.parse_args(argv)
+    if args.lines and not args.file:
+        parser.error("--lines requires --file")
     staged = args.staged or not args.worktree
 
     payload = _stop_hook_payload() if args.worktree else {}
@@ -309,7 +321,8 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
 
     if args.file:
         target = (repo.root / args.file)
-        all_changed = {args.file: set(range(1, len(target.read_text().splitlines()) + 1))}
+        every_line = set(range(1, len(target.read_text().splitlines()) + 1))
+        all_changed = {args.file: args.lines or every_line}
     else:
         try:
             all_changed = mutants.changed_lines(repo.root, staged)

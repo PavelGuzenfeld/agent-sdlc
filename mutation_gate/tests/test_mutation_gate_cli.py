@@ -1069,3 +1069,62 @@ def test_stop_hook_payload_reads_stdin_when_select_cannot_watch_it(monkeypatch, 
     monkeypatch.setattr(cli.select, "select", _unwatchable)
     monkeypatch.setattr(sys.stdin, "read", lambda: '{"cwd": "/payload"}')
     assert cli._stop_hook_payload() == {"cwd": "/payload"}
+
+
+_THREE_MUTABLE_LINES = "a = 1 + 2\nb = 3 + 4\nc = 5 + 6\n"
+
+
+def _file_dry_run(tmp_path, monkeypatch, capsys, source, *extra):
+    repo = _repo(tmp_path)
+    (tmp_path / "a.py").write_text(source)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    code = cli.main(["--file", "a.py", "--dry-run", *extra])
+    rows = [
+        row.split(maxsplit=1)[1]
+        for row in capsys.readouterr().err.splitlines()
+        if row.startswith("    mut ")
+    ]
+    return code, rows
+
+
+def _rows_on(rows, lines):
+    return [row for row in rows if int(row.split(":")[0]) in lines]
+
+
+def test_file_with_lines_mutates_only_the_given_lines(tmp_path, monkeypatch, capsys):
+    _, every_row = _file_dry_run(tmp_path, monkeypatch, capsys, _THREE_MUTABLE_LINES)
+    code, rows = _file_dry_run(
+        tmp_path, monkeypatch, capsys, _THREE_MUTABLE_LINES, "--lines", "1,3"
+    )
+    assert code == 0
+    assert rows == _rows_on(every_row, {1, 3})
+    assert {int(row.split(":")[0]) for row in rows} == {1, 3}
+
+
+def test_file_without_lines_still_mutates_every_line(tmp_path, monkeypatch, capsys):
+    code, rows = _file_dry_run(tmp_path, monkeypatch, capsys, _THREE_MUTABLE_LINES)
+    assert code == 0
+    assert {int(row.split(":")[0]) for row in rows} == {1, 2, 3}
+
+
+def test_lines_without_file_is_rejected(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--lines", "1"])
+    assert exit_info.value.code == 2
+    assert "--lines requires --file" in capsys.readouterr().err
+
+
+def test_lines_rejects_a_non_numeric_entry(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--file", "a.py", "--lines", "1,x"])
+    assert exit_info.value.code == 2
+    assert "invalid line number: 'x'" in capsys.readouterr().err
+
+
+def test_lines_naming_a_line_without_mutants_produces_none(tmp_path, monkeypatch, capsys):
+    code, rows = _file_dry_run(tmp_path, monkeypatch, capsys, "a = 1 + 2\n\n", "--lines", "2")
+    assert code == 0
+    assert rows == []

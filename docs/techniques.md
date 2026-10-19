@@ -32,10 +32,13 @@ BLOCKED: 2 mutant(s) survived with no waiver.
 - It runs per commit (`--staged`) and per session Stop (`--worktree`); a token
   lets whichever runs first satisfy the other.
 - `--file PATH` gates every line of one file, for an on-demand check.
+- `--lines 12,40` narrows `--file` to those lines, so a waiver re-check costs
+  a mutant per waiver.
 
 ```bash
 mutation-gate --dry-run      # list candidate tests and mutants, run nothing
 mutation-gate --file age.py  # gate the whole file
+mutation-gate --file age.py --lines 12,40  # gate two lines
 ```
 
 ## Covering-test map
