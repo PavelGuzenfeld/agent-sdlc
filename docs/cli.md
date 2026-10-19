@@ -35,7 +35,8 @@ Hook ids come from this repo's `.pre-commit-hooks.yaml`. See
 
 ```text
 usage: mutation-gate [-h] [--staged] [--worktree] [--user-prompt USER_PROMPT]
-                     [--no-adversary] [--file FILE] [--dry-run]
+                     [--no-adversary] [--file FILE] [--lines LINES]
+                     [--dry-run]
                      [files ...]
 ```
 
@@ -44,6 +45,7 @@ usage: mutation-gate [-h] [--staged] [--worktree] [--user-prompt USER_PROMPT]
 | `--staged` | Gate the index. The default; what pre-commit runs |
 | `--worktree` | Gate the working tree. What the Stop hook runs |
 | `--file FILE` | Gate every line of one file, not just the diff |
+| `--lines LINES` | With `--file`: gate only these lines, e.g. `288,527` |
 | `--dry-run` | Print candidate tests and mutants; run no tests |
 | `--user-prompt TEXT` | Intent for the adversary when there is no ticket |
 | `--no-adversary` | Skip the adversary and blind pass. Debugging the pack only |

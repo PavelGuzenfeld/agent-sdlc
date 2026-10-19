@@ -82,7 +82,7 @@ def _warn_stale_report(repo, staged: bool) -> None:
 
 
 def _gate_file(
-    repo, rel: str, lines: set[int], wvs, on_demand: bool = False
+    repo, rel: str, lines: set[int], wvs, on_demand: bool = False, has_every_line: bool = True
 ) -> tuple[bool, list, list]:
     """Returns (blocked, survivors, candidate test paths) for one changed file."""
     cands = coverage_map.candidates(repo, rel)
@@ -114,7 +114,8 @@ def _gate_file(
     _warn_stale_waivers(repo, rel, wvs)
     if not generated:
         _emit(f"  {rel}: no mutable sites on the changed lines")
-        token.write(repo, rel, fp, "no-mutants")
+        if has_every_line:
+            token.write(repo, rel, fp, "no-mutants")
         return False, [], cands
 
     cover = coverage_map.covering_tests(repo, rel, cands, fp)
@@ -151,7 +152,7 @@ def _gate_file(
         # out identically, and both are counted killed.
         _emit(f"  {rel}: {timed_out}/{total} mutant(s) timed out and were counted "
               f"KILLED — set mutant_timeout in {CONFIG_NAME} if the run is only slow")
-    if not blocked:
+    if not blocked and has_every_line:
         token.write(repo, rel, fp, "pass")
     return blocked, survivors, cands
 
@@ -240,6 +241,13 @@ def _user_turn_text(content) -> str | None:
     return "\n".join(kept) if kept else None
 
 
+def _parse_lines(text: str) -> set[int]:
+    numbers = text.split(",")
+    if not all(n.isdecimal() and int(n) > 0 for n in numbers):
+        raise argparse.ArgumentTypeError(f"expected 1-based line numbers like 288,527, got {text!r}")
+    return {int(n) for n in numbers}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["rules"]:
@@ -261,10 +269,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-adversary", action="store_true")
     parser.add_argument("--file", default=None,
                         help="gate every line of one file (acceptance / on-demand)")
+    parser.add_argument("--lines", type=_parse_lines, default=None,
+                        help="with --file: gate only these lines, e.g. 288,527")
     parser.add_argument("--dry-run", action="store_true",
                         help="print candidates and mutants; run no tests")
     parser.add_argument("files", nargs="*", help="ignored; pre-commit passes filenames")
     args = parser.parse_args(argv)
+    if args.lines and not args.file:
+        parser.error("--lines needs --file")
     staged = args.staged or not args.worktree
 
     payload = _stop_hook_payload() if args.worktree else {}
@@ -309,7 +321,7 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
 
     if args.file:
         target = (repo.root / args.file)
-        all_changed = {args.file: set(range(1, len(target.read_text().splitlines()) + 1))}
+        all_changed = {args.file: args.lines or set(range(1, len(target.read_text().splitlines()) + 1))}
     else:
         try:
             all_changed = mutants.changed_lines(repo.root, staged)
@@ -438,7 +450,7 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
     try:
         for rel, lines in sorted(changed.items()):
             file_blocked, survivors, cands = _gate_file(
-                repo, rel, lines, wvs, on_demand=bool(args.file)
+                repo, rel, lines, wvs, on_demand=bool(args.file), has_every_line=not args.lines
             )
             blocked |= file_blocked
             all_survivors.extend(survivors)

@@ -1069,3 +1069,93 @@ def test_stop_hook_payload_reads_stdin_when_select_cannot_watch_it(monkeypatch, 
     monkeypatch.setattr(cli.select, "select", _unwatchable)
     monkeypatch.setattr(sys.stdin, "read", lambda: '{"cwd": "/payload"}')
     assert cli._stop_hook_payload() == {"cwd": "/payload"}
+
+
+def _file_run(tmp_path, monkeypatch, source: str) -> None:
+    repo = _repo(tmp_path)
+    (tmp_path / "a.py").write_text(source)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.runner, "guard_clean_start", lambda repo: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+
+
+def _dry_run_mutated_lines(tmp_path, monkeypatch, capsys, argv) -> set[int]:
+    _file_run(tmp_path, monkeypatch, "a = 1 + 2\nb = 3 + 4\nc = 5 + 6\nd = 7 + 8\n")
+    assert cli.main([*argv, "--dry-run"]) == 0
+    return {int(line.split()[1].split(":")[0]) for line in capsys.readouterr().err.splitlines()
+            if line.lstrip().startswith("mut ")}
+
+
+def test_file_with_lines_dry_run_lists_mutants_only_on_the_named_lines(
+    tmp_path, monkeypatch, capsys
+):
+    """#354: a waiver re-check costs a mutant per named line, not every mutant in the file."""
+    assert _dry_run_mutated_lines(
+        tmp_path, monkeypatch, capsys, ["--file", "a.py", "--lines", "2,4"]
+    ) == {2, 4}
+
+
+def test_file_without_lines_dry_run_lists_mutants_from_the_first_line_to_the_last(
+    tmp_path, monkeypatch, capsys
+):
+    assert _dry_run_mutated_lines(tmp_path, monkeypatch, capsys, ["--file", "a.py"]) == {1, 2, 3, 4}
+
+
+def test_file_with_a_line_past_the_end_dry_run_lists_no_mutants(tmp_path, monkeypatch, capsys):
+    _file_run(tmp_path, monkeypatch, "a = 1 + 2\n")
+    assert cli.main(["--file", "a.py", "--lines", "2", "--dry-run"]) == 0
+    assert "a.py: 0 candidate test file(s), 0 mutant(s)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("lines", ["0", "x", "2,", "-1"])
+def test_lines_that_are_not_one_based_line_numbers_are_a_usage_error(lines, capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--file", "a.py", "--lines", lines])
+    assert exc.value.code == 2
+    assert "--lines" in capsys.readouterr().err
+
+
+def test_lines_without_file_is_a_usage_error(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--staged", "--lines", "1"])
+    assert exc.value.code == 2
+    assert "--lines needs --file" in capsys.readouterr().err
+
+
+_KILLED_MUTANT = cli.mutants.Mutant("a.py", 1, 4, 5, "1", "2", "literal")
+
+
+def _token_writes(tmp_path, monkeypatch, argv, generated) -> list[str]:
+    _file_run(tmp_path, monkeypatch, "a = 1\n")
+    written = []
+    monkeypatch.setattr(cli.waivers, "load", lambda repo: [])
+    monkeypatch.setattr(cli.model_vv, "check", lambda *a: [])
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.mutants, "generate", lambda *a: generated)
+    monkeypatch.setattr(cli.coverage_map, "candidates", lambda *a: [tmp_path / "t.py"])
+    monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
+    monkeypatch.setattr(cli.coverage_map, "covering_tests", lambda *a: {})
+    monkeypatch.setattr(cli.runner, "baseline_green", lambda *a: 1.0)
+    monkeypatch.setattr(cli.runner, "classify",
+                        lambda repo, m, *a: cli.runner.Result(m, cli.runner.KILLED, []))
+    monkeypatch.setattr(cli.token, "write", lambda repo, rel, fp, verdict: written.append(verdict))
+    assert cli.main(argv) == 0
+    return written
+
+
+@pytest.mark.parametrize("generated", [[], [_KILLED_MUTANT]], ids=["no-mutants", "pass"])
+def test_file_with_lines_issues_no_token_the_staged_gate_would_trust_for_the_whole_file(
+    tmp_path, monkeypatch, generated
+):
+    assert _token_writes(
+        tmp_path, monkeypatch, ["--file", "a.py", "--lines", "1", "--no-adversary"], generated
+    ) == []
+
+
+@pytest.mark.parametrize("generated, verdict", [([], "no-mutants"), ([_KILLED_MUTANT], "pass")])
+def test_file_without_lines_issues_the_whole_file_token(tmp_path, monkeypatch, generated, verdict):
+    assert _token_writes(
+        tmp_path, monkeypatch, ["--file", "a.py", "--no-adversary"], generated
+    ) == [verdict]
