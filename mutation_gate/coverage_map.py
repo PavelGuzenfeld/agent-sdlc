@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import sqlite3
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import mutants, runner
 from .repo import CACHE_ROOT, Repo, git
@@ -273,21 +273,26 @@ def _numbits_to_lines(numbits: bytes) -> list[int]:
     ]
 
 
+def _measured_file_id(repo: Repo, target: str, files: list[tuple[int, str]]) -> int | None:
+    """A test_command run in docker records the container's mount path, not the host's
+    (#358), so a lone row ending in `target`'s components stands in for an exact match.
+    Two such rows are ambiguous: none is safer than narrowing to the wrong file's tests."""
+    target_path = (repo.root / target).resolve()
+    exact = [fid for fid, path in files if Path(path).resolve() == target_path]
+    if exact:
+        return exact[0]
+    parts = Path(target).parts
+    tails = [fid for fid, path in files if PurePosixPath(path).parts[-len(parts):] == parts]
+    return tails[0] if len(tails) == 1 else None
+
+
 def _read_contexts(repo: Repo, target: str, coverage_data_file: str) -> dict[int, list[str]]:
     data_file = repo.root / coverage_data_file
     if not data_file.exists():
         return {}
-    target_path = (repo.root / target).resolve()
     con = sqlite3.connect(f"file:{data_file}?mode=ro", uri=True)
     try:
-        file_id = next(
-            (
-                fid
-                for fid, path in con.execute("SELECT id, path FROM file")
-                if Path(path).resolve() == target_path
-            ),
-            None,
-        )
+        file_id = _measured_file_id(repo, target, con.execute("SELECT id, path FROM file").fetchall())
         if file_id is None:
             return {}
         rows = con.execute(
