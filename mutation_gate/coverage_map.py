@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import sqlite3
+import time
 from pathlib import Path, PurePosixPath
 
 from . import mutants, runner
@@ -221,6 +222,7 @@ def blob_hashes(repo: Repo, paths: list[Path]) -> list[str]:
 
 
 _CACHE_VERSION = "2"
+_COARSEST_MTIME_STEP_S = 2.0
 
 
 def _cache_path(repo: Repo, target: str, fingerprint: str) -> Path:
@@ -255,9 +257,13 @@ def covering_tests(
     rels = " ".join(str(p.relative_to(repo.root)) for p in cands)
     cmd = lang_cfg.coverage_command.format(file=_cov_scope(target), tests=rels)
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
+    run_start = time.time()
     verdict = runner.run_capped(repo, cmd, repo.config.baseline_timeout)
     if verdict in (runner.FAILED, runner.TIMED_OUT):
         raise EmptyCoverageError(f"the coverage run {verdict}")
+    data_file = repo.root / lang_cfg.coverage_data_file
+    if data_file.exists() and data_file.stat().st_mtime < run_start - _COARSEST_MTIME_STEP_S:
+        raise EmptyCoverageError(f"{lang_cfg.coverage_data_file} predates this coverage run")
 
     mapping = _read_contexts(repo, target, lang_cfg.coverage_data_file)
     if not mapping:
