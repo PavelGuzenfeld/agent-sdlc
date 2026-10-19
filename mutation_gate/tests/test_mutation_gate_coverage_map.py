@@ -537,8 +537,14 @@ def _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, mtim
     os.utime(tmp_path / ".coverage", (mtime, mtime))
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
     monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
-    monkeypatch.setattr(coverage_map.runner, "run_capped", lambda repo, cmd, timeout: runner.PASSED)
-    monkeypatch.setattr(coverage_map, "time", SimpleNamespace(time=lambda: 1000.0))
+    clock = SimpleNamespace(now=1000.0)
+
+    def run_lasting_a_hundred_seconds(repo, cmd, timeout):
+        clock.now += 100.0
+        return runner.PASSED
+
+    monkeypatch.setattr(coverage_map.runner, "run_capped", run_lasting_a_hundred_seconds)
+    monkeypatch.setattr(coverage_map, "time", SimpleNamespace(time=lambda: clock.now))
     return coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
 
@@ -559,7 +565,9 @@ def test_covering_tests_names_a_data_file_stamped_over_two_seconds_before_the_ru
     with pytest.raises(
         coverage_map.EmptyCoverageError, match=r"^\.coverage predates this coverage run$"
     ):
-        _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, 997.5)
+        _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, 997.984375)
+
+    assert not list((tmp_path / "cache").rglob("*.json"))
 
 
 def test_covering_tests_hits_the_cache_on_a_repeat_call(tmp_path, monkeypatch):
