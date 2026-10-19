@@ -257,21 +257,24 @@ def test_covering_tests_collects_a_real_per_test_context_for_the_target(tmp_path
 
 
 def test_file_run_narrows_coverage_recorded_under_a_container_mount_path(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch
 ):
     root = tmp_path / "host"
     mount = tmp_path / "mount"
+    ran = tmp_path / "ran.log"
     (root / "pkg").mkdir(parents=True)
     (root / "pkg" / "__init__.py").write_text("")
-    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n")
+    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n\n\ndef g():\n    return 2\n")
     (root / "tests").mkdir()
     (root / "tests" / "test_mod.py").write_text(
-        "from pkg.mod import f\n\n\ndef test_f():\n    assert f() == 1\n"
+        "from pkg.mod import f, g\n\n\ndef test_f():\n    assert f() == 1\n\n\n"
+        "def test_g():\n    assert g() == 2\n"
     )
     python = shlex.quote(sys.executable)
     (root / ".mutation-gate.toml").write_text(
         "force_gate = true\n"
-        f"test_command = '{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
+        f"test_command = 'echo {{tests}} >> {ran} && "
+        f"{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
         f"coverage_command = 'rm -rf {mount} && cp -r . {mount} && cd {mount} && "
         f"COVERAGE_FILE={root}/.coverage {python} -m pytest -q -p no:cacheprovider "
         "--cov={file} --cov-context=test --cov-report= {tests}'\n"
@@ -283,9 +286,12 @@ def test_file_run_narrows_coverage_recorded_under_a_container_mount_path(
     for mod in (cli, coverage_map, runner, token):
         monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
 
-    cli.main(["--file", "pkg/mod.py", "--no-adversary"])
+    code = cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
 
-    assert "coverage came back empty" not in capsys.readouterr().err
+    baseline, *per_mutant = ran.read_text().splitlines()
+    assert code == 0
+    assert baseline == "tests/test_mod.py"
+    assert per_mutant and set(per_mutant) == {"tests/test_mod.py::test_f"}
 
 
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
