@@ -242,7 +242,7 @@ def test_covering_tests_scopes_cov_to_the_targets_directory_not_the_file(tmp_pat
         coverage_map.runner, "run_capped", lambda repo, cmd, timeout: seen.setdefault("cmd", cmd)
     )
 
-    with pytest.raises(coverage_map.EmptyCoverageError):
+    with pytest.raises(coverage_map.EmptyCoverageError, match=r"^no data file at \.coverage$"):
         coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
     assert "--cov=pkg " in seen["cmd"]
@@ -378,10 +378,11 @@ def test_file_run_names_a_path_mismatch_as_the_reason_coverage_came_back_empty(
 
     cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
 
-    assert (
-        "pkg/mod.py: coverage came back empty (no row in the data file matches pkg/mod.py)"
-        in capsys.readouterr().err
-    )
+    notices = [line for line in capsys.readouterr().err.splitlines() if "coverage came back empty" in line]
+    assert notices == [
+        "  pkg/mod.py: coverage came back empty (no row in the data file matches pkg/mod.py)"
+        " — every mutant runs against all candidate tests"
+    ]
 
 
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
