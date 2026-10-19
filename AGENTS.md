@@ -272,4 +272,9 @@ section, no "This PR introduces…", no closing summary. Defect in the title, th
 repro, expected/actual, evidence. Tighten the section you edit; design docs and
 ICD notes keep their rationale.
 
+Text posted or edited under the user's name starts from their own words: same
+length and register, grammar fixed, nothing added. Session evidence goes in only
+when they ask. Before any public post or edit: is this longer than what the user
+wrote? Then cut back to it.
+
 <!-- END mutation-gate rules -->
