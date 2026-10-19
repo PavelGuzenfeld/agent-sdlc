@@ -1159,3 +1159,23 @@ def test_file_without_lines_issues_the_whole_file_token(tmp_path, monkeypatch, g
     assert _token_writes(
         tmp_path, monkeypatch, ["--file", "a.py", "--no-adversary"], generated
     ) == [verdict]
+
+
+def test_file_with_lines_runs_tests_only_against_mutants_on_the_named_lines(tmp_path, monkeypatch):
+    _file_run(tmp_path, monkeypatch, "a = 1 + 2\nb = 3 + 4\nc = 5 + 6\nd = 7 + 8\n")
+    classified = []
+
+    def _classify(repo, m, *a):
+        classified.append(m.line)
+        return cli.runner.Result(m, cli.runner.KILLED, [])
+
+    monkeypatch.setattr(cli.waivers, "load", lambda repo: [])
+    monkeypatch.setattr(cli.model_vv, "check", lambda *a: [])
+    monkeypatch.setattr(cli.coverage_map, "candidates", lambda *a: [tmp_path / "t.py"])
+    monkeypatch.setattr(cli.coverage_map, "blob_hashes", lambda *a: ["h"])
+    monkeypatch.setattr(cli.coverage_map, "covering_tests", lambda *a: {})
+    monkeypatch.setattr(cli.runner, "baseline_green", lambda *a: 1.0)
+    monkeypatch.setattr(cli.runner, "classify", _classify)
+    monkeypatch.setattr(cli.token, "write", lambda *a: None)
+    assert cli.main(["--file", "a.py", "--lines", "2,4", "--no-adversary"]) == 0
+    assert set(classified) == {2, 4}
