@@ -14,22 +14,26 @@ import shlex
 import sqlite3
 import sys
 
-from mutation_gate import coverage_map
+from mutation_gate import cli, coverage_map, runner, token
 from mutation_gate.repo import Config, LanguageConfig, Repo
 
 
 def _write_coverage_db(path, file_path, context_lines):
     con = sqlite3.connect(str(path))
-    con.execute("CREATE TABLE file (id integer primary key, path text, unique(path))")
-    con.execute("CREATE TABLE context (id integer primary key, context text, unique(context))")
     con.execute(
-        "CREATE TABLE line_bits (file_id integer, context_id integer, numbits blob, "
+        "CREATE TABLE IF NOT EXISTS file (id integer primary key, path text, unique(path))"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS context (id integer primary key, context text, unique(context))"
+    )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS line_bits (file_id integer, context_id integer, numbits blob, "
         "unique(file_id, context_id))"
     )
     con.execute("INSERT INTO file (path) VALUES (?)", (file_path,))
     file_id = con.execute("SELECT id FROM file WHERE path = ?", (file_path,)).fetchone()[0]
     for context, lines in context_lines.items():
-        con.execute("INSERT INTO context (context) VALUES (?)", (context,))
+        con.execute("INSERT OR IGNORE INTO context (context) VALUES (?)", (context,))
         context_id = con.execute(
             "SELECT id FROM context WHERE context = ?", (context,)
         ).fetchone()[0]
@@ -172,6 +176,34 @@ def test_read_contexts_returns_empty_for_a_file_the_data_never_measured(tmp_path
     assert coverage_map._read_contexts(repo, "geo_frame.py", ".coverage") == {}
 
 
+def test_read_contexts_maps_a_mount_path_row_whose_components_end_in_the_target(tmp_path):
+    (tmp_path / ".git").mkdir()
+    _write_coverage_db(tmp_path / ".coverage", "/repo/xpkg/mod.py", {"t::wrong": [1]})
+    _write_coverage_db(tmp_path / ".coverage", "/repo/pkg/mod.py", {"t::right": [2]})
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+
+    assert coverage_map._read_contexts(repo, "pkg/mod.py", ".coverage") == {2: ["t::right"]}
+
+
+def test_read_contexts_prefers_the_host_row_over_a_mount_path_row(tmp_path):
+    (tmp_path / ".git").mkdir()
+    host = str((tmp_path / "pkg" / "mod.py").resolve())
+    _write_coverage_db(tmp_path / ".coverage", "/repo/pkg/mod.py", {"t::mount": [1]})
+    _write_coverage_db(tmp_path / ".coverage", host, {"t::host": [2]})
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+
+    assert coverage_map._read_contexts(repo, "pkg/mod.py", ".coverage") == {2: ["t::host"]}
+
+
+def test_read_contexts_returns_empty_when_two_mount_path_rows_end_in_the_target(tmp_path):
+    (tmp_path / ".git").mkdir()
+    _write_coverage_db(tmp_path / ".coverage", "/repo/mod.py", {"t::root": [1]})
+    _write_coverage_db(tmp_path / ".coverage", "/repo/pkg/mod.py", {"t::pkg": [2]})
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+
+    assert coverage_map._read_contexts(repo, "mod.py", ".coverage") == {}
+
+
 def test_read_contexts_returns_empty_when_data_file_is_missing(tmp_path):
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
@@ -222,6 +254,38 @@ def test_covering_tests_collects_a_real_per_test_context_for_the_target(tmp_path
     mapping = coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
 
     assert mapping == {2: ["tests/test_mod.py::test_f|run"]}
+
+
+def test_file_run_narrows_coverage_recorded_under_a_container_mount_path(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "host"
+    mount = tmp_path / "mount"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "__init__.py").write_text("")
+    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f\n\n\ndef test_f():\n    assert f() == 1\n"
+    )
+    python = shlex.quote(sys.executable)
+    (root / ".mutation-gate.toml").write_text(
+        "force_gate = true\n"
+        f"test_command = '{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
+        f"coverage_command = 'rm -rf {mount} && cp -r . {mount} && cd {mount} && "
+        f"COVERAGE_FILE={root}/.coverage {python} -m pytest -q -p no:cacheprovider "
+        "--cov={file} --cov-context=test --cov-report= {tests}'\n"
+    )
+    (root / ".git").mkdir()
+    repo = Repo(root=root, origin="", remotes=(), config=Config.load(root))
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(coverage_map, "git", lambda cmd, *rels, cwd: "\n".join(rels))
+    for mod in (cli, coverage_map, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+
+    cli.main(["--file", "pkg/mod.py", "--no-adversary"])
+
+    assert "coverage came back empty" not in capsys.readouterr().err
 
 
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
