@@ -314,11 +314,7 @@ def test_file_run_widens_to_all_candidates_when_the_coverage_run_fails_over_a_st
         f"{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
         "coverage_command = 'false {file} {tests}'\n"
     )
-    _write_coverage_db(
-        root / ".coverage",
-        str((root / "pkg" / "mod.py").resolve()),
-        {"tests/test_mod.py::test_g|run": [2]},
-    )
+    _write_coverage_db(root / ".coverage", "/repo/pkg/mod.py", {"tests/test_mod.py::test_g|run": [2]})
     (root / ".git").mkdir()
     repo = Repo(root=root, origin="", remotes=(), config=Config.load(root))
     monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
@@ -332,7 +328,7 @@ def test_file_run_widens_to_all_candidates_when_the_coverage_run_fails_over_a_st
     assert per_mutant and set(per_mutant) == {"tests/test_mod.py"}
     assert code == 0
     assert "pkg/mod.py: coverage came back empty" in capsys.readouterr().err
-    coverage_cache = tmp_path / "cache" / repo.key / "coverage"
+    coverage_cache = coverage_map._cache_path(repo, "pkg/mod.py", "any").parent
     assert not coverage_cache.exists() or not any(coverage_cache.iterdir())
 
 
