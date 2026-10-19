@@ -10,9 +10,12 @@ Also: a src-layout repo whose PYTHONPATH comes from pytest.ini rather than a
 test file's own sys.path.insert needs `import_roots` in .mutation-gate.toml
 to resolve the same bare import. PavelGuzenfeld/debris-scatter#48."""
 
+import os
 import shlex
 import sqlite3
 import sys
+import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -385,6 +388,50 @@ def test_file_run_names_a_path_mismatch_as_the_reason_coverage_came_back_empty(
     ]
 
 
+def test_file_run_widens_to_all_candidates_when_a_passing_coverage_run_leaves_a_stale_data_file(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "host"
+    ran = tmp_path / "ran.log"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "__init__.py").write_text("")
+    (root / "pkg" / "mod.py").write_text("def f():\n    return 1\n\n\ndef g():\n    return 2\n")
+    (root / "tests").mkdir()
+    (root / "tests" / "test_mod.py").write_text(
+        "from pkg.mod import f, g\n\n\ndef test_f():\n    assert f() == 1\n\n\n"
+        "def test_g():\n    assert g() == 2\n"
+    )
+    python = shlex.quote(sys.executable)
+    (root / ".mutation-gate.toml").write_text(
+        "force_gate = true\n"
+        f"test_command = 'echo {{tests}} >> {ran} && "
+        f"{python} -m pytest -q -p no:cacheprovider {{tests}}'\n"
+        "coverage_command = 'true {file} {tests}'\n"
+    )
+    _write_coverage_db(root / ".coverage", "/repo/pkg/mod.py", {"tests/test_mod.py::test_g|run": [2]})
+    an_hour_ago = time.time() - 3600
+    os.utime(root / ".coverage", (an_hour_ago, an_hour_ago))
+    (root / ".git").mkdir()
+    repo = Repo(root=root, origin="", remotes=(), config=Config.load(root))
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(coverage_map, "git", lambda cmd, *rels, cwd: "\n".join(rels))
+    for mod in (cli, coverage_map, runner, token):
+        monkeypatch.setattr(mod, "CACHE_ROOT", tmp_path / "cache")
+
+    code = cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
+
+    _, *per_mutant = ran.read_text().splitlines()
+    assert per_mutant and set(per_mutant) == {"tests/test_mod.py"}
+    assert code == 0
+    notices = [line for line in capsys.readouterr().err.splitlines() if "coverage came back empty" in line]
+    assert notices == [
+        "  pkg/mod.py: coverage came back empty (.coverage predates this coverage run)"
+        " — every mutant runs against all candidate tests"
+    ]
+    coverage_cache = coverage_map._cache_path(repo, "pkg/mod.py", "any").parent
+    assert not coverage_cache.exists() or not any(coverage_cache.iterdir())
+
+
 def test_numbits_to_lines_decodes_the_coveragepy_bit_layout_across_bytes():
     assert coverage_map._numbits_to_lines(b"\x02\x04") == [1, 10]
 
@@ -476,6 +523,43 @@ def test_covering_tests_retries_a_run_that_timed_out(tmp_path, monkeypatch):
     assert len(calls) == 2
     cache_dir = tmp_path / "cache" / repo.key / "coverage"
     assert not cache_dir.exists() or not any(cache_dir.iterdir())
+
+
+def _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, mtime):
+    (tmp_path / "pkg").mkdir()
+    target = tmp_path / "pkg" / "mod.py"
+    target.write_text("def f():\n    return 1\n")
+    test_file = tmp_path / "tests" / "test_mod.py"
+    test_file.parent.mkdir()
+    test_file.write_text("from pkg import mod\n")
+    (tmp_path / ".git").mkdir()
+    _write_coverage_db(tmp_path / ".coverage", str(target), {"tests/test_mod.py::test_f|run": [2]})
+    os.utime(tmp_path / ".coverage", (mtime, mtime))
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(coverage_map.runner, "run_capped", lambda repo, cmd, timeout: runner.PASSED)
+    monkeypatch.setattr(coverage_map, "time", SimpleNamespace(time=lambda: 1000.0))
+    return coverage_map.covering_tests(repo, "pkg/mod.py", [test_file], "fp")
+
+
+def test_covering_tests_reads_a_data_file_stamped_two_seconds_before_the_run_start(
+    tmp_path, monkeypatch
+):
+    """FAT stamps mtime in 2 s steps and Linux from a clock that trails time.time(), so a
+    file the run wrote can read up to 2 s older than the run start; the cost is that a
+    stale file written under 2 s before the run is read as this run's."""
+    mapping = _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, 998.0)
+
+    assert mapping == {2: ["tests/test_mod.py::test_f|run"]}
+
+
+def test_covering_tests_names_a_data_file_stamped_over_two_seconds_before_the_run_start(
+    tmp_path, monkeypatch
+):
+    with pytest.raises(
+        coverage_map.EmptyCoverageError, match=r"^\.coverage predates this coverage run$"
+    ):
+        _covering_tests_over_a_data_file_last_written_at(tmp_path, monkeypatch, 997.5)
 
 
 def test_covering_tests_hits_the_cache_on_a_repeat_call(tmp_path, monkeypatch):
