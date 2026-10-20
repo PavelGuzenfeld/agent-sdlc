@@ -16,6 +16,15 @@
             "command": "sh ${CLAUDE_PLUGIN_ROOT}/bin/mutation-gate-hook.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ${CLAUDE_PLUGIN_ROOT}/bin/codex-review-hook.sh",
+            "timeout": 900
+          }
+        ]
       }
     ],
     "PreToolUse": [

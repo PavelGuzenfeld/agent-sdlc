@@ -24,3 +24,7 @@ reason = "slash command specs ship as markdown"
 [[doc_allow]]
 glob = "rules/**/*"
 reason = "packaged rule prose, synced into consuming repos by rules sync"
+
+[[doc_allow]]
+glob = "bin/codex-review-prompt.md"
+reason = "prompt that codex-review-hook.sh reads at runtime"
