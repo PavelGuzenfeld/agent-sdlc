@@ -13,6 +13,7 @@ What runs without you asking, and the scripts behind it.
 
  agent finishes a turn  ----> Stop: mutation-gate-hook.sh      (repos with .mutation-gate.toml)
                         ----> Stop: say-hook.sh                (speaks when armed)
+                        ----> Stop: codex-review-hook.sh       (repos with agent-sdlc.codexReview)
 ```
 
 ## Claude hooks
@@ -22,10 +23,17 @@ What runs without you asking, and the scripts behind it.
 | `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
 | `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `say-hook.sh` | `hooks/hooks.json` |
+| `Stop` | `codex-review-hook.sh` | `hooks/hooks.json` |
 
 - `mutation-gate-hook.sh` exits quietly unless the repo has a
   `.mutation-gate.toml`, then runs `mutation-gate --worktree`.
 - Adding that file is all a repo needs for Stop-time gating.
+- `codex-review-hook.sh` exits quietly unless `git config --bool
+  agent-sdlc.codexReview` is true. Set it with `--global` for every repo.
+  Codex checks the change in two throwaway worktrees and blocks only on a
+  failure that it reproduced on the change and not on the last tree it
+  accepted. A failure that shows up in both comes back as a follow-up to file.
+  It reviews nothing when the HEAD and the tree are the same as at the last review.
 
 ## git-guardrail
 
@@ -94,6 +102,7 @@ pre-commit install --hook-type commit-msg
 |---|---|
 | `git-guardrail.sh` | The PreToolUse hook above |
 | `mutation-gate-hook.sh` | Stop hook: finds the repo root from the hook payload, runs the gate if opted in |
+| `codex-review-hook.sh`, `codex-review-prompt.md` | Stop hook: the codex review that blocks only on reproduced regressions |
 | `mutation-gate` | Runs the gate from this checkout without `pip install` |
 | `install-gdscript-parser` | Builds the tree-sitter GDScript parser in Docker so ast-grep can read `.gd` files |
 | `say.sh`, `ksay.py` | Speak a text file through Kokoro |
