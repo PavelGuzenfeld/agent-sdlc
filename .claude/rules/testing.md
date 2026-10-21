@@ -65,6 +65,8 @@ test that only re-exercises what the slice already covers earns nothing.
 watch it fail for the right reason. A test that was never red proves nothing —
 it could pass against the unmodified tree.
 
+**Read the launch path first.** Before validating on hardware, read every script the launch path execs. A fake image can hide a startup step that changes the outcome, such as one that wipes a log directory.
+
 ## Adversary protocol
 
 When the gate goes green, the pack spawns an isolated review that sees the

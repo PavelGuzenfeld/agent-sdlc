@@ -466,3 +466,13 @@ def test_debrief_agent_references_file_follow_ups_step():
         f"debrief-agent.md should reference step {file_follow_ups_step} "
         f"(the 'File follow-ups' step from done.md), but does not"
     )
+
+
+def test_diff_discipline_formats_through_the_repo_hook_not_a_bare_formatter():
+    text = (rules.RULES_DIR / "diff-discipline.md").read_text()
+    assert "pre-commit run <id> --files" in text
+
+
+def test_testing_rule_reads_every_script_the_launch_path_execs_before_hardware_validation():
+    text = (rules.RULES_DIR / "testing.md").read_text()
+    assert "every script the launch path execs" in text
