@@ -311,6 +311,23 @@ def test_grill_roots_the_tree_in_problem_audience_and_goal():
     assert "- **Problem and audience**" in content
 
 
+def test_done_handoff_never_overwrites_a_block_another_session_wrote_since_its_read():
+    """Intent: #369."""
+    content = (Path(__file__).parents[2] / "commands" / "done.md").read_text()
+    handoff = content.split("### 6. Handoff", 1)[1].split("### 7.", 1)[0]
+    normalized = " ".join(handoff.split())
+    assert "Overwrite it" not in normalized
+    assert "one block per lane, headed `<repo>@<branch>`" in normalized
+    assert "The `MEMORY.md` pointer is one lane-neutral line" in normalized
+    assert "never any lane's state" in normalized
+    assert "a lane adds it only when missing and never rewrites it" in normalized
+    assert "pointer to one line" not in normalized
+    assert "Read it again just before writing and edit only this lane's block" in normalized
+    assert "with Edit, never Write" in normalized
+    assert "Edit fails because the file changed: read it again and redo the edit" in normalized
+    assert "delete this lane's block; the file and its pointer go once no block is left" in normalized
+
+
 def test_naming_rule_never_lists_three_or_more_core_words_on_one_line():
     core_words = set(vocabulary.load(Path("."), "").concepts)
     content = (rules.RULES_DIR / "naming.md").read_text()

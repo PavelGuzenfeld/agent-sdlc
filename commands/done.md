@@ -96,7 +96,7 @@ session scratchpad — read that file, leave it untouched. Nothing inferred, not
 Route by the remote the commit landed on; no remote, or not a repo, means print the
 candidates and file nothing. Drop any the handoff already references, and any whose
 title matches an open issue — one `gh issue list --state open --limit 1000` per target repo. The
-handoff is overwritten each run, so only that match catches a repeat from last week.
+handoff block is rewritten each run, so only that match catches a repeat from last week.
 
 One gate, five candidates maximum across all repos — a checkpointed agent's reported
 candidates count against the same five, not a pool of their own — rows reading
@@ -139,19 +139,25 @@ Skip this step entirely when every commit this session landed, main's and every
 checkpointed agent's, is on a branch whose PR carries `Closes #N` — the ticket already
 holds the state. An agent branch with no PR open yet fails that test on its own, so a
 live checkpoint almost always forces this step even when main's commit alone would have
-skipped it. Delete a stale `project_current_work.md` and its pointer.
+skipped it. Delete this lane's stale block from `project_current_work.md`.
 
-Rewrite `project_current_work.md` in this project's memory directory. **Overwrite it.**
-It is one rolling file, never a per-session note — accumulating stopping points is the
-failure this design exists to avoid.
+`project_current_work.md` in this project's memory directory is one rolling file, never
+a per-session note — accumulating stopping points is the failure this design exists to
+avoid. Concurrent sessions in every repo share it, so it holds one block per lane, headed
+`<repo>@<branch>`. Read it again just before writing and edit only this lane's block, with
+Edit, never Write: a whole-file write drops a block another session wrote since your
+read. Edit fails because the file changed: read it again and redo the edit.
 
-It holds only what git cannot: the commit SHA and what landed, the next concrete step,
+A block holds only what git cannot: the commit SHA and what landed, the next concrete step,
 anything blocked with the reason, and — one line per checkpointed agent — its branch,
 worktree, SHA and next step. Anything that outlives this thread of work is an issue, not
-a line here — reference those by number and do not restate them. Keep its `MEMORY.md`
-pointer to one line.
+a line here — reference those by number and do not restate them.
 
-When the work is finished, delete the file and its pointer. A stale handoff is worse
+The `MEMORY.md` pointer is one lane-neutral line naming the file as the rolling per-lane
+handoff, never any lane's state: a lane adds it only when missing and never rewrites it.
+
+When the work is finished, delete this lane's block; the file and its pointer go once
+no block is left. A stale handoff is worse
 than none.
 
 ### 7. Report
