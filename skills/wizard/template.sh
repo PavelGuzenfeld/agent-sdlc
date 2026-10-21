@@ -101,13 +101,13 @@ set_var() {
 }
 
 probe() {
-  local var="$1"
+  local _probe_var="$1"
   shift
-  local output=''
-  if output="$("$@" 2>/dev/null)"; then
-    printf -v "$var" '%s' "$output"
+  local _probe_out=''
+  if _probe_out="$("$@" 2>/dev/null)"; then
+    printf -v "$_probe_var" '%s' "$_probe_out"
   else
-    printf -v "$var" ''
+    printf -v "$_probe_var" ''
     WROTE+=("probe: $* — FAILED")
     say "  ! probe failed: $*"
   fi

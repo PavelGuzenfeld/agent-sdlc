@@ -36,6 +36,15 @@ grep -q 'ls /nonexistent-wizard-path' "$work/out" "$work/err" || fail "failed pr
 
 wizard_with '
 TOTAL_STAGES=1
+stage "probe names"
+probe output printf "%s" hi
+probe var printf "%s" there
+say "callers see: [$output] [$var]"'
+run_wizard
+grep -qF 'callers see: [hi] [there]' "$work/out" || fail "probe lost the value when the caller variable is named output or var"
+
+wizard_with '
+TOTAL_STAGES=1
 stage "expect"
 expect "docker is installed" false
 say "reached after failed expect"'
