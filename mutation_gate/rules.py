@@ -20,6 +20,12 @@ _INSTALLED = Path(__file__).resolve().parent / "bundled_rules"
 RULES_DIR = _INSTALLED if _INSTALLED.is_dir() else Path(__file__).resolve().parent.parent / "rules"
 
 
+def source_dir(repo: Repo) -> Path:
+    """The pack's own checkout is its own rule source; the bundle would downgrade it."""
+    is_pack_checkout = (repo.root / "mutation_gate" / "rules.py").is_file()
+    return repo.root / "rules" if is_pack_checkout else RULES_DIR
+
+
 def _emit(line: str) -> None:
     print(line, file=sys.stderr)
 
@@ -42,7 +48,7 @@ def frontmatter(model_paths: list[str]) -> bytes:
 
 def expected(repo: Repo) -> dict[str, bytes]:
     out: dict[str, bytes] = {}
-    for path in sorted(RULES_DIR.glob("*.md")):
+    for path in sorted(source_dir(repo).glob("*.md")):
         if path.name == SCOPED_RULE:
             if not repo.config.model_paths:
                 continue
