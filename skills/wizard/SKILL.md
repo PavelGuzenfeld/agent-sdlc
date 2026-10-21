@@ -62,6 +62,7 @@ Hold the bar the template sets:
 - `ask_secret` for anything secret, `ask` otherwise.
 - `write_env` every persisted value; `set_secret` only what CI actually reads.
 - `confirm` before every irreversible action.
+- `probe VAR cmd...` for a status check whose failure is information, `expect "<precondition>" cmd...` for one the next stage needs. Never a bare command under `set -e`.
 - One focused task per stage — each `stage` clears the screen, so nothing the human
   still needs may scroll away.
 
