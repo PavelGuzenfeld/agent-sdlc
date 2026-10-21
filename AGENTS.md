@@ -74,6 +74,7 @@ structure right and the **layout wrong**. `sed`/`perl` only for prose, config an
 single-line literals — a regex alternation matches across lines and eats them.
 `sg` is ambiguous: `/usr/bin/sg` is newgrp's alias, and ast-grep-cli's shim can shadow it. Always `ast-grep`.
 Use it to audit too: a structural question deserves a pattern, not a grep heuristic.
+Run the formatter through the repo's own hook, `pre-commit run <id> --files <changed files>`, never a bare whole-file run: it reformats lines you did not touch.
 
 ## naming
 
@@ -169,6 +170,8 @@ test that only re-exercises what the slice already covers earns nothing.
 **Red first, always.** Write the slice test before the implementation and
 watch it fail for the right reason. A test that was never red proves nothing —
 it could pass against the unmodified tree.
+
+**Read the launch path first.** Before validating on hardware, read every script the launch path execs. A fake image can hide a startup step that changes the outcome, such as one that wipes a log directory.
 
 ## Adversary protocol
 

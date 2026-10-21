@@ -28,3 +28,4 @@ structure right and the **layout wrong**. `sed`/`perl` only for prose, config an
 single-line literals — a regex alternation matches across lines and eats them.
 `sg` is ambiguous: `/usr/bin/sg` is newgrp's alias, and ast-grep-cli's shim can shadow it. Always `ast-grep`.
 Use it to audit too: a structural question deserves a pattern, not a grep heuristic.
+Run the formatter through the repo's own hook, `pre-commit run <id> --files <changed files>`, never a bare whole-file run: it reformats lines you did not touch.
