@@ -143,16 +143,18 @@ skipped it. Delete this lane's stale block from `project_current_work.md`.
 
 `project_current_work.md` in this project's memory directory is one rolling file, never
 a per-session note — accumulating stopping points is the failure this design exists to
-avoid. Concurrent sessions share it, so it holds one block per lane, headed by the
-lane's branch. Read it again just before writing and edit only this lane's block, with
+avoid. Concurrent sessions in every repo share it, so it holds one block per lane, headed
+`<repo>@<branch>`. Read it again just before writing and edit only this lane's block, with
 Edit, never Write: a whole-file write drops a block another session wrote since your
 read. Edit fails because the file changed: read it again and redo the edit.
 
 A block holds only what git cannot: the commit SHA and what landed, the next concrete step,
 anything blocked with the reason, and — one line per checkpointed agent — its branch,
 worktree, SHA and next step. Anything that outlives this thread of work is an issue, not
-a line here — reference those by number and do not restate them. Keep its `MEMORY.md`
-pointer to one line.
+a line here — reference those by number and do not restate them.
+
+The `MEMORY.md` pointer is one lane-neutral line naming the file as the rolling per-lane
+handoff, never any lane's state: a lane adds it only when missing and never rewrites it.
 
 When the work is finished, delete this lane's block; the file and its pointer go once
 no block is left. A stale handoff is worse

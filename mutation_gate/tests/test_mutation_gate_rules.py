@@ -317,7 +317,11 @@ def test_done_handoff_never_overwrites_a_block_another_session_wrote_since_its_r
     handoff = content.split("### 6. Handoff", 1)[1].split("### 7.", 1)[0]
     normalized = " ".join(handoff.split())
     assert "Overwrite it" not in normalized
-    assert "one block per lane, headed by the lane's branch" in normalized
+    assert "one block per lane, headed `<repo>@<branch>`" in normalized
+    assert "The `MEMORY.md` pointer is one lane-neutral line" in normalized
+    assert "never any lane's state" in normalized
+    assert "a lane adds it only when missing and never rewrites it" in normalized
+    assert "pointer to one line" not in normalized
     assert "Read it again just before writing and edit only this lane's block" in normalized
     assert "with Edit, never Write" in normalized
     assert "Edit fails because the file changed: read it again and redo the edit" in normalized
