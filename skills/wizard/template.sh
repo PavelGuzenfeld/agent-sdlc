@@ -100,6 +100,25 @@ set_var() {
   fi
 }
 
+probe() {
+  local var="$1"
+  shift
+  local output=''
+  if output="$("$@" 2>/dev/null)"; then
+    printf -v "$var" '%s' "$output"
+  else
+    printf -v "$var" ''
+    WROTE+=("probe: $* — FAILED")
+    say "  ! probe failed: $*"
+  fi
+}
+
+expect() {
+  local precondition="$1"
+  shift
+  "$@" >/dev/null 2>&1 || { printf '!!! Precondition failed: %s\n' "$precondition" >&2; exit 1; }
+}
+
 confirm() {
   local answer=''
   printf '\n!!! %s\n' "$1"
