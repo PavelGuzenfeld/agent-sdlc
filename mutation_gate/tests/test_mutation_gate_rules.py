@@ -284,6 +284,13 @@ def test_tickets_rule_waits_for_ci_with_one_foreground_watch_at_the_max_timeout(
     assert "re-issued on timeout" in normalized
 
 
+def test_ci_wait_yields_to_a_session_ending_with_the_pr_open_and_records_ci_unwatched():
+    tickets = " ".join((rules.RULES_DIR / "tickets.md").read_text().split())
+    done = " ".join((Path(__file__).parents[2] / "commands" / "done.md").read_text().split())
+    assert "Unless the session is ending with the PR open: skip the wait and record CI as unwatched in the handoff." in tickets
+    assert "CI unwatched" in done
+
+
 def test_kata_waits_for_ci_by_the_tickets_rule_instead_of_restating_it():
     content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
     normalized = " ".join(content.split())

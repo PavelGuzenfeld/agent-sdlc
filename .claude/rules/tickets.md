@@ -34,7 +34,8 @@ A PR waits for CI in one foreground call — `gh pr checks <PR> --watch
 --fail-fast` or `gh run watch <run> --exit-status` — with the Bash timeout at
 its 600000 ms maximum and the output to a file, re-issued on timeout. The call
 blocks until CI settles, so no turn is spent on a status check: every turn
-re-reads the whole context.
+re-reads the whole context. Unless the session is ending with the PR open: skip
+the wait and record CI as unwatched in the handoff.
 
 ## Follow-ups
 
