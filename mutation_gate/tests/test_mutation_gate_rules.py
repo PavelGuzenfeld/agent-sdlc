@@ -500,3 +500,32 @@ def test_diff_discipline_formats_through_the_repo_hook_not_a_bare_formatter():
 def test_testing_rule_reads_every_script_the_launch_path_execs_before_hardware_validation():
     text = (rules.RULES_DIR / "testing.md").read_text()
     assert "every script the launch path execs" in text
+
+
+def _pack_checkout(root: Path) -> bytes:
+    newer = b"# voice\n\nnewer than the bundled copy\n"
+    (root / "rules").mkdir()
+    (root / "rules" / "voice.md").write_bytes(newer)
+    (root / "mutation_gate").mkdir()
+    (root / "mutation_gate" / "rules.py").write_text("")
+    return newer
+
+
+def test_sync_in_the_pack_checkout_writes_the_checkouts_rules_not_the_bundle(
+    tmp_path, monkeypatch
+):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    newer = _pack_checkout(tmp_path)
+    assert cli.main(["rules", "sync"]) == 0
+    assert [p.name for p in synced.iterdir()] == ["voice.md"]
+    assert (synced / "voice.md").read_bytes() == newer
+    assert newer in (tmp_path / "AGENTS.md").read_bytes()
+    assert cli.main(["rules", "check"]) == 0
+
+
+def test_sync_in_a_consumer_repo_with_a_rules_dir_still_writes_the_bundle(tmp_path, monkeypatch):
+    synced = _fresh_repo(tmp_path, monkeypatch, "")
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "voice.md").write_bytes(b"consumer's own file\n")
+    cli.main(["rules", "sync"])
+    assert (synced / "voice.md").read_bytes() == (rules.RULES_DIR / "voice.md").read_bytes()
