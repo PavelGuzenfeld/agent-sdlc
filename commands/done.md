@@ -150,7 +150,8 @@ read. Edit fails because the file changed: read it again and redo the edit.
 
 A block holds only what git cannot: the commit SHA and what landed, the next concrete step,
 anything blocked with the reason, and — one line per checkpointed agent — its branch,
-worktree, SHA and next step. Anything that outlives this thread of work is an issue, not
+worktree, SHA and next step. An open PR whose CI went unwatched gets a `CI unwatched` line
+with the PR number. Anything that outlives this thread of work is an issue, not
 a line here — reference those by number and do not restate them.
 
 The `MEMORY.md` pointer is one lane-neutral line naming the file as the rolling per-lane
