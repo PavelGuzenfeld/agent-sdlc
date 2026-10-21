@@ -519,7 +519,7 @@ def test_sync_in_the_pack_checkout_writes_the_checkouts_rules_not_the_bundle(
     assert cli.main(["rules", "sync"]) == 0
     assert [p.name for p in synced.iterdir()] == ["voice.md"]
     assert (synced / "voice.md").read_bytes() == newer
-    assert newer in (tmp_path / "AGENTS.md").read_bytes()
+    assert _expected_block({"voice.md": newer}) in (tmp_path / "AGENTS.md").read_bytes()
     assert cli.main(["rules", "check"]) == 0
 
 
