@@ -10,6 +10,8 @@
 #   write_env KEY "<value>"    idempotent upsert into $ENV_FILE
 #   set_secret NAME "<value>"  gh secret set (CI)
 #   set_var NAME "<value>"     gh variable set (CI)
+#   probe VAR cmd...           status check into VAR; a failure is logged, not fatal
+#   expect "<what>" cmd...     aborts unless cmd succeeds; a precondition gate
 #   confirm "<what>"           gate before anything irreversible; aborts on no
 #   summary                    closing report of what was written
 
