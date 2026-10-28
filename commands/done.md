@@ -106,10 +106,13 @@ prints its full title and body for a yes/no first. Unticked is dropped, not defe
 Past five, offer the strongest five and say how many were dropped. Scan every draft
 before filing it; a hit blocks that item and names the token, never redact and file.
 
-Build the alternation from the banned-name list at the `banned_names_file`
-named in `.mutation-gate.toml`, which is the only copy of it, and run it over
-the draft — the no-leaks hook's own scan already covers identity patterns.
-Unset or missing: block filing and say so — never file unscanned.
+A remote that `gh repo view --json visibility` confirms private skips the
+banned-name scan. Public, or visibility unknown (no network, not GitHub, `gh`
+not authed), is scanned: build the alternation from the banned-name list at the
+`banned_names_file` named in `.mutation-gate.toml`, which is the only copy of
+it, and run it over the draft. Unset or missing there: block filing, name the
+missing file, and say so — never file unscanned. The no-leaks hook's identity
+scan covers every remote.
 Never restate the tokens here — this file is committed.
 
 Title states the defect or the task flat — no prefix tag, no Overview, no closing
