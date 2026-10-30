@@ -70,7 +70,11 @@ needs. The agent:
 4. Pushes, then opens one PR with `--assignee @me`, a `Closes #N` line per
    ticket still in it, at most three plain sentences on what changed, and a
    Human-testing section when the change is user-observable. No how-it-works
-   paragraph.
+   paragraph. The body also carries a Verification block of four filled lines:
+   `Built:` each image the diff touches or whose context it changes; `Tests:`
+   the command and its image; `Observed:` the ticket's acceptance outcome
+   checked directly, command and output; `Not verified:` what was skipped and
+   why, naming a hardware class at most, never a host.
 5. Waits for CI per `rules/tickets.md`. No `.github/workflows/` in the
    repo means no checks to wait for — skip straight to exit. Red: fix, push,
    and watch again.
@@ -93,7 +97,10 @@ ever, regardless of LGTM.
 ## Review loop
 
 Before asking for LGTM, the orchestrator runs `/verify-generated-diff` on the
-PR.
+PR. Asking for LGTM waits for the PR body's Verification block with all four
+lines filled; an empty `Observed:` line sends the PR back to the agent. An
+added file starting with `#!` that is not executable fails the step the same
+way.
 
 Wait for a human `LGTM` typed at the terminal prompt — never a PR comment.
 Anything else is feedback: respawn the same agent on the same branch with the
