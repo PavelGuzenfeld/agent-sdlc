@@ -213,6 +213,45 @@ EOF
 
 run_delete_branch_head_cases
 
+run_primary_worktree_cases() {
+    label="repo-primary-worktree"
+    primary=$(mktemp -d)
+    linked=$(mktemp -d)/linked
+    (
+        unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+        cd "$primary"
+        git init -q -b main
+        printf 'x' >tracked
+        git add tracked
+        git -c user.name=t -c user.email=nobody commit -q -m base
+        git branch other
+        git worktree add -q -b linked-branch "$linked"
+    ) >/dev/null 2>&1
+    sha=$(git -C "$primary" rev-parse HEAD)
+
+    expect_block_reason "$repo_script" "$label" "checkout sha names git show" "git show" \
+        "git -C $primary checkout $sha"
+    expect_block_reason "$repo_script" "$label" "checkout sha names git worktree add" "git worktree add" \
+        "git -C $primary checkout $sha"
+    expect_allow "$repo_script" "$label" "checkout sha in a linked worktree" "git -C $linked checkout $sha"
+    expect_block "$repo_script" "$label" "checkout other branch"      "git -C $primary checkout other"
+    expect_block "$repo_script" "$label" "switch other branch"        "git -C $primary switch other"
+    expect_block "$repo_script" "$label" "checkout --detach"          "git -C $primary checkout --detach"
+    expect_block "$repo_script" "$label" "switch --detach"            "git -C $primary switch --detach other"
+    expect_block "$repo_script" "$label" "checkout -b"                "git -C $primary checkout -b fresh"
+    expect_block "$repo_script" "$label" "switch -c"                  "git -C $primary switch -c fresh"
+    expect_block "$repo_script" "$label" "checkout after &&"          "true && git -C $primary checkout other"
+    expect_allow "$repo_script" "$label" "checkout default branch"    "git -C $primary checkout main"
+    expect_allow "$repo_script" "$label" "switch default branch"      "git -C $primary switch main"
+    expect_allow "$repo_script" "$label" "restore file from index"    "git -C $primary checkout -- tracked"
+    expect_allow "$repo_script" "$label" "restore file from ref"      "git -C $primary checkout other -- tracked"
+    expect_allow "$repo_script" "$label" "checkout other in linked"   "git -C $linked checkout other"
+    expect_allow "$repo_script" "$label" "checkout -b in linked"      "git -C $linked checkout -b fresh"
+    expect_allow "$repo_script" "$label" "quoted text mentioning it"  'echo "git checkout other"'
+}
+
+run_primary_worktree_cases
+
 if [ -f "$home_script" ]; then
     run_case_table "$home_script" "installed"
 else
