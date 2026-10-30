@@ -128,8 +128,10 @@ Deferred because: <one line>
 ```
 
 A public remote gets the same content as prose, three lines at most, the ref
-inline: no field labels, no bullets, no AI-attribution line ever. `gh issue create`
-with the labels `rules/tickets.md`'s Follow-ups section requires.
+inline: no field labels, no bullets, no AI-attribution line ever. Write the body to
+a file and file with `gh issue create --body-file <path>`, never an inline `--body`:
+backticks, `$`, `*` and `!` break under zsh quoting and globbing. Pass the labels
+`rules/tickets.md`'s Follow-ups section requires on the same call.
 
 Nothing qualifying prints nothing. Anything here failing — auth, network, API — prints
 the drafts and continues; the commit and the SHA report never depend on this step.
