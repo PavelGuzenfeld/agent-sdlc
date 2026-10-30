@@ -542,3 +542,14 @@ def test_kata_withholds_lgtm_request_until_verification_block_is_filled_and_scri
     assert "Asking for LGTM waits for the PR body's Verification block" in normalized
     assert "an empty `Observed:` line sends the PR back to the agent" in normalized
     assert "added file starting with `#!` that is not executable fails the step" in normalized
+
+
+def test_status_command_files_green_prs_under_ready_and_red_prs_with_their_failing_check():
+    """Intent: #402 (decision 20 of #393)."""
+    content = (Path(__file__).parents[2] / "commands" / "status.md").read_text()
+    normalized = " ".join(content.split())
+    assert "Ready on LGTM: " in normalized
+    assert "Needs you: " in normalized
+    assert "failing check" in normalized
+    assert "assigned to `@me`" in normalized
+    assert "gh pr checks" in normalized
