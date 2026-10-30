@@ -193,6 +193,7 @@ switch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- 'git[[:space:]]+(-C[
 old_ifs=$IFS
 IFS='
 '
+set -f
 for seg in $switch_segments; do
     IFS=$old_ifs
     repo_path="."
@@ -215,6 +216,7 @@ for seg in $switch_segments; do
 '
 done
 IFS=$old_ifs
+set +f
 
 if printf '%s' "$cmd" | grep -Eq -- 'git[[:space:]]+add[[:space:]]+(-A|--all|\.)([[:space:]]|$)'; then
     deny "git add -A / add . / add --all" \

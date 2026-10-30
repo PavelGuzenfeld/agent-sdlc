@@ -225,6 +225,8 @@ run_primary_worktree_cases() {
         git add tracked
         git -c user.name=t -c user.email=nobody commit -q -m base
         git branch other
+        git checkout -q other
+        git checkout -q main
         git worktree add -q -b linked-branch "$linked"
     ) >/dev/null 2>&1
     sha=$(git -C "$primary" rev-parse HEAD)
@@ -240,6 +242,8 @@ run_primary_worktree_cases() {
     expect_block "$repo_script" "$label" "switch --detach"            "git -C $primary switch --detach other"
     expect_block "$repo_script" "$label" "checkout -b"                "git -C $primary checkout -b fresh"
     expect_block "$repo_script" "$label" "switch -c"                  "git -C $primary switch -c fresh"
+    expect_block "$repo_script" "$label" "switch -d default branch"   "git -C $primary switch -d main"
+    expect_block "$repo_script" "$label" "switch - to previous branch" "git -C $primary switch -"
     expect_block "$repo_script" "$label" "checkout after &&"          "true && git -C $primary checkout other"
     expect_allow "$repo_script" "$label" "checkout default branch"    "git -C $primary checkout main"
     expect_allow "$repo_script" "$label" "switch default branch"      "git -C $primary switch main"
