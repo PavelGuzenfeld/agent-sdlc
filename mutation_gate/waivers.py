@@ -32,17 +32,30 @@ class Waiver:
     check: str = ""
     test: str = ""
     ms: int = 0
+    text: str = ""
 
-    def covers(self, mutant: Mutant) -> bool:
+    def covers(self, mutant: Mutant, every: list[Mutant] = (), lines: list[str] = ()) -> bool:
         if self.check or self.file != mutant.file:
             return False
         if self.uncovered:
             return True
+        if self.text:
+            return self._covers_by_text(mutant, every, lines)
         if self.line and self.line != mutant.line:
             return False
         if self.column and self.column != mutant.column:
             return False
         return self.old == mutant.old and self.new == mutant.new
+
+    def _covers_by_text(self, mutant: Mutant, every: list[Mutant], lines: list[str]) -> bool:
+        def same_site(m: Mutant) -> bool:
+            return (m.old, m.new, line_text(lines, m.line)) == (self.old, self.new, self.text)
+
+        if not same_site(mutant):
+            return False
+        if sum(map(same_site, every)) <= 1:
+            return True
+        return self.line == mutant.line and (not self.column or self.column == mutant.column)
 
     def covers_finding(self, check: str, file: str, test: str, ms: int, line: int) -> bool:
         if self.check != check:
@@ -54,6 +67,10 @@ class Waiver:
         if self.line and self.line != line:
             return False
         return not self.ms or self.ms == ms
+
+
+def line_text(lines: list[str], line: int) -> str:
+    return lines[line - 1].strip() if 0 < line <= len(lines) else ""
 
 
 def _ambiguous(entry: dict) -> bool:
@@ -84,11 +101,15 @@ def load(repo: Repo) -> list[Waiver]:
     return out
 
 
-def waived(waivers: list[Waiver], mutant: Mutant) -> Waiver | None:
-    return next((w for w in waivers if w.covers(mutant)), None)
+def waived(
+    waivers: list[Waiver], mutant: Mutant, every: list[Mutant] = (), lines: list[str] = ()
+) -> Waiver | None:
+    return next((w for w in waivers if w.covers(mutant, every, lines)), None)
 
 
-def stale(waivers: list[Waiver], file: str, every_mutant: list[Mutant]) -> list[Waiver]:
+def stale(
+    waivers: list[Waiver], file: str, every_mutant: list[Mutant], lines: list[str] = ()
+) -> list[Waiver]:
     """Waivers naming a site in `file` that the generator no longer produces.
 
     A waiver is keyed on line and column, so inserting anything above one moves its
@@ -102,7 +123,7 @@ def stale(waivers: list[Waiver], file: str, every_mutant: list[Mutant]) -> list[
     return [
         w for w in waivers
         if w.file == file and w.line and not w.uncovered and not w.check
-        and not any(w.covers(m) for m in every_mutant)
+        and not any(w.covers(m, every_mutant, lines) for m in every_mutant)
     ]
 
 
@@ -128,10 +149,11 @@ def suggest_finding(check: str, file: str, test: str = "", ms: int = 0) -> str:
     )
 
 
-def suggest(mutant: Mutant) -> str:
+def suggest(mutant: Mutant, text: str = "") -> str:
     """Always scoped to the one site: `_ambiguous` refuses a bare literal without
     a line, and one line can hold two mutants with identical text. Widening is a
     decision to make by deleting a key."""
+    text_key = f'text = """{text}"""\n' if text else ""
     return (
         "[[waiver]]\n"
         f'file = "{mutant.file}"\n'
@@ -139,6 +161,7 @@ def suggest(mutant: Mutant) -> str:
         f"column = {mutant.column}\n"
         f'old = """{mutant.old}"""\n'
         f'new = """{mutant.new}"""\n'
+        f"{text_key}"
         'reason = "REPLACE ME — why no test can or should kill this"\n'
     )
 

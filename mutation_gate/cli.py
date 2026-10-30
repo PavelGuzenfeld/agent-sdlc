@@ -59,13 +59,25 @@ def _warn_stale_waivers(repo, rel: str, wvs) -> None:
     if not any(w.file == rel and w.line and not w.uncovered for w in wvs):
         return
     try:
-        whole = {rel: set(range(1, len((repo.root / rel).read_text().splitlines()) + 1))}
-        every = mutants.generate(repo.root, whole, repo.config.language)
+        every = _every_mutant(repo, rel)
     except (OSError, GateError, ValueError):
         return
-    for w in waivers.stale(wvs, rel, every):
+    for w in waivers.stale(wvs, rel, every, _source_lines(repo, rel)):
         _emit(f"  {rel}: waiver at line {w.line} column {w.column} matches no mutant "
               f"— stale after an edit above it? ({w.old!r} => {w.new!r})")
+
+
+def _source_lines(repo, rel: str) -> list[str]:
+    return (repo.root / rel).read_text().splitlines()
+
+
+def _line_text_of(repo, mutant) -> str:
+    return waivers.line_text(_source_lines(repo, mutant.file), mutant.line)
+
+
+def _every_mutant(repo, rel: str) -> list:
+    whole = {rel: set(range(1, len(_source_lines(repo, rel)) + 1))}
+    return mutants.generate(repo.root, whole, repo.config.language)
 
 
 def _warn_stale_report(repo, staged: bool) -> None:
@@ -131,6 +143,8 @@ def _gate_file(
     _emit(f"  {rel}: baseline {baseline:.1f}s, per-mutant timeout {timeout:.0f}s ({source})")
 
     survivors, blocked, timed_out = [], False, 0
+    every = _every_mutant(repo, rel) if any(w.text and w.file == rel for w in wvs) else []
+    lines = _source_lines(repo, rel) if every else []
     total = len(generated)
     for index, m in enumerate(generated, 1):
         tests = sorted({t.split("|")[0] for t in cover.get(m.line, [])})
@@ -141,7 +155,7 @@ def _gate_file(
         if result.verdict in (runner.KILLED, runner.KILLED_TIMEOUT):
             timed_out += result.verdict == runner.KILLED_TIMEOUT
             continue
-        waiver = waivers.waived(wvs, m)
+        waiver = waivers.waived(wvs, m, every, lines)
         if waiver:
             _emit(f"  {rel}:{m.line}:{m.column} {m.old} => {m.new}  SURVIVED (waived: {waiver.reason})")
             continue
@@ -470,7 +484,7 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
         if all_survivors:
             _emit("")
             _emit(f"Write the killing test, or record a waiver in {waivers.path(repo)}:")
-            _emit(waivers.suggest(all_survivors[0]))
+            _emit(waivers.suggest(all_survivors[0], _line_text_of(repo, all_survivors[0])))
         return 1
 
     _emit("mutation-gate: pass")
