@@ -56,8 +56,9 @@ the gate's adversary can't read a ticket off that.
 
 Spawn a fresh implementation agent per ticket or per batch, with every
 ticket's number and body, the shared `model:<name>` label as the agent's
-model override, and the worktree's path. The agent works from that body and
-does not loop `gh issue view` over linked issues unless a ticket names one it
+model override, and the worktree's path. The brief also states the acceptance
+outcome in one sentence, naming the whole UI element for a UI ticket. The
+agent works from that body and does not loop `gh issue view` over linked issues unless a ticket names one it
 needs. The agent:
 
 1. Writes each ticket's slice test first and confirms it fails.
@@ -84,6 +85,10 @@ needs. The agent:
    same-class-elsewhere guess or anything it would itself call speculative.
    "None" is the normal answer.
 
+A defect the agent finds mid-lane goes into the current PR only when it meets
+size:tiny and sits in a file the PR already touches, on its own line in the PR
+body; otherwise it is a follow-up.
+
 A ticket the agent finds not tiny mid-batch: it reverts that ticket's changes
 off the branch, drops its `Closes #N` line, strips its size:tiny label with a
 one-line comment giving the reason, then finishes the rest of the batch. That
@@ -98,11 +103,14 @@ ever, regardless of LGTM.
 
 Before asking for LGTM, the orchestrator runs `/verify-generated-diff` on the
 PR. Asking for LGTM waits for the PR body's Verification block with all four
-lines filled; an empty `Observed:` line sends the PR back to the agent. An
+lines filled; an empty `Observed:` line sends the PR back to the agent, and
+the `Observed:` line is checked against the brief's acceptance sentence. An
 added file starting with `#!` that is not executable fails the step the same
 way.
 
 Wait for a human `LGTM` typed at the terminal prompt — never a PR comment.
+An LGTM request names its PRs ("LGTM for #a, #b?"), and a bare `LGTM` approves
+exactly the PRs the last request named.
 Anything else is feedback: respawn the same agent on the same branch with the
 comments — never open a second PR for the same ticket or batch.
 
