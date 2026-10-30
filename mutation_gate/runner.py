@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -191,7 +192,7 @@ def _run_tests(
     """Verdict within `timeout`. Timing out is not-green: a mutant can make the
     suite hang — `break` to `continue`, or a divide that never settles — and a
     hung gate is worse than a wrong verdict."""
-    return run_capped(repo, test_command.format(tests=" ".join(tests)), timeout)
+    return run_capped(repo, test_command.format(tests=shlex.join(tests)), timeout)
 
 
 def _looks_like_collection_failure(returncode: int, output: bytes) -> bool:
@@ -235,7 +236,7 @@ def baseline_green(repo: Repo, tests: list[str], test_command: str) -> float:
     """Seconds the unmutated suite takes. Refuses rather than reporting, because
     a baseline that is not green makes every later verdict a fabrication."""
     start = time.monotonic()
-    command = test_command.format(tests=" ".join(tests))
+    command = test_command.format(tests=shlex.join(tests))
     verdict = _baseline_outcome(repo, command, repo.config.baseline_timeout)
     if verdict == NO_PASS_MARKER:
         raise GateError(
