@@ -529,3 +529,16 @@ def test_sync_in_a_consumer_repo_with_a_rules_dir_still_writes_the_bundle(tmp_pa
     (tmp_path / "rules" / "voice.md").write_bytes(b"consumer's own file\n")
     cli.main(["rules", "sync"])
     assert (synced / "voice.md").read_bytes() == (rules.RULES_DIR / "voice.md").read_bytes()
+
+
+def test_kata_withholds_lgtm_request_until_verification_block_is_filled_and_scripts_are_executable():
+    """Intent: #398 (decisions 11, 12 and 13 of #393)."""
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    for line in ("`Built:`", "`Tests:`", "`Observed:`", "`Not verified:`"):
+        assert line in normalized
+    assert "Verification block of four filled lines" in normalized
+    assert "naming a hardware class at most, never a host" in normalized
+    assert "Asking for LGTM waits for the PR body's Verification block" in normalized
+    assert "an empty `Observed:` line sends the PR back to the agent" in normalized
+    assert "added file starting with `#!` that is not executable fails the step" in normalized
