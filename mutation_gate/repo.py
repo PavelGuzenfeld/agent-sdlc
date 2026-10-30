@@ -219,6 +219,8 @@ class Config:
     own_namespaces: list[str] = field(default_factory=list)
     doc_allow: list[DocAllow] = field(default_factory=list)
     banned_names_file: str = ""
+    test_image: str = ""
+    is_test_image_used: bool = True
 
     def for_language(self, language: str) -> LanguageConfig:
         override = self.languages.get(language)

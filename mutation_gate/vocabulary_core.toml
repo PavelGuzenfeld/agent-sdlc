@@ -327,7 +327,7 @@ forms = ["plural"]
 
 [[concept]]
 word = "image"
-meaning = "a two-dimensional array of pixels"
+meaning = "a two-dimensional array of pixels, or the filesystem snapshot a container runs from"
 pos = ["noun"]
 forms = ["plural"]
 
