@@ -978,3 +978,8 @@ def test_a_name_compared_to_another_string_is_still_mutated(tmp_path):
     (tmp_path / "s.py").write_text('if __name__ == "mod":\n    pass\n')
     generated = mutants.generate(tmp_path, {"s.py": {1}}, "python")
     assert ('__name__ == "mod"', '__name__ != "mod"') in [(m.old, m.new) for m in generated]
+
+
+def test_mutant_built_without_a_column_idents_at_column_zero():
+    mutant = mutants.Mutant("a.py", 3, 0, 1, "0", "1", "literal")
+    assert mutant.ident == "a.py:3:0:literal:0 => 1"
