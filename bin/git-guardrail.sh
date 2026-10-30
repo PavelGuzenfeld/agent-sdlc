@@ -151,6 +151,73 @@ if printf '%s' "$cmd" | grep -Eq -- 'git[[:space:]]+(checkout[[:space:]]+(--[[:s
         "git safety protocol: never discard uncommitted changes without explicit request"
 fi
 
+is_primary_worktree() {
+    git_dir=$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null) || return 1
+    common_dir=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    [ "$git_dir" = "$common_dir" ]
+}
+
+default_branch_of() {
+    name=$(git -C "$1" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || name=""
+    if [ -n "$name" ]; then
+        printf '%s' "${name#origin/}"
+    elif git -C "$1" show-ref --verify --quiet refs/heads/main; then
+        printf main
+    else
+        printf master
+    fi
+}
+
+moves_off_default_branch() {
+    repo="$1"; default="$2"; shift 2
+    for tok in "$@"; do
+        [ "$tok" != "--" ] || return 1
+    done
+    for tok in "$@"; do
+        case "$tok" in
+            -b|-B|-c|-C|-d|--detach|--orphan|--create|--force-create|-) return 0 ;;
+            -*|[0-9]*'>'*|'>'*|'<'*) ;;
+            "$default") return 1 ;;
+            *)
+                if [ -e "$repo/$tok" ] && ! git -C "$repo" rev-parse --verify --quiet "$tok^{commit}" >/dev/null 2>&1; then
+                    return 1
+                fi
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+switch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- 'git[[:space:]]+(-C[[:space:]]+[^;&|[:space:]]+[[:space:]]+)?(checkout|switch)([[:space:]][^;&|]*)?' 2>/dev/null || true)
+old_ifs=$IFS
+IFS='
+'
+set -f
+for seg in $switch_segments; do
+    IFS=$old_ifs
+    repo_path="."
+    prev=""
+    set -- $seg
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            checkout|switch) shift; break ;;
+        esac
+        [ "$prev" != "-C" ] || repo_path="$1"
+        prev="$1"
+        shift
+    done
+    if is_primary_worktree "$repo_path" \
+        && moves_off_default_branch "$repo_path" "$(default_branch_of "$repo_path")" "$@"; then
+        deny "git checkout/switch off the default branch in the primary worktree" \
+            "read the other branch with: git show <branch>:<path>, or work on it with: git worktree add <dir> <branch>"
+    fi
+    IFS='
+'
+done
+IFS=$old_ifs
+set +f
+
 if printf '%s' "$cmd" | grep -Eq -- 'git[[:space:]]+add[[:space:]]+(-A|--all|\.)([[:space:]]|$)'; then
     deny "git add -A / add . / add --all" \
         "memory: feedback_never_add_dash_a_across_branches (uncommitted edits ride along across branches)"
