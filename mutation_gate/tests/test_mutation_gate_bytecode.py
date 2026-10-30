@@ -2,7 +2,6 @@
 mtime and size are unchanged. A same-size mutant restored within the second left
 bytecode that kept running the mutant after the gate put the original back."""
 
-import importlib.util
 import os
 import py_compile
 import subprocess
@@ -74,7 +73,8 @@ def test_a_mutant_run_never_loads_bytecode_the_repo_cached_for_the_original(gate
     """An unchecked-hash .pyc is trusted whatever the source's mtime, so it stands
     in deterministically for an original .pyc whose stamp the mutant happens to match."""
     py_compile.compile(
-        str(gated.root / "age.py"), cfile=importlib.util.cache_from_source(str(gated.root / "age.py")),
+        str(gated.root / "age.py"),
+        cfile=str(gated.root / "__pycache__" / f"age.{sys.implementation.cache_tag}.pyc"),
         invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
     )
 
