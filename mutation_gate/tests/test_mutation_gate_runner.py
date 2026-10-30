@@ -125,3 +125,28 @@ def test_a_baseline_that_exits_clean_without_its_pass_pattern_is_refused(tmp_pat
     command = "sh -c 'printf \"nope\\n\"'"
     with pytest.raises(runner.GateError, match="printed no pass_pattern"):
         runner.baseline_green(repo, [], command)
+
+
+INJECTED_IDS = [
+    "tests/test_x.py::test_refuses[a; touch injected]",
+    "tests/test_x.py::test_refuses[$(touch injected)]",
+    "tests/test_x.py::test_refuses[`touch injected`]",
+    "tests/test_x.py::test_refuses[a && touch injected]",
+]
+
+
+@pytest.mark.parametrize("test_id", INJECTED_IDS)
+def test_a_parametrized_id_with_shell_syntax_reaches_the_mutant_run_as_one_word(tmp_path, test_id):
+    argv = tmp_path / "argv"
+    command = f"printf '%s\\n' {{tests}} > {argv}"
+    assert runner._run_tests(_repo(tmp_path), [test_id], command) == runner.PASSED
+    assert not (tmp_path / "injected").exists()
+    assert argv.read_text() == f"{test_id}\n"
+
+
+@pytest.mark.parametrize("test_id", INJECTED_IDS)
+def test_a_parametrized_id_with_shell_syntax_reaches_the_baseline_as_one_word(tmp_path, test_id):
+    argv = tmp_path / "argv"
+    runner.baseline_green(_repo(tmp_path), [test_id], f"printf '%s\\n' {{tests}} > {argv}")
+    assert not (tmp_path / "injected").exists()
+    assert argv.read_text() == f"{test_id}\n"

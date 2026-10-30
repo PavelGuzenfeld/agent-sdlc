@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import shlex
 import sqlite3
 import time
 from pathlib import Path, PurePosixPath
@@ -254,7 +255,7 @@ def covering_tests(
     if not cands:
         return {}
     lang_cfg = repo.config.for_language("python")
-    rels = " ".join(str(p.relative_to(repo.root)) for p in cands)
+    rels = shlex.join(str(p.relative_to(repo.root)) for p in cands)
     cmd = lang_cfg.coverage_command.format(file=_cov_scope(target), tests=rels)
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
     run_start = time.time()
