@@ -598,9 +598,15 @@ def test_covering_tests_hits_the_cache_on_a_repeat_call(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
-def test_a_candidate_path_with_shell_syntax_reaches_the_coverage_run_as_one_word(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "payload",
+    ["; touch injected", "$(touch injected)", "`touch injected`", " && touch injected", "'; touch injected"],
+)
+def test_a_candidate_path_with_shell_syntax_reaches_the_coverage_run_as_one_word(
+    tmp_path, monkeypatch, payload
+):
     monkeypatch.setattr(coverage_map, "CACHE_ROOT", tmp_path / "cache")
-    candidate = tmp_path / "tests" / "test_a; touch injected.py"
+    candidate = tmp_path / "tests" / f"test_a{payload}.py"
     argv = tmp_path / "argv"
     repo = Repo(
         root=tmp_path, origin="", remotes=(),
@@ -609,4 +615,4 @@ def test_a_candidate_path_with_shell_syntax_reaches_the_coverage_run_as_one_word
     with pytest.raises(coverage_map.EmptyCoverageError):
         coverage_map.covering_tests(repo, "pkg/mod.py", [candidate], "fp")
     assert not (tmp_path / "injected").exists()
-    assert argv.read_text() == "tests/test_a; touch injected.py\n"
+    assert argv.read_text() == f"tests/test_a{payload}.py\n"
