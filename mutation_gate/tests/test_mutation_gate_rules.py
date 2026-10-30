@@ -567,3 +567,14 @@ def test_kata_scopes_lgtm_to_named_prs_routes_mid_lane_defects_and_states_accept
     assert "states the acceptance outcome in one sentence" in normalized
     assert "naming the whole UI element for a UI ticket" in normalized
     assert "`Observed:` line is checked against the brief's acceptance sentence" in normalized
+
+
+def test_kata_merge_chowns_a_worktree_holding_root_owned_files_before_removing_it():
+    """Intent: #400 (decision 4 of #393)."""
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert "When `find <worktree> -user root` lists anything" in normalized
+    assert "chown -R $(id -u):$(id -g) /w" in normalized
+    assert "alpine:3.20" in normalized
+    assert "Before `git worktree remove`" in normalized
+    assert "A clean worktree costs no docker call" in normalized

@@ -119,6 +119,11 @@ removes the worktree, then deletes the branch with `git branch -D`, which the
 guardrail allows once the branch's tip is that merged PR's head or an ancestor of it. The merge
 closes every ticket still in it through its own `Closes #N` line.
 
+Before `git worktree remove`, hand the tree back to the user. When
+`find <worktree> -user root` lists anything, a container left root-owned files:
+run `docker run --rm -v <worktree>:/w alpine:3.20 chown -R $(id -u):$(id -g) /w`,
+so removal needs no sudo. A clean worktree costs no docker call.
+
 Run `/done`'s tail without its handoff step or its agent-checkpoint step —
 its step 5 files the agent's candidates — and move to the next ticket or
 batch. That tail follows one PR's own merge, not a session interrupt, and
