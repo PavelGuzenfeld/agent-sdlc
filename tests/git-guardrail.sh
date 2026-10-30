@@ -8,7 +8,7 @@ failures=0
 
 run() {
     payload=$(printf '%s' "$2" | jq -Rs '{tool_input: {command: .}}')
-    printf '%s' "$payload" | "$1"
+    printf '%s' "$payload" | (cd "${hook_cwd:-.}" && "$1")
 }
 
 expect_block() {
@@ -252,6 +252,20 @@ run_primary_worktree_cases() {
     expect_allow "$repo_script" "$label" "checkout other in linked"   "git -C $linked checkout other"
     expect_allow "$repo_script" "$label" "checkout -b in linked"      "git -C $linked checkout -b fresh"
     expect_allow "$repo_script" "$label" "quoted text mentioning it"  'echo "git checkout other"'
+
+    hook_cwd="$linked"
+    expect_block_reason "$repo_script" "$label" "cd primary then checkout sha from linked, same message" "git worktree add" \
+        "cd $primary && git checkout $sha"
+    expect_block "$repo_script" "$label" "cd primary with semicolon from linked"  "cd $primary; git checkout $sha"
+    expect_block "$repo_script" "$label" "relative cd to primary from linked" \
+        "cd $(realpath --relative-to="$linked" "$primary") && git checkout $sha"
+    expect_block "$repo_script" "$label" "relative -C after cd primary"           "cd $primary && git -C . checkout $sha"
+    expect_allow "$repo_script" "$label" "cd primary then back to linked"         "cd $primary && cd $linked && git checkout $sha"
+    expect_allow "$repo_script" "$label" "bare cd falls back to hook cwd"         "cd && git checkout $sha"
+    hook_cwd="$primary"
+    expect_allow "$repo_script" "$label" "cd linked then checkout sha from primary" "cd $linked && git checkout $sha"
+    expect_block "$repo_script" "$label" "checkout sha from primary cwd"          "git checkout $sha"
+    hook_cwd=""
 }
 
 run_primary_worktree_cases

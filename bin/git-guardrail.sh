@@ -189,21 +189,38 @@ moves_off_default_branch() {
     return 1
 }
 
-switch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- 'git[[:space:]]+(-C[[:space:]]+[^;&|[:space:]]+[[:space:]]+)?(checkout|switch)([[:space:]][^;&|]*)?' 2>/dev/null || true)
+switch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- '(^|[;&|(])[[:space:]]*cd([[:space:]]+[^;&|[:space:]]*)?|git[[:space:]]+(-C[[:space:]]+[^;&|[:space:]]+[[:space:]]+)?(checkout|switch)([[:space:]][^;&|]*)?' 2>/dev/null || true)
 old_ifs=$IFS
 IFS='
 '
 set -f
+effective_dir="."
 for seg in $switch_segments; do
     IFS=$old_ifs
-    repo_path="."
-    prev=""
+    seg=$(printf '%s' "$seg" | sed -E 's/^[;&|( ]*//')
     set -- $seg
+    if [ "$1" = "cd" ]; then
+        case "${2:-}" in
+            ""|-*|Q) effective_dir="." ;;
+            /*) effective_dir="$2" ;;
+            *) effective_dir="$effective_dir/$2" ;;
+        esac
+        IFS='
+'
+        continue
+    fi
+    repo_path="$effective_dir"
+    prev=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
             checkout|switch) shift; break ;;
         esac
-        [ "$prev" != "-C" ] || repo_path="$1"
+        if [ "$prev" = "-C" ]; then
+            case "$1" in
+                /*) repo_path="$1" ;;
+                *) repo_path="$effective_dir/$1" ;;
+            esac
+        fi
         prev="$1"
         shift
     done
