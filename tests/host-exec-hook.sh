@@ -13,7 +13,7 @@ fail() {
     failures=$((failures + 1))
 }
 
-hook_cmd=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command | select(contains("host-exec"))' "$dir/hooks/hooks.json")
+hook_cmd=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command | select(contains("mutation_gate.host_exec"))' "$dir/hooks/hooks.json")
 [ -n "$hook_cmd" ] || fail "hooks/hooks.json has no Bash PreToolUse entry for host-exec"
 
 printf 'FROM python:3.12-slim\nRUN pip install --no-cache-dir -q pytest\n' | docker build -q -t "$image" - >/dev/null
@@ -53,7 +53,7 @@ else
     [ "$decision" = "allow" ] || fail "rewrite decision: expected allow, got $decision" "$out"
     [ "$description" = "run tests" ] || fail "rewrite dropped the other tool_input fields" "$out"
     case "$rewritten" in
-        "docker run --rm --user \$(id -u):\$(id -g) -v \"\$PWD:/w\" -w /w $image "*) ;;
+        "docker run --rm --user \$(id -u):\$(id -g) -e HOME=/tmp -v \"\$PWD:/w\" -w /w $image "*) ;;
         *) fail "rewritten command has the wrong prefix" "$rewritten" ;;
     esac
     set +e
@@ -98,6 +98,20 @@ out=$(run_hook "$with_image" 'docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/
 code=$?
 set -e
 [ "$code" -eq 0 ] && [ -z "$out" ] || fail "docker run with -u: expected silent pass, got $code" "$out"
+
+set +e
+out=$(run_hook "$with_image" 'docker run --rm -v "$PWD":/w alpine:3.20 chown -R $(id -u):$(id -g) /w' 2>&1)
+code=$?
+set -e
+[ "$code" -eq 0 ] && [ -z "$out" ] || fail "kata teardown chown: expected silent pass, got $code" "$out"
+
+no_config=$(new_repo "")
+rm "$no_config/.mutation-gate.toml"
+set +e
+out=$(run_hook "$no_config" "pytest -q" 2>&1)
+code=$?
+set -e
+[ "$code" -eq 0 ] && [ -z "$out" ] || fail "repo without .mutation-gate.toml: expected silent pass, got $code" "$out"
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures failure(s)" >&2

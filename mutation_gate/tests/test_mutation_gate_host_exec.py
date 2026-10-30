@@ -4,13 +4,15 @@ bind-mounts the repo or a worktree without `--user` is denied with the fix."""
 
 import io
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from mutation_gate import cli, host_exec
+from mutation_gate import host_exec
 from mutation_gate.host_exec import Denial, Rewrite, decide
 from mutation_gate.repo import Config
 
@@ -42,7 +44,7 @@ def repo(tmp_path, monkeypatch) -> Path:
 
 
 def _rewritten(command: str, image: str = "img:1") -> Rewrite:
-    return Rewrite(f'docker run --rm {USER} -v "$PWD:/w" -w /w {image} sh -c {command}')
+    return Rewrite(f'docker run --rm {USER} -e HOME=/tmp -v "$PWD:/w" -w /w {image} sh -c {command}')
 
 
 def test_test_image_defaults_to_empty_and_the_rewrite_to_on():
@@ -74,7 +76,7 @@ def test_image_with_shell_characters_is_quoted(repo):
 
 
 @pytest.mark.parametrize("command", [
-    "pip list", "pip3 install x", "git status", "cd sub && pytest", "ls pytest",
+    "pip list", "pip3 install x", "git status", "ls pytest", "docker build . && pytest",
     'docker run --rm -u 1:1 -v "$PWD:/w" img pytest',
 ])
 def test_other_commands_pass_through(repo, command):
@@ -116,6 +118,7 @@ def test_config_is_read_from_the_toplevel_not_the_subdirectory(repo):
 def _denial(command: str, cwd: Path) -> Denial:
     verdict = decide(command, cwd, False)
     assert isinstance(verdict, Denial), verdict
+    assert f"docker run {USER}" in verdict.reason
     return verdict
 
 
@@ -225,7 +228,7 @@ def _run_main(monkeypatch, payload: dict, marker: Path) -> tuple[int, str, str]:
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
     monkeypatch.setattr("sys.stdout", stdout)
     monkeypatch.setattr("sys.stderr", stderr)
-    return cli.main(["host-exec"]), stdout.getvalue(), stderr.getvalue()
+    return host_exec.main(), stdout.getvalue(), stderr.getvalue()
 
 
 def test_container_marker_is_the_docker_convention():
@@ -257,6 +260,7 @@ def test_hook_denies_with_exit_2_and_the_reason_on_stderr(repo, monkeypatch, tmp
     code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
     assert (code, out) == (2, "")
     assert err.startswith("host-exec: `pytest` would run on the host.")
+    assert 'test_image = "<image>"' in err
 
 
 def test_hook_without_cwd_uses_the_process_directory(repo, monkeypatch, tmp_path):
@@ -268,3 +272,81 @@ def test_hook_without_cwd_uses_the_process_directory(repo, monkeypatch, tmp_path
 
 def test_hook_without_a_command_passes(repo, monkeypatch, tmp_path):
     assert _run_main(monkeypatch, {"cwd": str(repo)}, tmp_path / "absent") == (0, "", "")
+
+
+def test_hook_denies_a_bind_mount_without_user_with_the_corrected_command(repo, monkeypatch, tmp_path):
+    payload = {"cwd": str(repo), "tool_input": {"command": "docker run -v .:/w img true"}}
+    code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
+    assert (code, out) == (2, "")
+    assert err.endswith(f"Run instead:\n  docker run {USER} -v .:/w img true\n")
+
+
+def test_switch_off_passes_through_even_with_an_image_set(repo):
+    (repo / ".mutation-gate.toml").write_text('test_image = "img:1"\nis_test_image_used = false\n')
+    assert decide("pytest", repo, False) is None
+
+
+def test_switch_off_keeps_the_bind_mount_check(repo):
+    (repo / ".mutation-gate.toml").write_text("is_test_image_used = false\n")
+    _denial("docker run -v .:/w img", repo)
+
+
+def test_repo_without_the_config_file_is_left_alone(repo):
+    (repo / ".mutation-gate.toml").unlink()
+    assert decide("pytest -q", repo, False) is None
+    assert decide("docker run -v .:/w img", repo, False) is None
+
+
+@pytest.mark.parametrize("toml", ['test_image = "unterminated\n', "no_such_key = 1\n"])
+def test_unreadable_config_passes_with_one_line_naming_the_file(repo, monkeypatch, tmp_path, toml):
+    (repo / ".mutation-gate.toml").write_text(toml)
+    payload = {"cwd": str(repo), "tool_input": {"command": "docker run -v .:/w img"}}
+    code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
+    assert (code, out) == (0, "")
+    assert err == f"host-exec: cannot read {repo / '.mutation-gate.toml'}, passing through\n"
+
+
+@pytest.mark.parametrize("command", ["cd sub && pytest -q", "git status; make", "true || colcon build",
+                                     "ls | pip install -r /dev/stdin"])
+def test_a_host_command_in_any_segment_moves_the_whole_line_into_the_image(repo, command):
+    assert decide(command, repo, False) == _rewritten(f"'{command}'")
+
+
+def test_no_image_denial_names_the_first_host_command_in_the_line(repo):
+    (repo / ".mutation-gate.toml").write_text("")
+    assert decide("cd sub && cmake -B b && make", repo, False).reason.startswith("`cmake` would run")
+
+
+@pytest.mark.parametrize("owner", ["$(id -u):$(id -g)", '"$(id -u):$(id -g)"', "{uid}:{gid}"])
+@pytest.mark.parametrize("mount", ["-v .:/w", "--mount type=bind,source=.,target=/w",
+                                   "--mount type=bind,src=.,dst=/w",
+                                   "--mount type=bind,source=.,destination=/w"])
+def test_handing_the_tree_back_to_the_user_needs_no_user_flag(repo, owner, mount):
+    owner = owner.format(uid=os.getuid(), gid=os.getgid())
+    command = f"docker run --rm {mount} alpine:3.20 chown -R {owner} /w"
+    assert decide(command, repo, False) is None
+
+
+@pytest.mark.parametrize("tail", ["chown -R 0:0 /w", "chown -R $(id -u):$(id -g) /x",
+                                  "chown -R $(id -u):$(id -g) /w /etc", "chown $(id -u):$(id -g) /w",
+                                  "sh -c 'chown -R $(id -u):$(id -g) /w'"])
+def test_any_other_root_command_on_the_mount_is_still_denied(repo, tail):
+    _denial(f"docker run --rm -v .:/w alpine:3.20 {tail}", repo)
+
+
+def test_handback_to_a_mount_outside_the_repo_does_not_excuse_an_inside_one(repo):
+    _denial("docker run -v .:/w -v /tmp:/t alpine:3.20 chown -R $(id -u):$(id -g) /t", repo)
+
+
+@needs_git
+def test_module_entry_point_runs_the_hook(tmp_path):
+    root = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+    (root / ".mutation-gate.toml").write_text("")
+    payload = json.dumps({"cwd": str(root), "tool_input": {"command": "docker run -v .:/w img"}})
+    result = subprocess.run(
+        [sys.executable, "-P", "-m", "mutation_gate.host_exec"], input=payload, capture_output=True,
+        text=True, cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(Path(host_exec.__file__).parents[1])},
+    )
+    assert result.returncode == 2
+    assert f"Run instead:\n  docker run {USER} -v .:/w img" in result.stderr

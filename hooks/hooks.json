@@ -37,7 +37,7 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/mutation-gate host-exec"
+            "command": "PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}\" python3 -P -m mutation_gate.host_exec"
           }
         ]
       }

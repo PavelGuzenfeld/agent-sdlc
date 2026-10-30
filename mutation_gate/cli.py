@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import adversary, commit_msg, coverage_map, diff_discipline, host_exec, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_path, vocabulary_wordnet, waivers
+from . import adversary, commit_msg, coverage_map, diff_discipline, model_vv, mutants, no_comments, no_leaks, no_new_docs, rules, runner, token, vocabulary, vocabulary_check, vocabulary_path, vocabulary_wordnet, waivers
 from .repo import CACHE_ROOT, CONFIG_NAME, GateError, discover, git, skip_reason
 
 
@@ -278,8 +278,6 @@ def main(argv: list[str] | None = None) -> int:
         return no_new_docs.main(argv[1:])
     if argv[:1] == ["no-leaks"]:
         return no_leaks.main(argv[1:])
-    if argv[:1] == ["host-exec"]:
-        return host_exec.main()
     parser = argparse.ArgumentParser(prog="mutation-gate")
     parser.add_argument("--staged", action="store_true", help="gate the index (pre-commit)")
     parser.add_argument("--worktree", action="store_true", help="gate the working tree")
