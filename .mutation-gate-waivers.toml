@@ -544,7 +544,7 @@ reason = "equivalent: the cache slug is any fixed prefix of the root hash; its l
 
 [[waiver]]
 file = "mutation_gate/waivers.py"
-line = 114
+line = 135
 column = 76
 old = """0"""
 new = """1"""
