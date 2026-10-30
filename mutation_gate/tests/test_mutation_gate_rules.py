@@ -553,3 +553,17 @@ def test_status_command_files_green_prs_under_ready_and_red_prs_with_their_faili
     assert "failing check" in normalized
     assert "assigned to `@me`" in normalized
     assert "gh pr checks" in normalized
+
+
+def test_kata_scopes_lgtm_to_named_prs_routes_mid_lane_defects_and_states_acceptance_in_the_brief():
+    """Intent: #399 (decisions 16, 17 and 18 of #393)."""
+    content = (Path(__file__).parents[2] / "commands" / "kata.md").read_text()
+    normalized = " ".join(content.split())
+    assert 'An LGTM request names its PRs ("LGTM for #a, #b?")' in normalized
+    assert "a bare `LGTM` approves exactly the PRs the last request named" in normalized
+    assert "meets size:tiny and sits in a file the PR already touches" in normalized
+    assert "on its own line in the PR body" in normalized
+    assert "otherwise it is a follow-up" in normalized
+    assert "states the acceptance outcome in one sentence" in normalized
+    assert "naming the whole UI element for a UI ticket" in normalized
+    assert "`Observed:` line is checked against the brief's acceptance sentence" in normalized
