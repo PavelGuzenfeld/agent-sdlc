@@ -8,6 +8,7 @@ Slash commands live in `commands/`. The Claude plugin ships them;
 | Command | Use it when | Writes anything? |
 |---|---|---|
 | `/kata` | Work the `model:*`-labelled, `@me`-assigned ticket queue to merge | Branches, PRs, merges on `LGTM` |
+| `/status` | See open PRs, lanes and gate holds in one report | Nothing |
 | `/done` | Close out a bit of work and hand off to a fresh session | One commit; offers follow-up issues |
 | `/grill` | Resolve an open design question by question | With `plan`: a decision record and step tickets |
 | `/goon` | Approve the recommendation just proposed | Whatever that proposal named |
@@ -115,6 +116,11 @@ Slash commands live in `commands/`. The Claude plugin ships them;
 | `/cleanup` | This session's running state |
 | `/cleanup space` | Build cache and dangling images |
 | `/cleanup all` | Stops everything, prunes volumes |
+
+### /status
+
+- One read-only report: your open PRs with CI and blocker, worktrees and lanes,
+  gate holds, then `Ready on LGTM: #...` and `Needs you: ...`.
 
 ### /activity
 

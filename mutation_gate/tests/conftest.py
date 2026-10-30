@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -42,3 +43,15 @@ GDSCRIPT_BROKEN_SGCONFIG = (
 def require_gdscript_parser() -> None:
     if not GDSCRIPT_LIB.exists():
         pytest.skip(f"gdscript parser not installed at {GDSCRIPT_LIB} (bin/install-gdscript-parser)")
+
+
+@pytest.fixture
+def fake_claude(tmp_path, monkeypatch):
+    record = tmp_path / "claude-argv"
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    exe = bin_dir / "claude"
+    exe.write_text(f"#!/bin/sh\nprintf '%s\\0' \"$@\" > '{record}'\necho 'no gaps found'\n")
+    exe.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    return lambda: record.read_bytes().decode().split("\0")[:-1]
