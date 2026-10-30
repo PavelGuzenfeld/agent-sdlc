@@ -56,6 +56,11 @@ def test_run_exports_the_real_intent_and_test_content_before_reviewing(tmp_path,
     assert seen["test_file"] == test_file.read_text()
 
 
+def test_the_adversary_run_leaves_no_claude_session_behind(tmp_path, fake_claude):
+    adversary.run([], adversary.Intent("issue #394", "intent body"), "")
+    assert "--no-session-persistence" in fake_claude()
+
+
 def _repo(root):
     return repo_mod.Repo(
         root=root,

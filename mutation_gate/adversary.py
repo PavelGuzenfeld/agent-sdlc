@@ -128,7 +128,10 @@ def run_isolated(name: str, prompt: str, work: Path, extra: tuple[str, ...] = ()
     if not shutil.which("claude"):
         return f"{name} skipped: `claude` not on PATH"
     proc = subprocess.run(
-        ["claude", "-p", prompt, "--restricted", "--disable-slash-commands", *extra],
+        [
+            "claude", "-p", prompt, "--restricted", "--disable-slash-commands",
+            "--no-session-persistence", *extra,
+        ],
         cwd=work, stdin=subprocess.DEVNULL, capture_output=True, text=True,
         check=False, timeout=600,
     )

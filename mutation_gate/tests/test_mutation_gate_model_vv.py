@@ -271,6 +271,12 @@ def test_blind_pass_invokes_claude_with_the_blind_isolation_flags_and_closed_std
     assert seen["stdin"] == sp.DEVNULL
 
 
+def test_the_blind_pass_leaves_no_claude_session_behind(tmp_path, fake_claude):
+    repo = _model_repo(tmp_path, spec="MS-3 mixing\n")
+    model_vv.blind_pass(repo)
+    assert "--no-session-persistence" in fake_claude()
+
+
 def _issue_repo(tmp_path: Path, monkeypatch, body: str | None, cache_home: Path | None = None):
     monkeypatch.setenv("XDG_CACHE_HOME", str(cache_home or tmp_path / "cache"))
     monkeypatch.setattr(model_vv, "fetch_issue_body", lambda repo, number: body)
