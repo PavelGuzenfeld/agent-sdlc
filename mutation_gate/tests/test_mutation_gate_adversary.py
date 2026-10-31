@@ -186,6 +186,41 @@ def test_the_cleanup_leaves_the_projects_folder_of_another_cwd_alone(tmp_path, f
     assert sibling.is_dir()
 
 
+def test_a_work_dir_with_a_dot_in_its_path_has_its_folder_removed(tmp_path, fake_claude):
+    work = tmp_path / "gate.work"
+    work.mkdir()
+    adversary.run_isolated("adversary", "the prompt", work)
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    assert not _projects_folder(config, work).exists()
+
+
+def test_a_work_dir_reached_through_a_symlink_has_the_folder_named_for_its_real_path_removed(
+    tmp_path, fake_claude
+):
+    real = tmp_path / "real-work"
+    real.mkdir()
+    link = tmp_path / "link-work"
+    link.symlink_to(real, target_is_directory=True)
+    adversary.run_isolated("adversary", "the prompt", link)
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    assert not _projects_folder(config, real).exists()
+
+
+def test_a_symlinked_subfolder_keeps_the_projects_folder_and_its_empty_siblings(
+    tmp_path, fake_claude
+):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    folder = _projects_folder(config, work)
+    (folder / "memory").mkdir(parents=True)
+    (folder / "link").symlink_to(elsewhere, target_is_directory=True)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert (folder / "memory").is_dir()
+
+
 def test_an_isolated_run_is_capped_at_ten_minutes(tmp_path, monkeypatch):
     seen = {}
 
