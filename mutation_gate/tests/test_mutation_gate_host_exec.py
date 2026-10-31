@@ -450,4 +450,12 @@ def test_hook_denies_a_host_command_piped_from_docker_with_exit_2(repo, monkeypa
     payload = {"cwd": str(repo), "tool_input": {"command": "docker logs x | pytest"}}
     code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
     assert (code, out) == (2, "")
-    assert err.startswith("host-exec: `pytest` is piped from a docker command")
+    assert err == (
+        "host-exec: `pytest` is piped from a docker command and would run on the host. Split the "
+        "line so `pytest` is its own command and runs in img:1.\n"
+    )
+
+
+def test_no_image_denial_names_the_first_host_command_after_a_docker_segment(repo):
+    (repo / ".mutation-gate.toml").write_text("")
+    assert decide("docker build . && make && pytest", repo, False).reason.startswith("`make` would run")
