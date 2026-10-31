@@ -39,6 +39,15 @@ expect_silent 85 "" "exactly 85 percent prints nothing"
 expect_one_line 86 "" "/mnt/stub 86%" "86 percent names mount and usage"
 expect_one_line 100 "" "/mnt/stub 100%" "100 percent names mount and usage"
 expect_one_line 50 "/wt/leftover" "/wt/leftover" "root-owned worktree file is named"
+out=$(run_preflight 90 "")
+occurrences=$(printf '%s' "$out" | grep -o '/mnt/stub 90%' | wc -l)
+[ "$occurrences" -eq 1 ] || { echo "FAIL: shared mount named $occurrences times, expected once: $out" >&2; failures=$((failures + 1)); }
+
+set +e
+out=$(run_preflight - "" 2>&1)
+code=$?
+set -e
+[ "$code" -eq 0 ] && [ -z "$out" ] || { echo "FAIL: non-numeric usage must be silent on stdout and stderr (code $code, output '$out')" >&2; failures=$((failures + 1)); }
 
 [ "$failures" -eq 0 ] || exit 1
 echo "session-preflight: ok"
