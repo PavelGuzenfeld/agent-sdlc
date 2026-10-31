@@ -5,7 +5,10 @@ What runs without you asking, and the scripts behind it.
 ## What runs when
 
 ```text
+ session starts          ----> SessionStart: session-preflight.sh (prints warnings)
+
  agent runs a Bash command ----> PreToolUse: git-guardrail.sh  (can deny)
+                           ----> PreToolUse: mutation_gate.host_exec  (can deny or rewrite)
 
  git commit
    |-- pre-commit stage ----> rules-check, mutation-gate, no-new-docs
@@ -20,12 +23,16 @@ What runs without you asking, and the scripts behind it.
 
 | Event | Script | Declared in |
 |---|---|---|
+| `SessionStart` | `session-preflight.sh` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `mutation_gate.host_exec` | `hooks/hooks.json` |
 | `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `say-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `codex-review-hook.sh` | `hooks/hooks.json` |
 
+- `session-preflight.sh` prints one `preflight: ...` line at session start,
+  or nothing. It warns when `$TMPDIR` or `$HOME` sits on a filesystem over 85%
+  used, or when a worktree of the repo holds a root-owned file.
 - `mutation-gate-hook.sh` exits quietly unless the repo has a
   `.mutation-gate.toml`, then runs `mutation-gate --worktree`.
 - Adding that file is all a repo needs for Stop-time gating.
@@ -49,9 +56,14 @@ A PreToolUse hook on every Bash call the agent makes. It denies:
 | `git push --force` / `-f` without `--force-with-lease` | Overwrites a shared branch |
 | `git push` with a `+refspec` | Same, by another spelling |
 | `git branch -D <b>` | Deletes unmerged work |
+| `git checkout` / `git switch` off the default branch, in the primary worktree | Strands the primary checkout on a feature branch; use `git worktree add` |
 
 - `branch -D` is allowed when `gh` finds a merged PR for the branch and the
   branch tip is that PR's head, or an ancestor of it.
+- A checkout or switch that stays on the default branch, or runs in a linked
+  worktree, is allowed. Restoring a path (`git checkout -- <file>`) is allowed.
+- A preceding `cd <path>` and a `git -C <path>` are followed, both for the
+  checkout/switch check and for `branch -D`.
 - A denial names the rule and how to run it yourself:
 
 ```text
@@ -62,6 +74,29 @@ git-guardrail: blocks git reset --hard
 
 - It matches command text, so the pattern inside a heredoc or `sed` script
   also trips it. Edit files with the editor tool instead.
+
+## host-exec
+
+A PreToolUse hook on every Bash call (`mutation_gate/host_exec.py`). It acts
+only in a repo with a `.mutation-gate.toml`, and never inside a container.
+
+| Command | Result |
+|---|---|
+| Host `python3`, `pytest`, `make`, `cmake`, `colcon` or `pip install` | Rewritten to `docker run` in `test_image`, with `--user $(id -u):$(id -g)`, the repo mounted at `/w` |
+| Same, with `test_image` empty | Denied, naming the config key |
+| `docker run` that bind-mounts the repo or a worktree without `--user` | Denied, with the command rewritten to carry `--user` |
+| Host command piped from a docker command | Denied: split the line |
+
+- `chown -R $(id -u):$(id -g) <mount target>` inside a `docker run` is exempt
+  from the `--user` deny. It is the teardown that hands a tree back.
+- A line with a docker segment is rewritten per element: each `&&`, `||`, `;`
+  or newline element that has a host command and does not start with `docker`
+  is wrapped; the rest stays.
+- `is_test_image_used = false` turns the rewrite and the no-image deny off. The
+  `--user` deny stays.
+- It passes through with no `.mutation-gate.toml`, inside a container
+  (`/.dockerenv`), and with a config it cannot read, which prints a notice.
+- A denial and a notice are prefixed `host-exec:`.
 
 ## Pre-commit hooks
 
@@ -101,6 +136,7 @@ pre-commit install --hook-type commit-msg
 
 | Script | What it does |
 |---|---|
+| `session-preflight.sh` | SessionStart hook: warns on a full disk or a root-owned file in a worktree |
 | `git-guardrail.sh` | The PreToolUse hook above |
 | `mutation-gate-hook.sh` | Stop hook: finds the repo root from the hook payload, runs the gate if opted in |
 | `codex-review-hook.sh`, `codex-review-prompt.md` | Stop hook: the codex review that blocks only on reproduced regressions |

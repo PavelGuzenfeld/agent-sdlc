@@ -89,7 +89,7 @@ to see its short definition.
 | Hook | A command Claude Code runs on an event, without being asked | [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code/hooks), [Hooks and tools](tools.md) |
 | PreToolUse | The hook event before each tool call. The git guardrail runs there | [Hooks and tools](tools.md#git-guardrail) |
 | Stop hook | The hook event when the agent finishes a turn. The gate runs there | [Hooks and tools](tools.md#claude-hooks) |
-| Git guardrail | The PreToolUse hook that denies `reset --hard`, `add -A`, force-push and unmerged `branch -D` | [Hooks and tools](tools.md#git-guardrail) |
+| Git guardrail | The PreToolUse hook that denies `reset --hard`, `add -A`, force-push, unmerged `branch -D`, and checkout or switch off the default branch in the primary worktree | [Hooks and tools](tools.md#git-guardrail) |
 | `--force-with-lease` | A force-push that refuses if the remote moved since you last fetched | [git docs](https://git-scm.com/docs/git-push) |
 | pre-commit | The framework that runs checks at `git commit`; this repo ships hooks for it | [pre-commit.com](https://pre-commit.com/), [Hooks and tools](tools.md#pre-commit-hooks) |
 | commit-msg stage | The pre-commit stage that runs on the commit message, after you write it | [Hooks and tools](tools.md#pre-commit-hooks) |

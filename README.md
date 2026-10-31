@@ -58,7 +58,8 @@ memory.
  | implement                |  smallest change           [diff-discipline]
  |                          |  no comments, canonical names
  +--------------------------+         [code-clarity] [naming]
-   |  every Bash call: git-guardrail  x reset --hard, add -A, force-push
+   |  every Bash call: git-guardrail  x reset --hard, add -A, force-push, checkout in the primary worktree
+   |                   host-exec      host python3/pytest/make run in test_image
    v
  +--------------------------+
  | git commit               |
@@ -178,7 +179,7 @@ them. Setup order, the CI job and the `docs/` allowlist:
 | `rules/` | How to work; synced into a repo with `mutation-gate rules sync` |
 | `commands/` | Slash commands: `/kata`, `/done`, `/grill`, `/rectify` … |
 | `skills/` | On-demand playbooks: `/diagnose`, `/sol-budget`, `/verify-generated-diff` … |
-| `bin/` | Hooks and helpers: `git-guardrail.sh`, the `/say` stack |
+| `bin/` | Hooks and helpers: `session-preflight.sh`, `git-guardrail.sh`, the `/say` stack. `mutation_gate/host_exec.py` is the host-exec hook |
 | `mutation_gate/` | The gate and the `mutation-gate` CLI |
 
 CI runs `scripts/no-leaks.sh` on every PR. It flags emails, RFC1918

@@ -48,7 +48,16 @@ Slash commands live in `commands/`. The Claude plugin ships them;
   worker on the labelled model.
 - The worker writes the slice test first, implements, runs the gate, opens a
   PR with `Closes #42`, and waits for green CI.
-- Nothing merges until you type `LGTM` at the prompt.
+- The brief states the acceptance outcome in one sentence.
+- The PR body carries a Verification block: `Built:`, `Tests:`, `Observed:`,
+  `Not verified:`. An empty `Observed:` sends the PR back to the worker.
+- A new `#!` file that is not executable fails review the same way.
+- A defect found mid-lane joins the PR only when it is size:tiny and in a file
+  the PR already touches; otherwise it is a follow-up.
+- Nothing merges until you type `LGTM` at the prompt. The request names its
+  PRs ("LGTM for #a, #b?") and a bare `LGTM` approves exactly those.
+- On merge, root-owned files in the worktree are handed back with a `chown`
+  in Docker before it is removed.
 
 ```text
 /kata 42
@@ -120,7 +129,8 @@ Slash commands live in `commands/`. The Claude plugin ships them;
 ### /status
 
 - One read-only report: your open PRs with CI and blocker, worktrees and lanes,
-  gate holds, then `Ready on LGTM: #...` and `Needs you: ...`.
+  gate holds, the session-start preflight line if one fired, then
+  `Ready on LGTM: #...` and `Needs you: ...`.
 
 ### /activity
 

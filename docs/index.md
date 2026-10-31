@@ -31,7 +31,7 @@ have to remember them.
 | Lost intent | Intent lives in the tracker; new `.md` files in the tree are blocked | [Rules → Tickets](rules.md#tickets) |
 | Model code drifting from its spec | Model V&V: spec issue, `MS-n` citations, golden hashes, a blind pass | [Techniques](techniques.md#model-vv) |
 | Vague or inconsistent names | Vocabulary dictionary, naming molds, WordNet synonym check | [Techniques](techniques.md#vocabulary-and-naming) |
-| Destructive git | A PreToolUse hook that blocks `reset --hard`, `add -A`, force-push | [Hooks and tools](tools.md#git-guardrail) |
+| Destructive git | A PreToolUse hook that blocks `reset --hard`, `add -A`, force-push, and checkout or switch off the default branch in the primary worktree | [Hooks and tools](tools.md#git-guardrail) |
 | AI tells in commits and PRs | Commit-message check for banned words and attribution trailers | [CLI](cli.md#commit-msg) |
 | Leaked identity or internal names | `no-leaks` scan on the staged diff and message | [CLI](cli.md#no-leaks) |
 
@@ -66,8 +66,8 @@ have to remember them.
   `/kata`, `/done`, `/grill`.
 - **Skills** (`skills/`) are playbooks the agent loads on demand:
   `/diagnose`, `/sol-budget`, `/verify-generated-diff`.
-- **Hooks** run without asking: the gate at Stop, the git guardrail before
-  every Bash call.
+- **Hooks** run without asking: a preflight check at session start, the git
+  guardrail and host-exec before every Bash call, the gate at Stop.
 - **The gate** (`mutation_gate/`, the `mutation-gate` CLI) is the only part
   that can say no.
 
