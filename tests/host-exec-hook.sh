@@ -105,6 +105,44 @@ code=$?
 set -e
 [ "$code" -eq 0 ] && [ -z "$out" ] || fail "kata teardown chown: expected silent pass, got $code" "$out"
 
+docker_line="docker image inspect $image >/dev/null && pytest -q"
+set +e
+out=$(run_hook "$with_image" "$docker_line" 2>"$with_image.err")
+code=$?
+set -e
+if [ "$code" -ne 0 ]; then
+    fail "docker segment plus pytest with test_image set: expected exit 0, got $code" "$(cat "$with_image.err")"
+else
+    rewritten=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.updatedInput.command')
+    set +e
+    run_out=$(cd "$with_image" && sh -c "$rewritten" 2>&1)
+    run_code=$?
+    set -e
+    if [ "$run_code" -ne 0 ]; then
+        fail "docker segment on the host plus pytest in the image failed with $run_code" "$run_out" "$rewritten"
+    elif ! printf '%s' "$run_out" | grep -q '1 passed'; then
+        fail "pytest after a docker segment did not run in the image" "$run_out"
+    fi
+fi
+
+with_sub=$(new_repo "test_image = \"$image\"
+")
+mkdir "$with_sub/sub"
+printf 'def test_in_sub():\n    pass\n' > "$with_sub/sub/test_in_sub.py"
+out=$(run_hook "$with_sub" "docker image inspect $image >/dev/null && cd sub && pytest -q" 2>/dev/null)
+rewritten=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.updatedInput.command')
+set +e
+run_out=$(cd "$with_sub" && sh -c "$rewritten" 2>&1)
+set -e
+printf '%s' "$run_out" | grep -q '1 passed' || fail "pytest after cd sub did not run in sub" "$run_out" "$rewritten"
+
+set +e
+run_hook "$without_image" "$docker_line" >/dev/null 2>"$without_image.err"
+code=$?
+set -e
+[ "$code" -eq 2 ] || fail "docker segment plus pytest with no image: expected exit 2, got $code"
+grep -q 'test_image' "$without_image.err" || fail "docker-line denial does not name test_image" "$(cat "$without_image.err")"
+
 no_config=$(new_repo "")
 rm "$no_config/.mutation-gate.toml"
 set +e

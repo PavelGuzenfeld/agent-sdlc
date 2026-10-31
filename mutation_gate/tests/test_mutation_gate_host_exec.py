@@ -5,6 +5,7 @@ bind-mounts the repo or a worktree without `--user` is denied with the fix."""
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -76,7 +77,7 @@ def test_image_with_shell_characters_is_quoted(repo):
 
 
 @pytest.mark.parametrize("command", [
-    "pip list", "pip3 install x", "git status", "ls pytest", "docker build . && pytest",
+    "pip list", "pip3 install x", "git status", "ls pytest",
     'docker run --rm -u 1:1 -v "$PWD:/w" img pytest',
 ])
 def test_other_commands_pass_through(repo, command):
@@ -355,3 +356,34 @@ def test_module_entry_point_runs_the_hook(tmp_path):
     )
     assert result.returncode == 2
     assert result.stderr.endswith(f"Run instead:\n  docker run {USER} -v .:/w img\n")
+
+
+def _in_image(element: str) -> str:
+    return _rewritten(shlex.quote(element)).command
+
+
+@pytest.mark.parametrize("command, expected", [
+    ("docker build . && pytest -q", f"docker build . && {_in_image('pytest -q')}"),
+    ("docker build .  &&  pytest -q | tail -1 ; ls",
+     f"docker build .  &&  {_in_image('pytest -q | tail -1')} ; ls"),
+    ("docker build . || make test\nls", f"docker build . || {_in_image('make test')}\nls"),
+    ("docker build . && cd sub && pytest -q",
+     f"docker build . && cd sub && {_in_image('pytest -q')}"),
+    ("pytest -q && docker push x && make", f"{_in_image('pytest -q')} && docker push x && {_in_image('make')}"),
+    ("docker ps | grep pytest && echo 'a && pytest'", None),
+    ("docker build . && echo $(pytest; true)", None),
+    ('docker build . && echo "a\\" ; pytest" && make',
+     f'docker build . && echo "a\\" ; pytest" && {_in_image("make")}'),
+    ("docker build . && echo 'a;b' && make", f"docker build . && echo 'a;b' && {_in_image('make')}"),
+    ("docker build . && echo \\a;make", f"docker build . && echo \\a;{_in_image('make')}"),
+    ("docker build . && ( true; make ) && docker push x",
+     f"docker build . && {_in_image('( true; make )')} && docker push x"),
+    ("docker build . && echo a) ; make", f"docker build . && echo a) ; {_in_image('make')}"),
+])
+def test_a_docker_segment_stays_on_the_host_and_each_host_element_runs_in_the_image(repo, command, expected):
+    assert decide(command, repo, False) == (Rewrite(expected) if expected else None)
+
+
+def test_no_image_denies_a_line_with_a_docker_segment_naming_the_key(repo):
+    (repo / ".mutation-gate.toml").write_text("")
+    assert "test_image" in decide("docker build . && pytest -q", repo, False).reason

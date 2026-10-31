@@ -18,6 +18,7 @@ CONTAINER_MARKER = Path("/.dockerenv")
 HOST_COMMANDS = frozenset({"python3", "pytest", "make", "cmake", "colcon"})
 USER_FLAG = "--user $(id -u):$(id -g)"
 SEPARATORS = ";&|"
+LIST_SEPARATORS = ("&&", "||", ";", "\n")
 PWD_PREFIX = re.compile(r"^(\$\{PWD\}|\$PWD|\$\(pwd\)|`pwd`)")
 USER_FLAGS = frozenset({"-u", "--user"})
 VOLUME_FLAGS = frozenset({"-v", "--volume"})
@@ -125,6 +126,48 @@ def is_host_command(tokens: list[str]) -> bool:
     return tokens[0] in HOST_COMMANDS or tokens[:2] == ["pip", "install"]
 
 
+def split_list(command: str) -> list[str]:
+    pieces: list[str] = []
+    start = depth = index = 0
+    quote = ""
+    while index < len(command):
+        char = command[index]
+        if quote:
+            index += char == "\\" and quote == '"'
+            quote = "" if char == quote else quote
+        elif char == "\\":
+            index += 1
+        elif char in "'\"":
+            quote = char
+        elif char in "()":
+            depth = max(depth + (1 if char == "(" else -1), 0)
+        elif depth == 0:
+            separator = next((s for s in LIST_SEPARATORS if command.startswith(s, index)), None)
+            if separator:
+                pieces += [command[start:index], separator]
+                index += len(separator)
+                start = index
+                continue
+        index += 1
+    return pieces + [command[start:]]
+
+
+def in_image(command: str, image: str) -> str:
+    return (f'docker run --rm {USER_FLAG} -e HOME=/tmp -v "$PWD:/w" -w /w '
+            f"{shlex.quote(image)} sh -c {shlex.quote(command)}")
+
+
+def rewrite_host_elements(command: str, image: str) -> str:
+    pieces = split_list(command)
+    for index in range(0, len(pieces), 2):
+        padded = pieces[index]
+        element = padded.strip()
+        parts = segments(element)
+        if parts and parts[0][0] != "docker" and any(is_host_command(part) for part in parts):
+            pieces[index] = padded.replace(element, in_image(element, image), 1)
+    return "".join(pieces)
+
+
 def decide(command: str, cwd: Path, is_in_container: bool) -> Denial | Rewrite | Notice | None:
     toplevel = git_lines(cwd, "rev-parse", "--show-toplevel")
     if toplevel is None or not (Path(toplevel[0]) / CONFIG_NAME).exists():
@@ -152,18 +195,16 @@ def decide(command: str, cwd: Path, is_in_container: bool) -> Denial | Rewrite |
                         f"which leaves root-owned files. Run instead:\n  {with_user(command)}"
                     )
     host = next((part[0] for part in parts if is_host_command(part)), None)
-    if (host is None or is_in_container or not config.is_test_image_used
-            or any(part[0] == "docker" for part in parts)):
+    if host is None or is_in_container or not config.is_test_image_used:
         return None
     if not config.test_image:
         return Denial(
             f"`{host}` would run on the host. Set test_image = \"<image>\" in "
             f"{CONFIG_NAME} to run it in that image, or is_test_image_used = false to keep it on the host."
         )
-    return Rewrite(
-        f'docker run --rm {USER_FLAG} -e HOME=/tmp -v "$PWD:/w" -w /w '
-        f"{shlex.quote(config.test_image)} sh -c {shlex.quote(command)}"
-    )
+    if any(part[0] == "docker" for part in parts):
+        return Rewrite(rewrite_host_elements(command, config.test_image))
+    return Rewrite(in_image(command, config.test_image))
 
 
 def main() -> int:
