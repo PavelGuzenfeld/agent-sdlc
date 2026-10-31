@@ -2,8 +2,12 @@
 built from; run_isolated must not write its own prompt into the work dir it
 hands to the isolated `claude` process."""
 
+import os
+import re
 import subprocess as sp
 from pathlib import Path
+
+import pytest
 
 from mutation_gate import adversary, repo as repo_mod
 
@@ -125,3 +129,140 @@ def test_the_tickets_title_and_body_join_with_a_blank_line(tmp_path, monkeypatch
     monkeypatch.setattr(adversary.subprocess, "run", fake_run)
     intent = adversary.resolve_intent(_repo(tmp_path), None)
     assert intent.text == "t\n\nb"
+
+
+def _projects_folder(config: Path, work: Path) -> Path:
+    return config / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(work.resolve()))
+
+
+def test_the_run_leaves_no_empty_projects_folder_for_its_cwd(tmp_path, fake_claude):
+    work = tmp_path / "gate work"
+    work.mkdir()
+    adversary.run_isolated("adversary", "the prompt", work)
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    assert not _projects_folder(config, work).exists()
+
+
+def test_a_projects_folder_holding_a_file_is_left_alone_including_its_empty_subfolders(
+    tmp_path, fake_claude
+):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    folder = _projects_folder(config, work)
+    held = folder / "notes.md"
+    folder.mkdir(parents=True)
+    held.write_text("kept\n")
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert held.read_text() == "kept\n"
+    assert (folder / "memory").is_dir()
+
+
+def test_a_failed_run_still_leaves_no_empty_projects_folder(tmp_path, monkeypatch):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    config = tmp_path / "claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+
+    def fake_run(argv, **kwargs):
+        (_projects_folder(config, work) / "memory").mkdir(parents=True)
+        return sp.CompletedProcess(argv, 1, stdout="", stderr="boom")
+
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert not _projects_folder(config, work).exists()
+
+
+def test_the_cleanup_leaves_the_projects_folder_of_another_cwd_alone(tmp_path, fake_claude):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    other = tmp_path / "other-work"
+    other.mkdir()
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    sibling = _projects_folder(config, other) / "memory"
+    sibling.mkdir(parents=True)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert sibling.is_dir()
+
+
+def test_a_work_dir_with_a_dot_in_its_path_has_its_folder_removed(tmp_path, fake_claude):
+    work = tmp_path / "gate.work"
+    work.mkdir()
+    adversary.run_isolated("adversary", "the prompt", work)
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    assert not _projects_folder(config, work).exists()
+
+
+def test_a_work_dir_reached_through_a_symlink_has_the_folder_named_for_its_real_path_removed(
+    tmp_path, fake_claude
+):
+    real = tmp_path / "real-work"
+    real.mkdir()
+    link = tmp_path / "link-work"
+    link.symlink_to(real, target_is_directory=True)
+    adversary.run_isolated("adversary", "the prompt", link)
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    assert not _projects_folder(config, real).exists()
+
+
+def test_a_symlinked_subfolder_keeps_the_projects_folder_and_its_empty_siblings(
+    tmp_path, fake_claude
+):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    folder = _projects_folder(config, work)
+    (folder / "memory").mkdir(parents=True)
+    (folder / "link").symlink_to(elsewhere, target_is_directory=True)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert (folder / "memory").is_dir()
+
+
+def test_an_isolated_run_is_capped_at_ten_minutes(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kwargs):
+        seen["timeout"] = kwargs["timeout"]
+        return sp.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run_isolated("adversary", "the prompt", tmp_path)
+    assert seen["timeout"] == 600
+
+
+def test_a_timed_out_run_still_leaves_no_empty_projects_folder(tmp_path, monkeypatch):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    config = tmp_path / "claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+
+    def fake_run(argv, **kwargs):
+        (_projects_folder(config, work) / "memory").mkdir(parents=True)
+        raise sp.TimeoutExpired(argv, 600)
+
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    with pytest.raises(sp.TimeoutExpired):
+        adversary.run_isolated("adversary", "the prompt", work)
+    assert not _projects_folder(config, work).exists()
+
+
+def test_without_claude_config_dir_the_folder_is_cleared_under_home(tmp_path, monkeypatch):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    home = tmp_path / "home"
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+
+    def fake_run(argv, **kwargs):
+        (_projects_folder(home / ".claude", work) / "memory").mkdir(parents=True)
+        return sp.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert not _projects_folder(home / ".claude", work).exists()

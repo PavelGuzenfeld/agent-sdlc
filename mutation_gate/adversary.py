@@ -7,7 +7,9 @@ cannot be anchored by what the code happens to do. It reports; it never blocks.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -127,14 +129,36 @@ def run_isolated(name: str, prompt: str, work: Path, extra: tuple[str, ...] = ()
     cannot wait on a terminal. Returns findings or the one-line reason it did not run."""
     if not shutil.which("claude"):
         return f"{name} skipped: `claude` not on PATH"
-    proc = subprocess.run(
-        [
-            "claude", "-p", prompt, "--restricted", "--disable-slash-commands",
-            "--no-session-persistence", *extra,
-        ],
-        cwd=work, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-        check=False, timeout=600,
-    )
+    try:
+        proc = subprocess.run(
+            [
+                "claude", "-p", prompt, "--restricted", "--disable-slash-commands",
+                "--no-session-persistence", *extra,
+            ],
+            cwd=work, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            check=False, timeout=600,
+        )
+    finally:
+        _remove_empty_projects_folder(work)
     if proc.returncode != 0:
         return f"{name} failed to run: {proc.stderr.strip()[:200]}"
     return proc.stdout.strip()
+
+
+def _remove_empty_projects_folder(work: Path) -> None:
+    """Deletes the `claude` projects folder for `work` only when it holds no
+    files or symlinks. rmdir alone, never rmtree: a folder with anything in it
+    belongs to the user."""
+    folder = _claude_projects_dir() / re.sub(r"[^A-Za-z0-9]", "-", str(work.resolve()))
+    tree = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        if filenames or any(Path(dirpath, d).is_symlink() for d in dirnames):
+            return
+        tree.append(dirpath)
+    for dirpath in reversed(tree):
+        with contextlib.suppress(OSError):
+            os.rmdir(dirpath)
+
+
+def _claude_projects_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
