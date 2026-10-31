@@ -13,6 +13,28 @@ deny() {
     exit 2
 }
 
+effective_dir="."
+
+apply_cd_segment() {
+    set -- $1
+    case "${2:-}" in
+        ""|-*|Q) effective_dir="." ;;
+        "~"|'$HOME') effective_dir="$HOME" ;;
+        "~/"*) effective_dir="$HOME/${2#\~/}" ;;
+        '$HOME/'*) effective_dir="$HOME/${2#\$HOME/}" ;;
+        /*) effective_dir="$2" ;;
+        *) effective_dir="$effective_dir/$2" ;;
+    esac
+}
+
+path_in_effective_dir() {
+    case "$1" in
+        "") printf '%s' "$effective_dir" ;;
+        /*) printf '%s' "$1" ;;
+        *) printf '%s/%s' "$effective_dir" "$1" ;;
+    esac
+}
+
 check_delete_branch_head() {
     b="$1"
     path="$2"
@@ -93,14 +115,24 @@ parse_delete_targets() {
     done
 }
 
-branch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- 'git[[:space:]]+(-C[[:space:]]+[^;&|[:space:]]+[[:space:]]+)?branch[^;&|]*' 2>/dev/null || true)
+branch_segments=$(printf '%s' "$cmd_unquoted" | grep -Eo -- '(^|[;&|(])[[:space:]]*cd([[:space:]]+[^;&|[:space:]]*)?|git[[:space:]]+(-C[[:space:]]+[^;&|[:space:]]+[[:space:]]+)?branch[^;&|]*' 2>/dev/null || true)
 delete_ok=1
 delete_reason=""
 old_ifs=$IFS
 IFS='
 '
+set -f
 for seg in $branch_segments; do
     IFS=$old_ifs
+    seg=$(printf '%s' "$seg" | sed -E 's/^[;&|( ]*//')
+    case "$seg" in
+        cd|"cd "*)
+            apply_cd_segment "$seg"
+            IFS='
+'
+            continue
+            ;;
+    esac
     parse_delete_targets $seg
     if [ "$D_HAS_D" -eq 1 ]; then
         if [ "$D_OK" -eq 0 ] || [ -z "$D_BRANCHES" ]; then
@@ -109,7 +141,7 @@ for seg in $branch_segments; do
         else
             for b in $D_BRANCHES; do
                 check_status=0
-                check_reason=$(check_delete_branch_head "$b" "$D_PATH") || check_status=$?
+                check_reason=$(check_delete_branch_head "$b" "$(path_in_effective_dir "$D_PATH")") || check_status=$?
                 if [ "$check_status" -ne 0 ]; then
                     delete_ok=0
                     delete_reason="$check_reason"
@@ -121,6 +153,7 @@ for seg in $branch_segments; do
 '
 done
 IFS=$old_ifs
+set +f
 if [ "$delete_ok" -eq 0 ]; then
     deny "git branch -D" "git safety protocol: never delete a branch with -D without explicit request ($delete_reason)"
 fi
@@ -200,14 +233,7 @@ for seg in $switch_segments; do
     seg=$(printf '%s' "$seg" | sed -E 's/^[;&|( ]*//')
     set -- $seg
     if [ "$1" = "cd" ]; then
-        case "${2:-}" in
-            ""|-*|Q) effective_dir="." ;;
-            "~"|'$HOME') effective_dir="$HOME" ;;
-            "~/"*) effective_dir="$HOME/${2#\~/}" ;;
-            '$HOME/'*) effective_dir="$HOME/${2#\$HOME/}" ;;
-            /*) effective_dir="$2" ;;
-            *) effective_dir="$effective_dir/$2" ;;
-        esac
+        apply_cd_segment "$seg"
         IFS='
 '
         continue
@@ -219,10 +245,7 @@ for seg in $switch_segments; do
             checkout|switch) shift; break ;;
         esac
         if [ "$prev" = "-C" ]; then
-            case "$1" in
-                /*) repo_path="$1" ;;
-                *) repo_path="$effective_dir/$1" ;;
-            esac
+            repo_path=$(path_in_effective_dir "$1")
         fi
         prev="$1"
         shift

@@ -188,6 +188,30 @@ STUB
     expect_allow "$repo_script" "$label" "redirect ahead of the branch name is skipped, not treated as a branch" \
         "git -C $tmp branch -D 2>/dev/null merged-ok"
 
+    hook_cwd=$(mktemp -d)
+    expect_allow "$repo_script" "$label" "cd to the repo then delete a merged branch from another cwd" \
+        "cd $tmp && git branch -D merged-ok"
+    expect_block "$repo_script" "$label" "cd to the repo then delete an unmerged tip from another cwd" \
+        "cd $tmp && git branch -D one-past"
+    expect_allow "$repo_script" "$label" "cd with semicolon then delete a merged branch" \
+        "cd $tmp; git branch -D merged-ok"
+    expect_allow "$repo_script" "$label" "relative cd to the repo" \
+        "cd $(realpath --relative-to="$hook_cwd" "$tmp") && git branch -D merged-ok"
+    expect_allow "$repo_script" "$label" "relative -C after cd" \
+        "cd $(dirname "$tmp") && git -C $(basename "$tmp") branch -D merged-ok"
+    expect_block_reason "$repo_script" "$label" "cd away again judges the branch in the later directory" \
+        "no local branch" "cd $tmp && cd $hook_cwd && git branch -D merged-ok"
+    expect_block_reason "$repo_script" "$label" "quoted cd target falls back to hook cwd" \
+        "no local branch" "cd \"$tmp\" && git branch -D merged-ok"
+    saved_home="$HOME"
+    HOME=$(dirname "$tmp")
+    expect_allow "$repo_script" "$label" "tilde cd to the repo" \
+        "cd ~/$(basename "$tmp") && git branch -D merged-ok"
+    expect_allow "$repo_script" "$label" "HOME variable cd to the repo" \
+        "cd \$HOME/$(basename "$tmp") && git branch -D merged-ok"
+    HOME="$saved_home"
+    hook_cwd=""
+
     export PATH="$minimal_bin"
     expect_block_reason "$repo_script" "$label" "no gh on PATH" "no gh on PATH" \
         "git -C $tmp branch -D merged-ok"
