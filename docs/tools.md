@@ -21,6 +21,7 @@ What runs without you asking, and the scripts behind it.
 | Event | Script | Declared in |
 |---|---|---|
 | `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
+| `PreToolUse` (Bash) | `mutation_gate.host_exec` | `hooks/hooks.json` |
 | `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `say-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `codex-review-hook.sh` | `hooks/hooks.json` |
