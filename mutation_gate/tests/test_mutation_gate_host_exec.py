@@ -328,11 +328,15 @@ def test_handing_the_tree_back_to_the_user_needs_no_user_flag(repo, owner, mount
     assert decide(command, repo, False) is None
 
 
-@pytest.mark.parametrize("tail", ["chown -R 0:0 /w", "chown -R $(id -u):$(id -g) /x",
+@pytest.mark.parametrize("tail", ["chown -R $(id -u):$(id -g) /x",
                                   "chown -R $(id -u):$(id -g) /w /etc", "chown $(id -u):$(id -g) /w",
                                   "sh -c 'chown -R $(id -u):$(id -g) /w'"])
 def test_any_other_root_command_on_the_mount_is_still_denied(repo, tail):
     _denial(f"docker run --rm -v .:/w alpine:3.20 {tail}", repo)
+
+
+def test_chown_to_another_user_is_still_denied(repo):
+    _denial(f"docker run --rm -v .:/w alpine:3.20 chown -R {os.getuid() + 1}:{os.getgid()} /w", repo)
 
 
 def test_handback_to_a_mount_outside_the_repo_does_not_excuse_an_inside_one(repo):
