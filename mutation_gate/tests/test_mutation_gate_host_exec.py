@@ -118,13 +118,14 @@ def test_config_is_read_from_the_toplevel_not_the_subdirectory(repo):
 def _denial(command: str, cwd: Path) -> Denial:
     verdict = decide(command, cwd, False)
     assert isinstance(verdict, Denial), verdict
-    assert f"docker run {USER}" in verdict.reason
+    corrected = command.replace("docker run", f"docker run {USER}")
+    assert verdict.reason.endswith(f"Run instead:\n  {corrected}")
     return verdict
 
 
 def test_bind_mount_without_user_is_denied_with_the_corrected_command(repo):
     command = 'docker run --rm -v "$PWD:/w" -w /w img true && docker  run img'
-    assert _denial(command, repo).reason == (
+    assert decide(command, repo, False) == Denial(
         "docker run bind-mounts $PWD inside the repo without --user, which leaves "
         f"root-owned files. Run instead:\n  docker run {USER} --rm -v \"$PWD:/w\" -w /w img "
         f"true && docker run {USER} img"
@@ -349,4 +350,4 @@ def test_module_entry_point_runs_the_hook(tmp_path):
         text=True, cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(Path(host_exec.__file__).parents[1])},
     )
     assert result.returncode == 2
-    assert f"Run instead:\n  docker run {USER} -v .:/w img" in result.stderr
+    assert result.stderr.endswith(f"Run instead:\n  docker run {USER} -v .:/w img\n")
