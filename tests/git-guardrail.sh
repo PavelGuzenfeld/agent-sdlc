@@ -262,9 +262,24 @@ run_primary_worktree_cases() {
     expect_block "$repo_script" "$label" "relative -C after cd primary"           "cd $primary && git -C . checkout $sha"
     expect_allow "$repo_script" "$label" "cd primary then back to linked"         "cd $primary && cd $linked && git checkout $sha"
     expect_allow "$repo_script" "$label" "bare cd falls back to hook cwd"         "cd && git checkout $sha"
+    expect_allow "$repo_script" "$label" "quoted cd target from linked is judged by hook cwd" \
+        "cd \"$primary\" && git checkout $sha"
+    expect_block "$repo_script" "$label" "chained relative cds join onto each other" \
+        "cd .. && cd .. && cd $(basename "$primary") && git checkout $sha"
+    saved_home="$HOME"
+    HOME=$(dirname "$primary")
+    expect_block "$repo_script" "$label" "tilde cd to primary from linked" \
+        "cd ~/$(basename "$primary") && git checkout $sha"
+    expect_block "$repo_script" "$label" "bare tilde cd to primary from linked" \
+        "cd ~ && cd $(basename "$primary") && git checkout $sha"
+    expect_block "$repo_script" "$label" "HOME variable cd to primary from linked" \
+        "cd \$HOME/$(basename "$primary") && git checkout $sha"
+    HOME="$saved_home"
     hook_cwd="$primary"
     expect_allow "$repo_script" "$label" "cd linked then checkout sha from primary" "cd $linked && git checkout $sha"
     expect_block "$repo_script" "$label" "checkout sha from primary cwd"          "git checkout $sha"
+    expect_block "$repo_script" "$label" "quoted cd target from primary is judged by hook cwd" \
+        "cd \"$linked\" && git checkout $sha"
     hook_cwd=""
 }
 

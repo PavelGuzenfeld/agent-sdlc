@@ -202,6 +202,9 @@ for seg in $switch_segments; do
     if [ "$1" = "cd" ]; then
         case "${2:-}" in
             ""|-*|Q) effective_dir="." ;;
+            "~"|'$HOME') effective_dir="$HOME" ;;
+            "~/"*) effective_dir="$HOME/${2#\~/}" ;;
+            '$HOME/'*) effective_dir="$HOME/${2#\$HOME/}" ;;
             /*) effective_dir="$2" ;;
             *) effective_dir="$effective_dir/$2" ;;
         esac
