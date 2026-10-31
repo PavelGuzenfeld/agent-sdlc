@@ -158,6 +158,34 @@ def test_a_projects_folder_holding_a_file_is_left_alone_including_its_empty_subf
     assert (folder / "memory").is_dir()
 
 
+def test_a_failed_run_still_leaves_no_empty_projects_folder(tmp_path, monkeypatch):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    config = tmp_path / "claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    monkeypatch.setattr(adversary.shutil, "which", lambda name: "/usr/bin/claude")
+
+    def fake_run(argv, **kwargs):
+        (_projects_folder(config, work) / "memory").mkdir(parents=True)
+        return sp.CompletedProcess(argv, 1, stdout="", stderr="boom")
+
+    monkeypatch.setattr(adversary.subprocess, "run", fake_run)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert not _projects_folder(config, work).exists()
+
+
+def test_the_cleanup_leaves_the_projects_folder_of_another_cwd_alone(tmp_path, fake_claude):
+    work = tmp_path / "gate-work"
+    work.mkdir()
+    other = tmp_path / "other-work"
+    other.mkdir()
+    config = Path(os.environ["CLAUDE_CONFIG_DIR"])
+    sibling = _projects_folder(config, other) / "memory"
+    sibling.mkdir(parents=True)
+    adversary.run_isolated("adversary", "the prompt", work)
+    assert sibling.is_dir()
+
+
 def test_an_isolated_run_is_capped_at_ten_minutes(tmp_path, monkeypatch):
     seen = {}
 
