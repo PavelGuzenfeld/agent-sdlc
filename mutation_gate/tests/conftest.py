@@ -48,10 +48,17 @@ def require_gdscript_parser() -> None:
 @pytest.fixture
 def fake_claude(tmp_path, monkeypatch):
     record = tmp_path / "claude-argv"
+    config = tmp_path / "claude-config"
     bin_dir = tmp_path / "fake-bin"
     bin_dir.mkdir()
     exe = bin_dir / "claude"
-    exe.write_text(f"#!/bin/sh\nprintf '%s\\0' \"$@\" > '{record}'\necho 'no gaps found'\n")
+    exe.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\0' \"$@\" > '{record}'\n"
+        f"mkdir -p '{config}/projects/'\"$(printf '%s' \"$(pwd -P)\" | tr -c 'A-Za-z0-9' '-')\"'/memory'\n"
+        "echo 'no gaps found'\n"
+    )
     exe.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
     return lambda: record.read_bytes().decode().split("\0")[:-1]
