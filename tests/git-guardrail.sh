@@ -209,6 +209,11 @@ STUB
         "cd ~/$(basename "$tmp") && git branch -D merged-ok"
     expect_allow "$repo_script" "$label" "HOME variable cd to the repo" \
         "cd \$HOME/$(basename "$tmp") && git branch -D merged-ok"
+    HOME="$tmp"
+    expect_allow "$repo_script" "$label" "bare HOME variable cd to the repo" \
+        "cd \$HOME && git branch -D merged-ok"
+    expect_allow "$repo_script" "$label" "bare tilde cd to the repo" \
+        "cd ~ && git branch -D merged-ok"
     HOME="$saved_home"
     hook_cwd=""
 
@@ -298,6 +303,9 @@ run_primary_worktree_cases() {
         "cd ~ && cd $(basename "$primary") && git checkout $sha"
     expect_block "$repo_script" "$label" "HOME variable cd to primary from linked" \
         "cd \$HOME/$(basename "$primary") && git checkout $sha"
+    HOME="$primary"
+    expect_block "$repo_script" "$label" "bare HOME variable cd to primary from linked" \
+        "cd \$HOME && git checkout $sha"
     HOME="$saved_home"
     hook_cwd="$primary"
     expect_allow "$repo_script" "$label" "cd linked then checkout sha from primary" "cd $linked && git checkout $sha"
