@@ -371,7 +371,6 @@ def _in_image(element: str) -> str:
      f"docker build . && cd sub && {_in_image('pytest -q')}"),
     ("pytest -q && docker push x && make", f"{_in_image('pytest -q')} && docker push x && {_in_image('make')}"),
     ("docker ps | grep pytest && echo 'a && pytest'", None),
-    ("docker build . && echo $(pytest; true)", None),
     ('docker build . && echo "a\\" ; pytest" && make',
      f'docker build . && echo "a\\" ; pytest" && {_in_image("make")}'),
     ("docker build . && echo 'a;b' && make", f"docker build . && echo 'a;b' && {_in_image('make')}"),
@@ -383,7 +382,72 @@ def _in_image(element: str) -> str:
 def test_a_docker_segment_stays_on_the_host_and_each_host_element_runs_in_the_image(repo, command, expected):
     assert decide(command, repo, False) == (Rewrite(expected) if expected else None)
 
+NO_IMAGE_REASON = (
+    '`pytest` would run on the host. Set test_image = "<image>" in .mutation-gate.toml '
+    "to run it in that image, or is_test_image_used = false to keep it on the host."
+)
+DOCKER_THEN_HOST = "docker build . && pytest -q"
 
-def test_no_image_denies_a_line_with_a_docker_segment_naming_the_key(repo):
+
+def test_no_image_denies_a_line_with_a_docker_segment_with_the_full_reason(repo):
     (repo / ".mutation-gate.toml").write_text("")
-    assert "test_image" in decide("docker build . && pytest -q", repo, False).reason
+    assert decide(DOCKER_THEN_HOST, repo, False) == Denial(NO_IMAGE_REASON)
+
+
+def test_docker_then_host_line_passes_with_the_rewrite_switched_off(repo):
+    (repo / ".mutation-gate.toml").write_text("is_test_image_used = false\n")
+    assert decide(DOCKER_THEN_HOST, repo, False) is None
+
+
+def test_docker_then_host_line_passes_inside_a_container(repo):
+    assert decide(DOCKER_THEN_HOST, repo, True) is None
+
+
+def test_docker_then_host_line_passes_outside_a_git_repo(repo, tmp_path):
+    assert decide(DOCKER_THEN_HOST, tmp_path, False) is None
+
+
+def test_docker_then_host_line_passes_with_an_unreadable_config(repo):
+    (repo / ".mutation-gate.toml").write_text("test_image = [")
+    verdict = decide(DOCKER_THEN_HOST, repo, False)
+    assert verdict == host_exec.Notice(f"cannot read {repo / '.mutation-gate.toml'}, passing through")
+
+
+def test_unparseable_docker_then_host_line_passes(repo):
+    assert decide("docker build . && pytest 'x", repo, False) is None
+
+
+def test_hook_rewrites_a_docker_then_host_line_and_keeps_the_docker_segment(repo, monkeypatch, tmp_path):
+    payload = {"cwd": str(repo), "tool_input": {"command": DOCKER_THEN_HOST, "timeout": 5}}
+    code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
+    assert (code, err) == (0, "")
+    assert json.loads(out)["hookSpecificOutput"]["updatedInput"] == {
+        "command": 'docker build . && docker run --rm --user $(id -u):$(id -g) -e HOME=/tmp '
+                   '-v "$PWD:/w" -w /w img:1 sh -c \'pytest -q\'',
+        "timeout": 5,
+    }
+
+
+@pytest.mark.parametrize("command, host", [
+    ("docker logs x | pytest", "pytest"),
+    ("ls && docker logs x | make test && ls", "make"),
+    ("docker build . && docker logs x | grep y | colcon build", "colcon"),
+    ("docker logs x | tail -1 ; docker logs y | cmake .", "cmake"),
+])
+def test_a_host_command_piped_from_docker_is_denied_with_a_request_to_split(repo, command, host):
+    assert decide(command, repo, False) == Denial(
+        f"`{host}` is piped from a docker command and would run on the host. Split the "
+        f"line so `{host}` is its own command and runs in img:1."
+    )
+
+
+def test_a_host_command_piped_from_docker_without_an_image_is_denied_naming_the_key(repo):
+    (repo / ".mutation-gate.toml").write_text("")
+    assert decide("docker logs x | pytest", repo, False) == Denial(NO_IMAGE_REASON)
+
+
+def test_hook_denies_a_host_command_piped_from_docker_with_exit_2(repo, monkeypatch, tmp_path):
+    payload = {"cwd": str(repo), "tool_input": {"command": "docker logs x | pytest"}}
+    code, out, err = _run_main(monkeypatch, payload, tmp_path / "absent")
+    assert (code, out) == (2, "")
+    assert err.startswith("host-exec: `pytest` is piped from a docker command")

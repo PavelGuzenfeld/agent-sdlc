@@ -168,6 +168,16 @@ def rewrite_host_elements(command: str, image: str) -> str:
     return "".join(pieces)
 
 
+def host_command_piped_from_docker(command: str) -> str | None:
+    for element in split_list(command)[::2]:
+        parts = segments(element)
+        if parts and parts[0][0] == "docker":
+            host = next((part[0] for part in parts[1:] if is_host_command(part)), None)
+            if host:
+                return host
+    return None
+
+
 def decide(command: str, cwd: Path, is_in_container: bool) -> Denial | Rewrite | Notice | None:
     toplevel = git_lines(cwd, "rev-parse", "--show-toplevel")
     if toplevel is None or not (Path(toplevel[0]) / CONFIG_NAME).exists():
@@ -201,6 +211,12 @@ def decide(command: str, cwd: Path, is_in_container: bool) -> Denial | Rewrite |
         return Denial(
             f"`{host}` would run on the host. Set test_image = \"<image>\" in "
             f"{CONFIG_NAME} to run it in that image, or is_test_image_used = false to keep it on the host."
+        )
+    piped = host_command_piped_from_docker(command)
+    if piped:
+        return Denial(
+            f"`{piped}` is piped from a docker command and would run on the host. Split the "
+            f"line so `{piped}` is its own command and runs in {config.test_image}."
         )
     if any(part[0] == "docker" for part in parts):
         return Rewrite(rewrite_host_elements(command, config.test_image))
