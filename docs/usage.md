@@ -15,8 +15,8 @@ cd agent-sdlc
 ./install.sh --deps
 ```
 
-- The plugin ships skills, commands, `bin/` and the git-guardrail, `/say` and
-  Stop-time gate hooks.
+- The plugin ships skills, commands, `bin/` and the session-preflight,
+  git-guardrail, host-exec, `/say` and Stop-time gate hooks.
 - `--deps` installs `mutation-gate` and the tools it calls.
 - Or load it for one session, without installing: `claude --plugin-dir /path/to/agent-sdlc`.
 
@@ -93,7 +93,8 @@ gh issue edit 42 --add-label model:sonnet --add-assignee @me
 LGTM
 ```
 
-- Kata squash-merges, removes the worktree and deletes the branch.
+- Kata squash-merges, hands any root-owned files back with a `chown`, removes
+  the worktree and deletes the branch.
 
 ### 8. Close out
 

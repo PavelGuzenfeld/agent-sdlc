@@ -105,6 +105,9 @@ new = """age > 18"""
 reason = "REPLACE ME — why no test can or should kill this"
 ```
 
+- An optional `text = """..."""` key holds the mutated line's text. The waiver
+  then still covers its mutant when lines above move. If the same mutation
+  repeats on identical lines, `line` (and `column`) must still match.
 - "I could not think of a test" is not a reason. Neither is a restatement of
   the mutation.
 - A waiver that no longer matches a mutant after an edit is reported as stale.

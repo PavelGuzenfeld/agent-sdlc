@@ -74,7 +74,7 @@ test_command = "npm --prefix web run test"
 | `own_namespaces` | `[]` | Origin substrings this checkout is allowed to gate under; outside all of them reads as a fork. The `MUTATION_GATE_OWN_NAMESPACES` env var overrides this when set. |
 | `doc_allow` | `[]` | `[[doc_allow]]` entries, each a `glob` and a `reason`: a new `.md` file the built-in allowlist doesn't cover. |
 | `banned_names_file` | `""` | Path to a file of `X → Y` lines `no-leaks` must reject from the staged diff and commit message. |
-| `test_image` | `""` | Docker image the host-exec PreToolUse hook runs host `python3`, `pytest`, `make`, `cmake`, `colcon` and `pip install` in; empty denies those commands. |
-| `is_test_image_used` | `true` | `false` turns that rewrite off, so those commands run on the host. |
+| `test_image` | `""` | Docker image the host-exec PreToolUse hook runs host `python3`, `pytest`, `make`, `cmake`, `colcon` and `pip install` in; empty denies those commands. Applies only in a repo with `.mutation-gate.toml`, never inside a container. |
+| `is_test_image_used` | `true` | `false` turns that rewrite and the empty-image deny off, so those commands run on the host. The deny on `docker run` without `--user` stays. |
 
 Source: [`mutation_gate/repo.py`](https://github.com/PavelGuzenfeld/agent-sdlc/blob/main/mutation_gate/repo.py).

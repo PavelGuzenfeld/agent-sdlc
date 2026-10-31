@@ -71,7 +71,7 @@ gh issue edit 42 --add-label model:sonnet --add-assignee @me
   fixes the code.
 - The commit runs the gate; a survivor sends it back to the test.
 - It opens the PR assigned to `@me` with `Closes #42` and waits for CI.
-- You read it and type `LGTM`; it squash-merges and removes the worktree.
+- You read it and type `LGTM`; it squash-merges, hands any root-owned files back with a `chown`, and removes the worktree.
 
 ## Vertical slice
 
