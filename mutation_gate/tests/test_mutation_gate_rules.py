@@ -578,3 +578,11 @@ def test_kata_merge_chowns_a_worktree_holding_root_owned_files_before_removing_i
     assert "alpine:3.20" in normalized
     assert "Before `git worktree remove`" in normalized
     assert "A clean worktree costs no docker call" in normalized
+
+
+def test_done_files_follow_up_bodies_through_body_file_never_inline_body():
+    """Intent: #401 (decision 22 of #393)."""
+    content = (Path(__file__).parents[2] / "commands" / "done.md").read_text()
+    normalized = " ".join(content.split())
+    assert "--body-file" in normalized
+    assert "--body " not in normalized
