@@ -459,3 +459,13 @@ def test_hook_denies_a_host_command_piped_from_docker_with_exit_2(repo, monkeypa
 def test_no_image_denial_names_the_first_host_command_after_a_docker_segment(repo):
     (repo / ".mutation-gate.toml").write_text("")
     assert decide("docker build . && make && pytest", repo, False).reason.startswith("`make` would run")
+
+
+def test_an_escaped_separator_does_not_split_an_element(repo):
+    command = "docker info && echo a\;b && pytest -q"
+    assert decide(command, repo, False) == Rewrite(f"docker info && echo a\;b && {_in_image('pytest -q')}")
+
+
+def test_rewriting_never_wraps_an_element_that_starts_with_docker():
+    command = "docker logs x | pytest && make"
+    assert host_exec.rewrite_host_elements(command, "img:1") == f"docker logs x | pytest && {_in_image('make')}"
