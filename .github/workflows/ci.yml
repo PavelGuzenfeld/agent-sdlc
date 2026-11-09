@@ -13,7 +13,7 @@ jobs:
   no-leaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/no-leaks.sh
       - run: sh tests/no-leaks-env.sh
       - run: sh scripts/no-leaks.sh
@@ -22,14 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     container: python:3.12-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install numpy pytest pyyaml
       - run: pytest skills/sol-budget/tests tests/test_say_narrate_bin.py
 
   bin:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/git-guardrail.sh && sh tests/bootstrap-labels.sh && sh tests/bootstrap-templates.sh && sh tests/activity.sh && sh tests/say-plugin-root.sh && sh tests/mutation-gate-hook.sh && sh tests/codex-review-hook.sh && sh tests/survey.sh && sh tests/wizard-template.sh && sh tests/host-exec-hook.sh && sh tests/session-preflight.sh && sh tests/bare-rm-hook.sh
 
   mutation-gate-tests:
@@ -37,11 +37,11 @@ jobs:
     container: python:3.12-slim
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install --no-cache-dir -e ".[vocabulary]" pytest pytest-cov pyyaml ast-grep-cli==0.45.3
       - run: mkdir -p /usr/share/nltk_data && python -c "import nltk; nltk.download('wordnet', download_dir='/usr/share/nltk_data')"
       - run: ast-grep --version
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: gdscript-parser-cache
         with:
           path: ~/.local/share/ast-grep/gdscript.so
@@ -64,7 +64,7 @@ jobs:
   install:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/install.sh
 
   pre-commit-range:
@@ -72,7 +72,7 @@ jobs:
     container: python:3.12-slim
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - run: pip install --no-cache-dir -e . pre-commit
@@ -94,7 +94,7 @@ jobs:
     container: python:3.12-slim
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install --no-cache-dir -e . pre-commit
       - run: |
           git config --global --add safe.directory "$PWD"
@@ -114,6 +114,6 @@ jobs:
     runs-on: ubuntu-latest
     container: python:3.12-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install mkdocs-material
       - run: mkdocs build --strict
