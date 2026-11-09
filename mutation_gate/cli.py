@@ -115,6 +115,9 @@ def _gate_file(
             token.write(repo, rel, fp, "uncovered-waived")
             return False, [], []
         _emit(f"  {rel}: BLOCKED — no covering tests")
+        if rel.endswith(coverage_map.CPP_SUFFIXES):
+            setting = "[languages.cpp] test_globs" if "cpp" in repo.config.languages else "test_globs"
+            _emit(f"    existing tests that cover it: add their paths to {setting} in {CONFIG_NAME}")
         _emit("    add to " + str(waivers.path(repo)) + ":")
         _emit("    " + waivers.suggest_uncovered(rel).replace("\n", "\n    "))
         return True, [], []
