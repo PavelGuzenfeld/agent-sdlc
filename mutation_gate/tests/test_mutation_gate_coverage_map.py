@@ -618,17 +618,18 @@ def test_a_candidate_path_with_shell_syntax_reaches_the_coverage_run_as_one_word
     assert argv.read_text() == f"tests/test_a{payload}.py\n"
 
 
-def _godot_repo(tmp_path, tests: dict[str, str]):
+def _godot_repo(tmp_path, tests: dict[str, str], closure_depth=1, project_godot=""):
     (tmp_path / ".git").mkdir()
     game = tmp_path / "game"
     (game / "scripts").mkdir(parents=True)
-    (game / "project.godot").write_text("")
+    (game / "project.godot").write_text(project_godot)
     (game / "scripts" / "main.gd").write_text("extends Node\n")
     (game / "scripts" / "wave_manager.gd").write_text("class_name WaveManager\nextends Node\n")
     (game / "test").mkdir()
     for name, text in tests.items():
         (game / "test" / name).write_text(text)
-    config = Config(languages={"gdscript": LanguageConfig(test_paths=["game/test"])})
+    config = Config(languages={"gdscript": LanguageConfig(test_paths=["game/test"])},
+                    closure_depth=closure_depth)
     return Repo(root=tmp_path, origin="", remotes=(), config=config), game / "test"
 
 
@@ -698,5 +699,62 @@ def test_gd_test_loading_a_scene_that_attaches_the_target_is_selected(tmp_path):
         '[ext_resource type="Script" path="res://scripts/main.gd" id="1"]\n')
     (scenes / "menu.tscn").write_text(
         '[ext_resource type="Script" path="res://scripts/menu.gd" id="1"]\n')
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_level.gd"]
+
+
+def test_gd_test_calling_the_autoload_registered_for_the_target_is_selected(tmp_path):
+    """#428: an autoload is reached by its project.godot name, never by path."""
+    repo, tests = _godot_repo(tmp_path, {
+        "test_waves.gd": "func test_start():\n\tWaves.start()\n",
+        "test_score.gd": "func test_add():\n\tScore.add(1)\n",
+    }, project_godot='[autoload]\n\nWaves="*res://scripts/main.gd"\nScore="*res://scripts/score.gd"\n')
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_waves.gd"]
+
+
+def test_gd_test_preloading_the_target_by_relative_path_is_selected(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_boot.gd": 'const Main = preload("../scripts/main.gd")\n',
+        "test_other.gd": 'const Boot = preload("../scripts/boot.gd")\n',
+    })
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_boot.gd"]
+
+
+def test_gd_test_reaching_the_target_through_another_script_is_selected_at_depth_two(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_boot.gd": 'const Boot = preload("res://scripts/boot.gd")\n',
+        "test_other.gd": 'const Other = preload("res://scripts/other.gd")\n',
+    }, closure_depth=2)
+    (tmp_path / "game" / "scripts" / "boot.gd").write_text(
+        'const Main = preload("res://scripts/main.gd")\n')
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_boot.gd"]
+
+
+def test_gd_test_reaching_the_target_through_another_script_is_not_selected_at_depth_one(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_boot.gd": 'const Boot = preload("res://scripts/boot.gd")\n',
+        "test_main.gd": "extends GutTest\n",
+    })
+    (tmp_path / "game" / "scripts" / "boot.gd").write_text(
+        'const Main = preload("res://scripts/main.gd")\n')
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_main.gd"]
+
+
+def test_gd_test_loading_a_scene_that_instances_the_target_scene_is_selected_at_depth_two(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_level.gd": 'var s = load("res://scenes/level.tscn").instantiate()\n',
+        "test_menu.gd": 'var s = load("res://scenes/menu.tscn").instantiate()\n',
+    }, closure_depth=2)
+    scenes = tmp_path / "game" / "scenes"
+    scenes.mkdir()
+    (scenes / "main.tscn").write_text(
+        '[ext_resource type="Script" path="res://scripts/main.gd" id="1"]\n')
+    (scenes / "level.tscn").write_text(
+        '[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1"]\n')
+    (scenes / "menu.tscn").write_text("[gd_scene format=3]\n")
 
     assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_level.gd"]
