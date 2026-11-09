@@ -13,7 +13,7 @@ jobs:
   no-leaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/no-leaks.sh
       - run: sh scripts/no-leaks.sh
 
@@ -22,7 +22,7 @@ jobs:
     container: python:3.12-slim
     steps:
       - run: apt-get update && apt-get install -y --no-install-recommends git
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install --no-cache-dir -e ".[vocabulary]" pytest pytest-cov pyyaml ast-grep-cli==0.45.3
       - run: mkdir -p /usr/share/nltk_data && python -c "import nltk; nltk.download('wordnet', download_dir='/usr/share/nltk_data')"
       - run: ast-grep --version
@@ -32,20 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     container: python:3.12-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: pip install numpy pytest pyyaml
       - run: pytest skills/sol-budget/tests
 
   bin:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/git-guardrail.sh
 
   install:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sh tests/install.sh
 
   release:
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -75,7 +75,7 @@ jobs:
           done
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -89,7 +89,7 @@ jobs:
           python -m build
 
       - name: Upload dist for PyPI publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/*
@@ -118,7 +118,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: dist
           path: dist
