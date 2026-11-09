@@ -122,19 +122,20 @@ def test_candidates_finds_a_colocated_vitest_test_declared_only_by_glob(tmp_path
 def test_candidates_for_a_cpp_target_include_a_gdscript_test_its_language_globs_name(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "add.cpp").write_text("int add(int a, int b) { return a + b; }\n")
-    tests_dir = tmp_path / "tests"
-    tests_dir.mkdir()
-    gdscript_test = tests_dir / "test_add.gd"
+    game_test_dir = tmp_path / "game" / "test"
+    game_test_dir.mkdir(parents=True)
+    gdscript_test = game_test_dir / "test_add.gd"
     gdscript_test.write_text("extends GutTest\n")
-    cpp_test = tests_dir / "test_add.cpp"
-    cpp_test.write_text("int main() {}\n")
+    (game_test_dir / "helper.gd").write_text("extends Node\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_unrelated.gd").write_text("extends GutTest\n")
     (tmp_path / ".git").mkdir()
     config = Config(
-        languages={"cpp": LanguageConfig(test_paths=["tests"], test_globs=["tests/*.gd"])}
+        languages={"cpp": LanguageConfig(test_paths=["tests"], test_globs=["game/test/test_*.gd"])}
     )
     repo = Repo(root=tmp_path, origin="", remotes=(), config=config)
 
-    assert coverage_map.candidates(repo, "src/add.cpp") == [cpp_test, gdscript_test]
+    assert coverage_map.candidates(repo, "src/add.cpp") == [gdscript_test]
 
 
 def test_candidates_for_a_ts_target_is_the_whole_vitest_suite_unnarrowed(tmp_path):
