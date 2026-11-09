@@ -52,6 +52,13 @@ expect_block "rm after quoted separator"  'echo "a;b" && rm y' rm
 expect_block "rm after then"              "if true; then rm y; fi" rm
 expect_block "rm after brace"             "{ rm y; }" rm
 expect_block "rm with tab"                "rm	y" rm
+expect_block "rm behind an env assignment" "FOO=1 rm x" rm
+expect_block "rm behind two env assignments" "A=1 B=2 rm x" rm
+expect_block "cp behind an env assignment" "FOO=1 cp a b" cp
+expect_block "mv behind a quoted env assignment" 'FOO="a b" mv a b' mv
+expect_block "cp behind a variable named like rm" "FORM=1 cp a b" cp
+expect_block "rm inside backticks"        'echo `rm x`' rm
+expect_block "mv inside backticks"        'echo `mv a b`' mv
 
 expect_allow "command rm"                 "command rm data/docs.json"
 expect_allow "command cp"                 "command cp a b"
@@ -79,6 +86,11 @@ rm -rf build
 expect_allow "double-quoted separator"    'echo "a; rm y"'
 expect_allow "multi-line quoted string"   'echo "a
 rm y"'
+expect_allow "sudo rm skips the shell alias" "sudo rm x"
+expect_allow "sudo command rm"            "sudo command rm x"
+expect_allow "command rm behind an env assignment" "FOO=1 command rm x"
+expect_allow "quoted env assignment and rm" 'echo "FOO=1 rm x"'
+expect_allow "backtick inside single quotes" "echo 'a \`rm x\`'"
 expect_block "rm after heredoc ends"      "cat <<EOF > s.sh
 rm -rf build
 EOF
