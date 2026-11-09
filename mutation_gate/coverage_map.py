@@ -224,7 +224,10 @@ def candidates(repo: Repo, target: str) -> list[Path]:
     if target.endswith(CPP_SUFFIXES):
         # Whole suite, no narrowing: a compiled C++ suite runs in seconds, so a
         # name or include heuristic buys nothing and a miss is a false SURVIVED.
-        return _test_files(repo, "cpp", ".cpp")
+        return sorted(
+            {repo.root / rel for rel in repo.glob_tests("cpp")}
+            | set(_test_files(repo, "cpp", ".cpp"))
+        )
     if target.endswith(TS_SUFFIXES):
         # Same reasoning as C++: a vitest suite this fast (debris-scatter's 125
         # tests run in well under a second) makes narrowing not worth building,
