@@ -673,3 +673,30 @@ def test_gd_target_no_test_loads_or_names_falls_back_to_the_whole_suite(tmp_path
 
     assert coverage_map.candidates(repo, "game/scripts/main.gd") == [
         tests / "test_a.gd", tests / "test_b.gd"]
+
+
+def test_gd_test_loading_another_script_or_class_sharing_a_suffix_is_not_selected(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_waves.gd": 'const W = preload("res://scripts/wave_manager.gd")\n',
+        "test_ui.gd": 'const U = preload("res://ui/scripts/wave_manager.gd")\n',
+        "test_boss.gd": "var b := BossWaveManager.new()\n",
+    })
+
+    assert coverage_map.candidates(repo, "game/scripts/wave_manager.gd") == [
+        tests / "test_waves.gd"]
+
+
+def test_gd_test_loading_a_scene_that_attaches_the_target_is_selected(tmp_path):
+    repo, tests = _godot_repo(tmp_path, {
+        "test_boot.gd": 'const Boot = preload("res://scripts/boot.gd")\n',
+        "test_level.gd": 'var s = load("res://scenes/main.tscn").instantiate()\n',
+        "test_menu.gd": 'var s = load("res://scenes/menu.tscn").instantiate()\n',
+    })
+    scenes = tmp_path / "game" / "scenes"
+    scenes.mkdir()
+    (scenes / "main.tscn").write_text(
+        '[ext_resource type="Script" path="res://scripts/main.gd" id="1"]\n')
+    (scenes / "menu.tscn").write_text(
+        '[ext_resource type="Script" path="res://scripts/menu.gd" id="1"]\n')
+
+    assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_level.gd"]

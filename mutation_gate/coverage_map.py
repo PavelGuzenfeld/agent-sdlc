@@ -162,9 +162,12 @@ def _godot_project_root(repo: Repo, target: str) -> Path:
 
 def _gdscript_reference(repo: Repo, target: str) -> re.Pattern[str]:
     """A `res://` path is relative to the nearest project.godot; a `class_name` is
-    global, so a test can use the script without loading it (#426)."""
-    res_path = (repo.root / target).relative_to(_godot_project_root(repo, target))
-    alternatives = [f"[\"']res://{re.escape(res_path.as_posix())}[\"']"]
+    global, and a `.tscn` attaching the script reaches it one hop away (#426)."""
+    project = _godot_project_root(repo, target)
+    script = re.compile(f"[\"']res://{re.escape((repo.root / target).relative_to(project).as_posix())}[\"']")
+    alternatives = [script.pattern] + [
+        f"[\"']res://{re.escape(scene.relative_to(project).as_posix())}[\"']"
+        for scene in sorted(project.rglob("*.tscn")) if script.search(scene.read_text())]
     declared = re.search(r"^class_name\s+(\w+)", (repo.root / target).read_text(), re.M)
     if declared:
         alternatives.append(rf"\b{declared.group(1)}\b")
