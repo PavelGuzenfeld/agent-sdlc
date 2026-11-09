@@ -1189,11 +1189,12 @@ def _block_without_covering_tests(tmp_path, monkeypatch, capsys, rel, config):
         (Config(languages={"cpp": LanguageConfig()}), "[languages.cpp] test_globs"),
     ],
 )
+@pytest.mark.parametrize("rel", ["ext.cpp", "ext.hpp", "ext.cc", "ext.h", "ext.cu", "ext.cuh"])
 def test_blocked_cpp_file_names_the_test_globs_setting_that_keeps_its_config(
-    tmp_path, monkeypatch, capsys, config, setting
+    tmp_path, monkeypatch, capsys, config, setting, rel
 ):
-    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, "ext.cpp", config)
-    blocked = lines.index("  ext.cpp: BLOCKED — no covering tests")
+    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, rel, config)
+    blocked = lines.index(f"  {rel}: BLOCKED — no covering tests")
     assert lines[blocked + 1] == (
         f"    existing tests that cover it: add their paths to {setting} in .mutation-gate.toml"
     )
