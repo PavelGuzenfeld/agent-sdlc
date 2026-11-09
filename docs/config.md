@@ -41,6 +41,9 @@ test_command = "npm --prefix web run test"
 - Each table overrides `test_paths`, `test_globs`, `test_command`,
   `coverage_command` and `coverage_data_file` for that language.
 - `.tsx` files are their own language, `tsx`, and need their own table.
+- `[languages.cpp]` `test_globs` match tests in any language, such as GDScript
+  tests of a GDExtension. Every match covers each C++ file, and the adversary
+  reviews it.
 
 ## Keys
 

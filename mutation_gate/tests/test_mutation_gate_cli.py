@@ -1128,3 +1128,40 @@ def test_lines_naming_a_line_without_mutants_produces_none(tmp_path, monkeypatch
     code, rows = _file_dry_run(tmp_path, monkeypatch, capsys, "a = 1 + 2\n\n", "--lines", "2")
     assert code == 0
     assert rows == []
+
+
+def _git_fixture(root: Path, files: dict[str, str]) -> None:
+    def run(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+    run("init", "-q")
+    run("config", "user.email", "t")
+    run("config", "user.name", "t")
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    run("add", "-A")
+
+
+def test_staged_cpp_change_covered_only_by_a_gdscript_test_is_gated_and_reviewed_against_it(
+    tmp_path, monkeypatch, capsys
+):
+    _git_fixture(tmp_path, {
+        ".mutation-gate.toml": (
+            "[languages.cpp]\n"
+            "test_paths = []\n"
+            'test_globs = ["tests/*.gd"]\n'
+            "test_command = \"grep -q 'a + b' src/add.cpp\"\n"
+        ),
+        "src/add.cpp": "int add(int a, int b) { return a + b; }\n",
+        "tests/test_add.gd": "extends GutTest\nfunc test_add():\n\tassert_eq(Ext.add(2, 3), 5)\n",
+    })
+    for module in (cli, cli.runner, cli.token, cli.coverage_map):
+        monkeypatch.setattr(module, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.chdir(tmp_path)
+    reviewed = {}
+    monkeypatch.setattr(cli.adversary, "resolve_intent", lambda repo, prompt, session_prompt=None: None)
+    monkeypatch.setattr(cli.adversary, "run",
+                        lambda tests, intent, note: reviewed.setdefault("tests", tests) and "")
+    assert cli.main(["--staged"]) == 0
+    assert [p.relative_to(tmp_path).as_posix() for p in reviewed["tests"]] == ["tests/test_add.gd"]
