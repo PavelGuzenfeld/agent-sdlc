@@ -708,6 +708,7 @@ def test_gd_test_calling_the_autoload_registered_for_the_target_is_selected(tmp_
     repo, tests = _godot_repo(tmp_path, {
         "test_waves.gd": "func test_start():\n\tWaves.start()\n",
         "test_score.gd": "func test_add():\n\tScore.add(1)\n",
+        "test_waves_ui.gd": "func test_show():\n\tWavesUi.show()\n",
     }, project_godot='[autoload]\n\nWaves="*res://scripts/main.gd"\nScore="*res://scripts/score.gd"\n')
 
     assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_waves.gd"]
@@ -717,6 +718,7 @@ def test_gd_test_preloading_the_target_by_relative_path_is_selected(tmp_path):
     repo, tests = _godot_repo(tmp_path, {
         "test_boot.gd": 'const Main = preload("../scripts/main.gd")\n',
         "test_other.gd": 'const Boot = preload("../scripts/boot.gd")\n',
+        "test_outside.gd": 'const Outside = preload("../../scripts/main.gd")\n',
     })
 
     assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_boot.gd"]
@@ -755,6 +757,9 @@ def test_gd_test_loading_a_scene_that_instances_the_target_scene_is_selected_at_
         '[ext_resource type="Script" path="res://scripts/main.gd" id="1"]\n')
     (scenes / "level.tscn").write_text(
         '[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1"]\n')
-    (scenes / "menu.tscn").write_text("[gd_scene format=3]\n")
+    (scenes / "button.tscn").write_text(
+        '[ext_resource type="Script" path="res://scripts/button.gd" id="1"]\n')
+    (scenes / "menu.tscn").write_text(
+        '[ext_resource type="PackedScene" path="res://scenes/button.tscn" id="1"]\n')
 
     assert coverage_map.candidates(repo, "game/scripts/main.gd") == [tests / "test_level.gd"]
