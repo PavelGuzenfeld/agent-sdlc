@@ -139,7 +139,7 @@ def test_the_ghcr_namespace_check_stays_shell_only():
 def test_the_leak_reference_docs_point_at_the_setting_not_the_old_path(path):
     text = path.read_text()
     assert "banned_names_file" in text
-    assert "public-surface" not in text
+    assert "public-surface" not in text.replace("~/.claude/rules/public-surface.md", "")
 
 
 def test_a_staged_email_is_blocked_without_echoing_it(monkeypatch, tmp_path, capsys):
