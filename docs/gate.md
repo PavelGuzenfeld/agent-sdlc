@@ -146,7 +146,7 @@ def test_q_stays_psd_across_dt():
 | Python | `.py` | `test_paths` / `test_globs`, coverage map |
 | C++ | `.cpp .hpp .cc .h .cu .cuh` | `.cpp` files under `test_paths` |
 | TypeScript | `.ts`, `.tsx` | `*.test.ts` |
-| GDScript | `.gd` | `test_paths`; needs `install-gdscript-parser` |
+| GDScript | `.gd` | `test_paths`, by name, `res://` path or `class_name`; needs `install-gdscript-parser` |
 
 - A repo with more than one language sets `[languages.<name>]` tables. See
   [Config](config.md).

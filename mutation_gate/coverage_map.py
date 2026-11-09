@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import shlex
 import sqlite3
 import time
@@ -152,13 +153,33 @@ def _ts_test_files(repo: Repo) -> list[Path]:
     return sorted(set(out))
 
 
-def _by_name(repo: Repo, target: str) -> list[Path]:
-    """GDScript has no coverage tool, so the name convention is the only signal
-    narrower than the whole suite."""
+def _godot_project_root(repo: Repo, target: str) -> Path:
+    for parent in (repo.root / target).parents:
+        if (parent / "project.godot").is_file() or parent == repo.root:
+            return parent
+    return repo.root
+
+
+def _gdscript_reference(repo: Repo, target: str) -> re.Pattern[str]:
+    """A `res://` path is relative to the nearest project.godot; a `class_name` is
+    global, so a test can use the script without loading it (#426)."""
+    res_path = (repo.root / target).relative_to(_godot_project_root(repo, target))
+    alternatives = [f"[\"']res://{re.escape(res_path.as_posix())}[\"']"]
+    declared = re.search(r"^class_name\s+(\w+)", (repo.root / target).read_text(), re.M)
+    if declared:
+        alternatives.append(rf"\b{declared.group(1)}\b")
+    return re.compile("|".join(alternatives))
+
+
+def _gdscript_candidates(repo: Repo, target: str) -> list[Path]:
+    """GDScript has no coverage tool: a test is named after the target or
+    references it by path or class; with neither, the whole suite runs."""
     tests = _test_files(repo, "gdscript", ".gd")
     stem = Path(target).stem
-    named = [t for t in tests if t.stem in (f"{stem}_test", f"test_{stem}")]
-    return named or tests
+    reference = _gdscript_reference(repo, target)
+    hits = [t for t in tests
+            if t.stem in (f"{stem}_test", f"test_{stem}") or reference.search(t.read_text())]
+    return hits or tests
 
 
 def candidates(repo: Repo, target: str) -> list[Path]:
@@ -175,7 +196,7 @@ def candidates(repo: Repo, target: str) -> list[Path]:
     tests. Documented caveat of decision 26, not a defect.
     """
     if target.endswith(".gd"):
-        return _by_name(repo, target)
+        return _gdscript_candidates(repo, target)
     if target.endswith(CPP_SUFFIXES):
         # Whole suite, no narrowing: a compiled C++ suite runs in seconds, so a
         # name or include heuristic buys nothing and a miss is a false SURVIVED.
