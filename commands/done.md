@@ -109,9 +109,9 @@ before filing it; a hit blocks that item and names the token, never redact and f
 A remote that `gh repo view --json visibility` confirms private skips the
 banned-name scan. Public, or visibility unknown (no network, not GitHub, `gh`
 not authed), is scanned: build the alternation from the banned-name list at the
-`banned_names_file` named in `.mutation-gate.toml`, which is the only copy of
-it, and run it over the draft. Unset or missing there: block filing, name the
-missing file, and say so — never file unscanned. The no-leaks hook's identity
+`banned_names_file` named in `.mutation-gate.toml`, otherwise at
+`~/.claude/rules/public-surface.md`, and run it over the draft. Neither present:
+block filing, name the missing file, and say so — never file unscanned. The no-leaks hook's identity
 scan covers every remote.
 Never restate the tokens here — this file is committed.
 

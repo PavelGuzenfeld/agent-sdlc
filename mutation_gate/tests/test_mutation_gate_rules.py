@@ -586,3 +586,9 @@ def test_done_files_follow_up_bodies_through_body_file_never_inline_body():
     normalized = " ".join(content.split())
     assert "--body-file" in normalized
     assert "--body " not in normalized
+
+
+def test_done_scans_follow_ups_against_the_global_list_when_the_repo_names_none():
+    done = " ".join((Path(__file__).parents[2] / "commands" / "done.md").read_text().split())
+    assert "otherwise at `~/.claude/rules/public-surface.md`" in done
+    assert "Neither present: block filing, name the missing file" in done
