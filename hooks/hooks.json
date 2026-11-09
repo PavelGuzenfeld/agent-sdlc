@@ -48,6 +48,10 @@
           {
             "type": "command",
             "command": "PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}\" python3 -P -m mutation_gate.host_exec"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/bare-rm-guard.sh"
           }
         ]
       }
