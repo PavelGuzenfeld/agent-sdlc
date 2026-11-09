@@ -160,28 +160,49 @@ def _godot_project_root(repo: Repo, target: str) -> Path:
     return repo.root
 
 
-def _gdscript_reference(repo: Repo, target: str) -> re.Pattern[str]:
-    """A `res://` path is relative to the nearest project.godot; a `class_name` is
-    global, and a `.tscn` attaching the script reaches it one hop away (#426)."""
-    project = _godot_project_root(repo, target)
-    script = re.compile(f"[\"']res://{re.escape((repo.root / target).relative_to(project).as_posix())}[\"']")
-    alternatives = [script.pattern] + [
-        f"[\"']res://{re.escape(scene.relative_to(project).as_posix())}[\"']"
-        for scene in sorted(project.rglob("*.tscn")) if script.search(scene.read_text())]
-    declared = re.search(r"^class_name\s+(\w+)", (repo.root / target).read_text(), re.M)
-    if declared:
-        alternatives.append(rf"\b{declared.group(1)}\b")
-    return re.compile("|".join(alternatives))
+_QUOTED_RESOURCE = re.compile(r"[\"']([^\"'\n]+\.(?:gd|tscn))[\"']")
+_AUTOLOAD_ENTRY = re.compile(r"^(\w+)=\"\*?res://([^\"]+)\"", re.M)
+
+
+def _resource_paths(project: Path, source: Path) -> set[Path]:
+    """`res://` resolves against project.godot's directory, a bare path against `source`'s."""
+    return {((project / quoted.removeprefix("res://")) if quoted.startswith("res://")
+             else (source.parent / quoted)).resolve()
+            for quoted in _QUOTED_RESOURCE.findall(source.read_text())}
+
+
+def _global_names(project: Path, reached: set[Path]) -> re.Pattern[str] | None:
+    """A `class_name` or an autoload reaches a script with no path in the caller."""
+    names = {declared.group(1) for script in reached if script.suffix == ".gd"
+             if (declared := re.search(r"^class_name\s+(\w+)", script.read_text(), re.M))}
+    settings = project / "project.godot"
+    if settings.is_file():
+        autoloads = settings.read_text().partition("[autoload]")[2].split("\n[", 1)[0]
+        names |= {name for name, path in _AUTOLOAD_ENTRY.findall(autoloads)
+                  if (project / path).resolve() in reached}
+    return re.compile("|".join(rf"\b{name}\b" for name in sorted(names))) if names else None
+
+
+def _reaches(project: Path, source: Path, reached: set[Path]) -> bool:
+    names = _global_names(project, reached)
+    return bool(_resource_paths(project, source) & reached) or bool(
+        names and names.search(source.read_text()))
 
 
 def _gdscript_candidates(repo: Repo, target: str) -> list[Path]:
-    """GDScript has no coverage tool: a test is named after the target or
-    references it by path or class; with neither, the whole suite runs."""
+    """No coverage tool: a test is named after the target or reaches it. A scene
+    attaching the target counts as the target; other hops count against closure_depth."""
     tests = _test_files(repo, "gdscript", ".gd")
+    project = _godot_project_root(repo, target)
+    scenes = sorted(project.rglob("*.tscn"))
+    reached = {(repo.root / target).resolve()}
+    reached |= {s.resolve() for s in scenes if _resource_paths(project, s) & reached}
+    sources = [f for f in sorted(project.rglob("*.gd")) + scenes if f not in tests]
+    for _ in range(max(1, repo.config.closure_depth) - 1):
+        reached |= {f.resolve() for f in sources if _reaches(project, f, reached)}
     stem = Path(target).stem
-    reference = _gdscript_reference(repo, target)
     hits = [t for t in tests
-            if t.stem in (f"{stem}_test", f"test_{stem}") or reference.search(t.read_text())]
+            if t.stem in (f"{stem}_test", f"test_{stem}") or _reaches(project, t, reached)]
     return hits or tests
 
 
