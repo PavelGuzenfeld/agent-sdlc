@@ -9,6 +9,7 @@ What runs without you asking, and the scripts behind it.
 
  agent runs a Bash command ----> PreToolUse: git-guardrail.sh  (can deny)
                            ----> PreToolUse: mutation_gate.host_exec  (can deny or rewrite)
+                           ----> PreToolUse: bare-rm-guard.sh  (can deny)
 
  git commit
    |-- pre-commit stage ----> rules-check, mutation-gate, no-new-docs
@@ -26,6 +27,7 @@ What runs without you asking, and the scripts behind it.
 | `SessionStart` | `session-preflight.sh` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `mutation_gate.host_exec` | `hooks/hooks.json` |
+| `PreToolUse` (Bash) | `bare-rm-guard.sh` | `hooks/hooks.json` |
 | `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `say-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `codex-review-hook.sh` | `hooks/hooks.json` |
@@ -98,6 +100,18 @@ only in a repo with a `.mutation-gate.toml`, and never inside a container.
   (`/.dockerenv`), and with a config it cannot read, which prints a notice.
 - A denial and a notice are prefixed `host-exec:`.
 
+## bare-rm-guard
+
+A PreToolUse hook on every Bash call. It denies a bare `rm`, `cp` or `mv` at
+command position, including after `&&`, `||`, `;`, `|`, a newline, `(` and `{`.
+The interactive shell aliases them to `-i`, and the prompt waits out the full
+tool timeout.
+
+- Run `command rm`, `command cp` or `command mv` instead.
+- `\rm`, `/bin/rm`, `git rm` and a word in an argument or a quoted string
+  (`echo rm`, `grep -rn mv`) pass.
+- A denial is prefixed `bare-rm-guard:`.
+
 ## Pre-commit hooks
 
 Wire the gate into a consuming repo's `.pre-commit-config.yaml`:
@@ -138,6 +152,7 @@ pre-commit install --hook-type commit-msg
 |---|---|
 | `session-preflight.sh` | SessionStart hook: warns on a full disk or a root-owned file in a worktree |
 | `git-guardrail.sh` | The PreToolUse hook above |
+| `bare-rm-guard.sh` | PreToolUse hook: denies a bare `rm`, `cp` or `mv` |
 | `mutation-gate-hook.sh` | Stop hook: finds the repo root from the hook payload, runs the gate if opted in |
 | `codex-review-hook.sh`, `codex-review-prompt.md` | Stop hook: the codex review that blocks only on reproduced regressions |
 | `mutation-gate` | Runs the gate from this checkout without `pip install` |
