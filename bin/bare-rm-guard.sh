@@ -4,7 +4,16 @@ set -eu
 cmd=$(jq -r '.tool_input.command // empty')
 [ -n "$cmd" ] || exit 0
 
-cmd_unquoted=$(printf '%s' "$cmd" | tr '\n' ';' | sed -E -e 's/"[^"]*"/Q/g' -e "s/'[^']*'/Q/g")
+without_heredocs=$(printf '%s\n' "$cmd" | awk '
+    word != "" { line = $0; sub(/^\t+/, "", line); if (line == word) word = ""; next }
+    { print }
+    match($0, /<<-?[ \t]*[\047\042]?[A-Za-z_][A-Za-z_0-9]*/) {
+        word = substr($0, RSTART, RLENGTH)
+        gsub(/^<<-?[ \t]*[\047\042]?/, "", word)
+    }
+')
+
+cmd_unquoted=$(printf '%s' "$without_heredocs" | tr '\n' ';' | sed -E -e 's/"[^"]*"/Q/g' -e "s/'[^']*'/Q/g")
 
 bare=$(printf '%s' "$cmd_unquoted" | grep -Eo -- '(^|[;&|({]|[;[:space:]](then|do|else))[[:space:]]*(rm|cp|mv)([[:space:]]|$)' | head -n1 | grep -Eo -- '(rm|cp|mv)' | head -n1 || true)
 [ -n "$bare" ] || exit 0

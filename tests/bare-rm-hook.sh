@@ -67,6 +67,22 @@ expect_allow "single-quoted rm"           "echo 'a; rm y'"
 expect_allow "word starting with rm"      "rmdir y && cpp x && mvn test"
 expect_allow "path containing rm"         "ls ./rm/y"
 expect_allow "empty command"              ""
+expect_allow "heredoc body"               "cat <<EOF > s.sh
+rm -rf build
+EOF"
+expect_allow "quoted heredoc word"        "cat <<'EOF' > s.sh
+rm -rf build
+EOF"
+expect_allow "dash heredoc with tab terminator" "cat <<-EOF > s.sh
+rm -rf build
+	EOF"
+expect_allow "double-quoted separator"    'echo "a; rm y"'
+expect_allow "multi-line quoted string"   'echo "a
+rm y"'
+expect_block "rm after heredoc ends"      "cat <<EOF > s.sh
+rm -rf build
+EOF
+rm y" rm
 
 if [ "$failures" -ne 0 ]; then
     echo "$failures case(s) failed" >&2
