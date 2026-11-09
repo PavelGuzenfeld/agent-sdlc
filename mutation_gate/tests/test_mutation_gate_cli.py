@@ -1165,3 +1165,21 @@ def test_staged_cpp_change_covered_only_by_a_gdscript_test_is_gated_and_reviewed
                         lambda tests, intent, note: reviewed.setdefault("tests", tests) and "")
     assert cli.main(["--staged"]) == 0
     assert [p.relative_to(tmp_path).as_posix() for p in reviewed["tests"]] == ["tests/test_add.gd"]
+
+
+def test_blocked_cpp_file_names_the_cpp_test_globs_setting_beside_the_uncovered_stub(
+    tmp_path, monkeypatch, capsys
+):
+    (tmp_path / "ext.cpp").write_text("int f() { return 1; }\n")
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"ext.cpp": {1}})
+    monkeypatch.setattr(cli.mutants, "require_ast_grep", lambda: None)
+    monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
+    monkeypatch.setattr(cli.coverage_map, "candidates", lambda repo, rel: [])
+    assert cli.main(["--staged", "--no-adversary"]) == 1
+    err = capsys.readouterr().err
+    assert "ext.cpp: BLOCKED — no covering tests" in err
+    assert "[languages.cpp] test_globs" in err
+    assert "uncovered = true" in err
