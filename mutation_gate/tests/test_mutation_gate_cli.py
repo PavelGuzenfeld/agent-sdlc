@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from mutation_gate import cli
-from mutation_gate.repo import Config, GateError, Repo
+from mutation_gate.repo import Config, GateError, LanguageConfig, Repo
 
 
 class _FrozenClock:
@@ -1168,12 +1168,10 @@ def test_staged_cpp_change_covered_only_by_a_gdscript_test_is_gated_and_reviewed
 
 
 
-@pytest.mark.parametrize("rel,language", [("ext.cpp", "cpp"), ("mod.py", "python")])
-def test_blocked_file_names_its_own_language_test_globs_setting_before_the_uncovered_stub(
-    tmp_path, monkeypatch, capsys, rel, language
-):
+def _block_without_covering_tests(tmp_path, monkeypatch, capsys, rel, config):
     (tmp_path / rel).write_text("x = 1\n")
-    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=config)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
     monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
     monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
     monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {rel: {1}})
@@ -1181,10 +1179,29 @@ def test_blocked_file_names_its_own_language_test_globs_setting_before_the_uncov
     monkeypatch.setattr(cli.model_vv, "git", _not_a_git_repo)
     monkeypatch.setattr(cli.coverage_map, "candidates", lambda repo, rel: [])
     assert cli.main(["--staged", "--no-adversary"]) == 1
-    lines = capsys.readouterr().err.splitlines()
-    blocked = lines.index(f"  {rel}: BLOCKED — no covering tests")
+    return capsys.readouterr().err.splitlines()
+
+
+@pytest.mark.parametrize(
+    "config,setting",
+    [
+        (Config(), "test_globs"),
+        (Config(languages={"cpp": LanguageConfig()}), "[languages.cpp] test_globs"),
+    ],
+)
+def test_blocked_cpp_file_names_the_test_globs_setting_that_keeps_its_config(
+    tmp_path, monkeypatch, capsys, config, setting
+):
+    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, "ext.cpp", config)
+    blocked = lines.index("  ext.cpp: BLOCKED — no covering tests")
     assert lines[blocked + 1] == (
-        f"    existing tests that cover it: add their paths to "
-        f"[languages.{language}] test_globs in .mutation-gate.toml"
+        f"    existing tests that cover it: add their paths to {setting} in .mutation-gate.toml"
     )
     assert "    uncovered = true" in lines[blocked + 2 :]
+
+
+def test_blocked_python_file_does_not_offer_test_globs(tmp_path, monkeypatch, capsys):
+    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, "mod.py", Config())
+    assert "  mod.py: BLOCKED — no covering tests" in lines
+    assert not any("test_globs" in line for line in lines)
+    assert "    uncovered = true" in lines

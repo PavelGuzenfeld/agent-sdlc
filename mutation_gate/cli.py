@@ -108,8 +108,6 @@ def _gate_file(
         _emit(f"  {rel}: already gated by the other hook (token valid)")
         return False, [], cands
 
-    language = mutants.language_of(rel) or repo.config.language
-
     if not cands:
         waiver = waivers.uncovered_waived(wvs, rel)
         if waiver:
@@ -117,11 +115,14 @@ def _gate_file(
             token.write(repo, rel, fp, "uncovered-waived")
             return False, [], []
         _emit(f"  {rel}: BLOCKED — no covering tests")
-        _emit(f"    existing tests that cover it: add their paths to [languages.{language}] test_globs in {CONFIG_NAME}")
+        if rel.endswith(coverage_map.CPP_SUFFIXES):
+            setting = "[languages.cpp] test_globs" if "cpp" in repo.config.languages else "test_globs"
+            _emit(f"    existing tests that cover it: add their paths to {setting} in {CONFIG_NAME}")
         _emit("    add to " + str(waivers.path(repo)) + ":")
         _emit("    " + waivers.suggest_uncovered(rel).replace("\n", "\n    "))
         return True, [], []
 
+    language = mutants.language_of(rel) or repo.config.language
     lang_cfg = repo.config.for_language(language)
 
     generated = mutants.generate(repo.root, {rel: lines}, repo.config.language)
