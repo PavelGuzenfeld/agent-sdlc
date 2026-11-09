@@ -15,7 +15,7 @@ without_heredocs=$(printf '%s\n' "$cmd" | awk '
 
 cmd_unquoted=$(printf '%s' "$without_heredocs" | tr '\n' ';' | sed -E -e 's/"[^"]*"/Q/g' -e "s/'[^']*'/Q/g")
 
-bare=$(printf '%s' "$cmd_unquoted" | grep -Eo -- '(^|[;&|({]|[;[:space:]](then|do|else))[[:space:]]*(rm|cp|mv)([[:space:]]|$)' | head -n1 | grep -Eo -- '(rm|cp|mv)' | head -n1 || true)
+bare=$(printf '%s' "$cmd_unquoted" | grep -Eo -- '(^|[;&|({`]|[;[:space:]](then|do|else))[[:space:]]*([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*(rm|cp|mv)([[:space:]]|$)' | head -n1 | grep -Eo -- '(rm|cp|mv)([[:space:]]|$)' | tail -n1 | grep -Eo -- '(rm|cp|mv)' || true)
 [ -n "$bare" ] || exit 0
 
 echo "bare-rm-guard: blocks bare $bare" >&2
