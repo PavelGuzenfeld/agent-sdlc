@@ -1201,8 +1201,9 @@ def test_blocked_cpp_file_names_the_test_globs_setting_that_keeps_its_config(
     assert "    uncovered = true" in lines[blocked + 2 :]
 
 
-def test_blocked_python_file_does_not_offer_test_globs(tmp_path, monkeypatch, capsys):
-    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, "mod.py", Config())
-    assert "  mod.py: BLOCKED — no covering tests" in lines
+@pytest.mark.parametrize("rel", ["mod.py", "ext.ts", "ext.gd"])
+def test_blocked_non_cpp_file_does_not_offer_test_globs(tmp_path, monkeypatch, capsys, rel):
+    lines = _block_without_covering_tests(tmp_path, monkeypatch, capsys, rel, Config())
+    assert f"  {rel}: BLOCKED — no covering tests" in lines
     assert not any("test_globs" in line for line in lines)
     assert "    uncovered = true" in lines
