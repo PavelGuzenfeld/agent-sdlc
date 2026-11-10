@@ -88,6 +88,7 @@ def gated(tmp_path, monkeypatch):
         monkeypatch.setattr(cli.token, "write", lambda *a: None)
         monkeypatch.setattr(cli.mutants, "generate", lambda *a: [MUTANT] * len(outcomes))
         monkeypatch.setattr(cli.runner, "baseline_green", lambda *a: baseline)
+        monkeypatch.setattr(cli.runner, "rerun_unmutated", lambda *a: None)
         monkeypatch.setattr(cli.waivers, "waived", lambda *a: None)
         remaining = list(outcomes)
 

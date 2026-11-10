@@ -134,6 +134,7 @@ def _gate_one_file(tmp_path, monkeypatch, wvs, generated, source):
     monkeypatch.setattr(cli.token, "is_valid", lambda *a: False)
     monkeypatch.setattr(cli.token, "write", lambda *a: None)
     monkeypatch.setattr(cli.runner, "baseline_green", lambda *a: 1.0)
+    monkeypatch.setattr(cli.runner, "rerun_unmutated", lambda *a: None)
     monkeypatch.setattr(cli.runner, "classify", lambda repo, m, *a: cli.runner.Result(m, cli.runner.SURVIVED, []))
     _, survivors, _ = cli._gate_file(repo, "a.py", {1, 2, 3, 4}, wvs, on_demand=True)
     return survivors, whole_file_scans

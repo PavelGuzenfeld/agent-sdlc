@@ -164,6 +164,7 @@ def _gate_file(
             continue
         survivors.append(m)
         blocked = True
+    runner.rerun_unmutated(repo, all_tests, lang_cfg.test_command)
     if timed_out:
         # Otherwise the score reads as a clean sweep and says nothing about what
         # produced it: a suite that hangs and a build that is merely slow time

@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import GDSCRIPT_SGCONFIG, require_gdscript_parser
 from mutation_gate import cli
 from mutation_gate.repo import Config, GateError, LanguageConfig, Repo
 
@@ -1165,6 +1166,35 @@ def test_staged_cpp_change_covered_only_by_a_gdscript_test_is_gated_and_reviewed
                         lambda tests, intent, note: reviewed.setdefault("tests", tests) and "")
     assert cli.main(["--staged"]) == 0
     assert [p.relative_to(tmp_path).as_posix() for p in reviewed["tests"]] == ["tests/test_add.gd"]
+
+
+def test_a_gdscript_baseline_after_a_building_cpp_gate_loads_the_restored_build_output(
+    tmp_path, monkeypatch, capsys
+):
+    require_gdscript_parser()
+    original = "int add(int a, int b) { return a + b; }\n"
+    _git_fixture(tmp_path, {
+        ".mutation-gate.toml": (
+            "[languages.cpp]\n"
+            "test_paths = []\n"
+            'test_globs = ["tests/test_add.gd"]\n'
+            "test_command = \"cp src/add.cpp lib.out && grep -q 'a + b' lib.out\"\n"
+            "[languages.gdscript]\n"
+            "test_command = \"grep -q 'a + b' lib.out && grep -q 'return 3$' src/ext.gd\"\n"
+        ),
+        "sgconfig.yml": GDSCRIPT_SGCONFIG,
+        "src/add.cpp": original,
+        "src/ext.gd": "func three():\n\treturn 3\n",
+        "tests/test_add.gd": "extends GutTest\nfunc test_add():\n\tassert_eq(Ext.add(2, 3), 5)\n",
+        "tests/test_ext.gd": "extends GutTest\nfunc test_three():\n\tassert_eq(Ext.three(), 3)\n",
+    })
+    for module in (cli, cli.runner, cli.token, cli.coverage_map):
+        monkeypatch.setattr(module, "CACHE_ROOT", tmp_path / "cache")
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["--staged", "--no-adversary"]) == 0, capsys.readouterr().err
+    assert (tmp_path / "lib.out").read_text() == original
 
 
 
