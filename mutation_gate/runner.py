@@ -261,6 +261,16 @@ def baseline_green(repo: Repo, tests: list[str], test_command: str) -> float:
     return time.monotonic() - start
 
 
+def rerun_unmutated(repo: Repo, tests: list[str], test_command: str) -> None:
+    """Once after the last mutant: restoring the source leaves behind whatever the
+    suite built from the final mutant, and the next language's baseline loads it (#449)."""
+    verdict = _run_tests(repo, tests, test_command, repo.config.baseline_timeout)
+    if verdict != PASSED:
+        raise GateError(
+            f"suite {verdict} on the restored source; build output may still hold a mutant"
+        )
+
+
 def classify(
     repo: Repo,
     mutant: Mutant,

@@ -327,9 +327,9 @@ def test_file_run_narrows_coverage_recorded_under_a_container_mount_path(
 
     code = cli.main(["--file", "pkg/mod.py", "--lines", "2", "--no-adversary"])
 
-    baseline, *per_mutant = ran.read_text().splitlines()
+    baseline, *per_mutant, rerun = ran.read_text().splitlines()
     assert code == 0
-    assert baseline == "tests/test_mod.py"
+    assert baseline == rerun == "tests/test_mod.py"
     assert per_mutant and set(per_mutant) == {"tests/test_mod.py::test_f"}
 
 
