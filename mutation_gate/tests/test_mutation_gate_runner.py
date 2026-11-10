@@ -164,8 +164,6 @@ def test_several_injected_ids_each_reach_the_mutant_run_as_their_own_word(tmp_pa
     assert argv.read_text() == "".join(f"{test_id}\n" for test_id in INJECTED_IDS)
 
 
-def test_a_suite_that_fails_on_the_restored_source_refuses_instead_of_leaving_mutant_build_output(
-    tmp_path,
-):
+def test_a_suite_that_fails_on_the_restored_source_refuses_the_run(tmp_path):
     with pytest.raises(runner.GateError, match="suite failed on the restored source"):
         runner.rerun_unmutated(_repo(tmp_path), [], "false")
