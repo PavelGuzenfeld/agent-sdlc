@@ -10,9 +10,11 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import hashlib
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import time
 import uuid
@@ -56,6 +58,10 @@ NO_ROOT_CACHE = (
     f"-e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX={UNWRITTEN_PYCACHE}"
     " -e PYTEST_ADDOPTS='-p no:cacheprovider'"
 )
+
+REMOTE_ENV = "MUTATION_GATE_REMOTE"
+SSH_TRANSPORT_FAILURE_EXIT_CODE = 255
+REMOTE_CACHE = "~/.cache/mutation-gate"
 
 GIT_REPO_SCOPED = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")
 NO_BYTECODE = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": UNWRITTEN_PYCACHE}
@@ -141,6 +147,64 @@ def _prepare_docker_run(cmd: str) -> tuple[str, str | None]:
     return DOCKER_RUN_RE.sub(f"docker run --name {name} {NO_ROOT_CACHE}", cmd, count=1), name
 
 
+def _remote_dir(repo: Repo) -> str:
+    identity = f"{socket.gethostname()}:{repo.root}".encode()
+    return f"{REMOTE_CACHE}/{hashlib.sha256(identity).hexdigest()[:16]}"
+
+
+GLOB_METACHARACTERS = re.compile(rb"([\\*?\[])")
+
+
+def _anchored_patterns(listed_paths: bytes) -> bytes:
+    """`--files-from` turns off the recursion `--delete` needs, so the list goes in
+    as include patterns. Each path is anchored and escaped to match only itself."""
+    return b"\0".join(
+        b"/" + GLOB_METACHARACTERS.sub(rb"\\\1", path)
+        for path in listed_paths.split(b"\0") if path
+    ) + b"\0"
+
+
+def _sync_to_remote(repo: Repo, remote: str, directory: str) -> None:
+    try:
+        files = subprocess.run(
+            ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+            cwd=repo.root, env=_test_env(), capture_output=True, check=True,
+        ).stdout
+        synced = subprocess.run(
+            ["rsync", "-a", "--checksum", "--delete", "--delete-excluded", "--mkpath", "--prune-empty-dirs",
+             "--from0", "--include-from=-", "--include=*/", "--exclude=*",
+             "./", f"{remote}:{directory.removeprefix('~/')}/"],
+            cwd=repo.root, input=_anchored_patterns(files), capture_output=True, check=False,
+        )
+    except FileNotFoundError as exc:
+        raise GateError(f"cannot sync to {remote}: {exc}") from exc
+    if synced.returncode != 0:
+        raise GateError(
+            f"rsync to {remote} failed ({synced.returncode}): "
+            f"{synced.stderr.decode(errors='replace').strip()}"
+        )
+
+
+def _on_remote(repo: Repo, cmd: str) -> str:
+    """`cmd` as it must run, over ssh in a freshly synced copy when
+    MUTATION_GATE_REMOTE is set. The directory stays unquoted so the remote
+    shell expands `~`."""
+    remote = os.environ.get(REMOTE_ENV)
+    if not remote:
+        return cmd
+    directory = _remote_dir(repo)
+    _sync_to_remote(repo, remote, directory)
+    return f"ssh {shlex.quote(remote)} {shlex.quote(f'cd {directory} && {cmd}')}"
+
+
+def _refuse_ssh_failure(returncode: int) -> None:
+    if os.environ.get(REMOTE_ENV) and returncode == SSH_TRANSPORT_FAILURE_EXIT_CODE:
+        raise GateError(
+            f"ssh to {os.environ[REMOTE_ENV]} failed (exit 255): the test command "
+            "never ran, so the run proves nothing about the mutant"
+        )
+
+
 def _terminate(proc: subprocess.Popen, container: str | None) -> None:
     """Remove the container first, then reap the process group it was attached to."""
     if container:
@@ -168,6 +232,7 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     command started removed if it overruns. Every subprocess the gate starts
     goes through here, or a hang wedges the run and leaks what it was holding."""
     cmd, container = _prepare_docker_run(command)
+    cmd = _on_remote(repo, cmd)
     pattern = repo.config.pass_pattern
     capture = subprocess.PIPE if pattern else subprocess.DEVNULL
     proc = subprocess.Popen(
@@ -181,6 +246,7 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     except subprocess.TimeoutExpired:
         _terminate(proc, container)
         return TIMED_OUT
+    _refuse_ssh_failure(proc.returncode)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
         return ABORTED
     if proc.returncode != 0:
@@ -215,6 +281,7 @@ def _baseline_outcome(repo: Repo, command: str, timeout: float | None) -> str:
     so the pipe is affordable, and only here must a collection error be told
     apart from an ordinary failure."""
     cmd, container = _prepare_docker_run(command)
+    cmd = _on_remote(repo, cmd)
     proc = subprocess.Popen(
         cmd, shell=True, cwd=repo.root,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -226,6 +293,7 @@ def _baseline_outcome(repo: Repo, command: str, timeout: float | None) -> str:
         _terminate(proc, container)
         return TIMED_OUT
     out = out or b""
+    _refuse_ssh_failure(proc.returncode)
     if proc.returncode != 0:
         if _looks_like_collection_failure(proc.returncode, out):
             return BASELINE_COLLECTION_FAILED
