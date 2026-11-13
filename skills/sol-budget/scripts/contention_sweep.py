@@ -82,7 +82,7 @@ def _generator_command(load_gen: Path, threads: int, seconds: float) -> list[str
     """`--first-core` keeps the generators off the victim's core. Without it the sweep
     measures threads fighting for a core, which saturates long before the fabric does
     and puts the knee far below where it belongs."""
-    return [str(load_gen), "--threads", str(threads), "--seconds", str(seconds),
+    return [str(load_gen.absolute()), "--threads", str(threads), "--seconds", str(seconds),
             "--first-core", str(VICTIM_CORE + 1)]
 
 
