@@ -250,3 +250,32 @@ def test_the_combined_cpu_and_gpu_level_is_swept_too(tmp_path):
          "--max-threads", "1", "--seconds", "0.05", "--samples", "1"],
         capture_output=True, text=True, timeout=300, check=True).stdout
     assert "1 cpu + gpu" in out
+
+
+def test_a_load_gen_given_as_a_relative_path_launches_the_executable_in_the_cwd(tmp_path):
+    fake = tmp_path / "load_gen"
+    fake.write_text(f"#!{sys.executable}\nimport json\n"
+                    "print(json.dumps({'delivered_bytes_per_s': 4.0}))\n")
+    fake.chmod(0o755)
+    out = subprocess.run(
+        [sys.executable, str(SCRIPTS / "contention_sweep.py"), "--load-gen", "./load_gen",
+         "--max-threads", "1", "--seconds", "0.05", "--samples", "1"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=300,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "| 1 cpu | 4 |" in out.stdout
+
+
+def test_a_load_gen_cuda_given_as_a_relative_path_launches_the_executable_in_the_cwd(tmp_path):
+    fake = f"#!{sys.executable}\nimport json\nprint(json.dumps({{'delivered_bytes_per_s': 4.0}}))\n"
+    for name in ("load_gen", "load_gen_cuda"):
+        (tmp_path / name).write_text(fake)
+        (tmp_path / name).chmod(0o755)
+    out = subprocess.run(
+        [sys.executable, str(SCRIPTS / "contention_sweep.py"), "--load-gen", "./load_gen",
+         "--load-gen-cuda", "./load_gen_cuda", "--max-threads", "0", "--seconds", "0.05",
+         "--samples", "1"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=300,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "| 0 cpu + gpu | 4 |" in out.stdout
