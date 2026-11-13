@@ -34,6 +34,11 @@ KILLED_TIMEOUT = "KILLED-TIMEOUT"
 PASSED, FAILED, TIMED_OUT = "passed", "failed", "timed out"
 ABORTED = "aborted before any test failed"
 PYTEST_ABORT_EXIT_CODES = frozenset({3, 4, 5})
+SIGKILL_EXIT_CODES = frozenset({128 + signal.SIGKILL, -signal.SIGKILL})
+ENVIRONMENT_FAILURE_CAUSES = {
+    "CUDA out of memory": "a GPU out-of-memory error",
+    "Cannot connect to the Docker daemon": "no reachable docker daemon",
+}
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
@@ -207,6 +212,22 @@ def _refuse_ssh_failure(returncode: int) -> None:
         )
 
 
+def _refuse_environment_failure(returncode: int, found: list[str]) -> None:
+    """Bare `MemoryError` is no marker: a mutant can raise it in plain code, a real kill.
+    Takes causes, not the output: pytest prints a failing frame's arguments, and a
+    marker printed there would block this repo's own gate."""
+    if returncode in SIGKILL_EXIT_CODES:
+        cause = f"was killed by SIGKILL (exit {returncode}), as the out-of-memory killer does"
+    elif returncode != 0 and found:
+        cause = f"reported {found[0]} and exited {returncode}"
+    else:
+        return
+    raise GateError(
+        f"test command {cause}: the environment failed, not a test the mutant broke, "
+        "so the run proves nothing about the mutant. Fix the environment and re-run."
+    )
+
+
 def _terminate(proc: subprocess.Popen, container: str | None) -> None:
     """Remove the container first, then reap the process group it was attached to."""
     if container:
@@ -238,10 +259,9 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     cmd, container = _prepare_docker_run(command)
     cmd = _on_remote(repo, cmd, timeout)
     pattern = repo.config.pass_pattern
-    capture = subprocess.PIPE if pattern else subprocess.DEVNULL
     proc = subprocess.Popen(
         cmd, shell=True, cwd=repo.root,
-        stdout=capture, stderr=subprocess.STDOUT if pattern else capture,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         start_new_session=True, env=_test_env(),
     )
     try:
@@ -251,6 +271,9 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
         _terminate(proc, container)
         return TIMED_OUT
     _refuse_ssh_failure(proc.returncode)
+    out = out or b""
+    found = [label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items() if marker.encode() in out]
+    _refuse_environment_failure(proc.returncode, found)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
         return ABORTED
     if proc.returncode != 0:
