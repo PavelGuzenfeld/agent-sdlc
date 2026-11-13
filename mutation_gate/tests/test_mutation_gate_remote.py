@@ -236,3 +236,41 @@ def test_a_tracked_file_deleted_from_the_tree_does_not_fail_the_sync(remote):
     os.system(f"git -C {remote.root} add gone.py")
     (remote.root / "gone.py").unlink()
     assert _sync_listing(remote) == ["./src/x.py"]
+
+
+DOCKER_SHIM = """#!/bin/sh
+case "$1" in
+run) exec sleep 30 ;;
+rm) echo "$@" >> "$HOME/docker-calls" ;;
+esac
+"""
+
+HANGING_DOCKER_COMMAND = "docker run --rm img {tests}"
+
+
+def _docker_calls(home):
+    log = home / "docker-calls"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+def test_a_hung_remote_container_is_removed_through_ssh_and_never_locally(remote, tmp_path):
+    _install(remote.shims, "docker", DOCKER_SHIM)
+    verdict = runner.classify(remote, MUTANT, ["t.py"], HANGING_DOCKER_COMMAND, 1.0).verdict
+    *_, removal = _argv_calls(remote, "ssh")
+    assert verdict == runner.KILLED_TIMEOUT
+    assert removal[0] == REMOTE
+    assert removal[1].startswith("docker rm -f mutation-gate-")
+    assert _docker_calls(remote.remote_home) == [removal[1].removeprefix("docker ")]
+    assert _docker_calls(tmp_path / "local-home") == []
+
+
+def test_the_remote_command_runs_under_timeout_with_the_kill_grace_inside_the_cd(remote):
+    runner.classify(remote, MUTANT, ["t.py"], RECORD_COMMAND, 30.0)
+    (call,) = _argv_calls(remote, "ssh")
+    assert f" && timeout --kill-after=15 30 sh -c " in call[1]
+
+
+def test_a_remote_run_without_a_timeout_has_no_timeout_wrapper(remote):
+    runner.run_capped(remote, "sh -c 'true'")
+    (call,) = _argv_calls(remote, "ssh")
+    assert "timeout" not in call[1]

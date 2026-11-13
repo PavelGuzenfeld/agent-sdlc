@@ -185,7 +185,7 @@ def _sync_to_remote(repo: Repo, remote: str, directory: str) -> None:
         )
 
 
-def _on_remote(repo: Repo, cmd: str) -> str:
+def _on_remote(repo: Repo, cmd: str, timeout: float | None) -> str:
     """`cmd` as it must run, over ssh in a freshly synced copy when
     MUTATION_GATE_REMOTE is set. The directory stays unquoted so the remote
     shell expands `~`."""
@@ -194,6 +194,8 @@ def _on_remote(repo: Repo, cmd: str) -> str:
         return cmd
     directory = _remote_dir(repo)
     _sync_to_remote(repo, remote, directory)
+    if timeout is not None:
+        cmd = f"timeout --kill-after={TERM_GRACE_SECONDS:g} {timeout:g} sh -c {shlex.quote(cmd)}"
     return f"ssh {shlex.quote(remote)} {shlex.quote(f'cd {directory} && {cmd}')}"
 
 
@@ -208,8 +210,10 @@ def _refuse_ssh_failure(returncode: int) -> None:
 def _terminate(proc: subprocess.Popen, container: str | None) -> None:
     """Remove the container first, then reap the process group it was attached to."""
     if container:
+        remote = os.environ.get(REMOTE_ENV)
+        removal = ["docker", "rm", "-f", container]
         subprocess.run(
-            ["docker", "rm", "-f", container],
+            ["ssh", remote, shlex.join(removal)] if remote else removal,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
         )
     try:
@@ -232,7 +236,7 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     command started removed if it overruns. Every subprocess the gate starts
     goes through here, or a hang wedges the run and leaks what it was holding."""
     cmd, container = _prepare_docker_run(command)
-    cmd = _on_remote(repo, cmd)
+    cmd = _on_remote(repo, cmd, timeout)
     pattern = repo.config.pass_pattern
     capture = subprocess.PIPE if pattern else subprocess.DEVNULL
     proc = subprocess.Popen(
@@ -281,7 +285,7 @@ def _baseline_outcome(repo: Repo, command: str, timeout: float | None) -> str:
     so the pipe is affordable, and only here must a collection error be told
     apart from an ordinary failure."""
     cmd, container = _prepare_docker_run(command)
-    cmd = _on_remote(repo, cmd)
+    cmd = _on_remote(repo, cmd, timeout)
     proc = subprocess.Popen(
         cmd, shell=True, cwd=repo.root,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
