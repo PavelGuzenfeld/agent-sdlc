@@ -31,13 +31,14 @@ open(os.environ["FAKE_REMOTE_HOME"] + ".rsync-argv", "a").write(json.dumps(sys.a
 if os.environ.get("FAKE_RSYNC_EXIT"):
     sys.exit(int(os.environ["FAKE_RSYNC_EXIT"]))
 dest = os.path.join(os.environ["FAKE_REMOTE_HOME"], sys.argv[-1].split(":", 1)[1])
-shutil.rmtree(dest, ignore_errors=True)
-for rel in filter(None, sys.stdin.buffer.read().decode().split("\\0")):
-    os.makedirs(os.path.dirname(os.path.join(dest, rel)), exist_ok=True)
-    shutil.copy(rel, os.path.join(dest, rel))
+os.execv(os.environ["FAKE_REAL_RSYNC"], [os.environ["FAKE_REAL_RSYNC"], *sys.argv[1:-1], dest])
 """
 
 REMOTE = "remote-box"
+
+REAL_RSYNC = shutil.which("rsync")
+
+pytestmark = pytest.mark.skipif(REAL_RSYNC is None, reason="the sync tests drive real rsync")
 
 RECORD_COMMAND = (
     "sh -c 'cp src/x.py \"$HOME/seen\"; pwd > \"$HOME/where\"; echo {tests} > /dev/null'"
@@ -66,6 +67,7 @@ def remote(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{shims}:{os.environ['PATH']}")
     monkeypatch.setenv("HOME", str(tmp_path / "local-home"))
     monkeypatch.setenv("FAKE_REMOTE_HOME", str(remote_home))
+    monkeypatch.setenv("FAKE_REAL_RSYNC", REAL_RSYNC or "")
     monkeypatch.setenv("MUTATION_GATE_REMOTE", REMOTE)
     monkeypatch.setattr(runner, "CACHE_ROOT", tmp_path / "cache")
     repo = repo_mod.Repo(root=work, origin="", remotes=(), config=repo_mod.Config())
@@ -198,3 +200,39 @@ def test_a_failed_rsync_stops_ssh_from_running(remote, monkeypatch):
     with pytest.raises(repo_mod.GateError):
         runner.classify(remote, MUTANT, ["t.py"], RECORD_COMMAND, 30.0)
     assert _argv_calls(remote, "ssh") == []
+
+
+def _sync_listing(remote, monkeypatch=None):
+    command = "sh -c 'find . -type f | sort > \"$HOME/listing\"; echo {tests} > /dev/null'"
+    runner.classify(remote, MUTANT, ["t.py"], command, 30.0)
+    return (remote.remote_home / "listing").read_text().split()
+
+
+def test_a_file_in_the_remote_copy_but_not_in_the_local_list_is_gone_after_a_sync(remote):
+    (remote.root / "sub").mkdir()
+    (remote.root / "sub" / "b.py").write_text("b")
+    (remote.root / "stale.py").write_text("s")
+    (remote.root / "sub" / "stale2.py").write_text("s")
+    _sync_listing(remote)
+    (remote.root / "stale.py").unlink()
+    (remote.root / "sub" / "stale2.py").unlink()
+    assert _sync_listing(remote) == ["./src/x.py", "./sub/b.py"]
+
+
+def test_a_filename_containing_glob_metacharacters_is_synced_only_as_itself(remote):
+    (remote.root / "[a].py").write_text("x")
+    (remote.root / "a.py").write_text("x")
+    (remote.root / "star*.py").write_text("x")
+    (remote.root / "starry.py").write_text("x")
+    os.system(f"git -C {remote.root} add -f 'star*.py' starry.py a.py '[a].py'")
+    os.system(f"git -C {remote.root} rm -q --cached starry.py a.py")
+    (remote.root / "starry.py").unlink()
+    (remote.root / "a.py").unlink()
+    assert _sync_listing(remote) == ["./[a].py", "./src/x.py", "./star*.py"]
+
+
+def test_a_tracked_file_deleted_from_the_tree_does_not_fail_the_sync(remote):
+    (remote.root / "gone.py").write_text("x")
+    os.system(f"git -C {remote.root} add gone.py")
+    (remote.root / "gone.py").unlink()
+    assert _sync_listing(remote) == ["./src/x.py"]

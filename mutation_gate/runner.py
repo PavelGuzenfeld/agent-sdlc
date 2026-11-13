@@ -152,6 +152,18 @@ def _remote_dir(repo: Repo) -> str:
     return f"{REMOTE_CACHE}/{hashlib.sha256(identity).hexdigest()[:16]}"
 
 
+GLOB_METACHARACTERS = re.compile(rb"([\\*?\[])")
+
+
+def _anchored_patterns(listed_paths: bytes) -> bytes:
+    """`--files-from` turns off the recursion `--delete` needs, so the list goes in
+    as include patterns. Each path is anchored and escaped to match only itself."""
+    return b"\0".join(
+        b"/" + GLOB_METACHARACTERS.sub(rb"\\\1", path)
+        for path in listed_paths.split(b"\0") if path
+    ) + b"\0"
+
+
 def _sync_to_remote(repo: Repo, remote: str, directory: str) -> None:
     try:
         files = subprocess.run(
@@ -159,9 +171,10 @@ def _sync_to_remote(repo: Repo, remote: str, directory: str) -> None:
             cwd=repo.root, env=_test_env(), capture_output=True, check=True,
         ).stdout
         synced = subprocess.run(
-            ["rsync", "-a", "--delete", "--ignore-missing-args", "--from0",
-             "--files-from=-", "./", f"{remote}:{directory.removeprefix('~/')}/"],
-            cwd=repo.root, input=files, capture_output=True, check=False,
+            ["rsync", "-a", "--checksum", "--delete", "--delete-excluded", "--mkpath", "--prune-empty-dirs",
+             "--from0", "--include-from=-", "--include=*/", "--exclude=*",
+             "./", f"{remote}:{directory.removeprefix('~/')}/"],
+            cwd=repo.root, input=_anchored_patterns(files), capture_output=True, check=False,
         )
     except FileNotFoundError as exc:
         raise GateError(f"cannot sync to {remote}: {exc}") from exc
