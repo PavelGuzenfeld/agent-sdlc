@@ -308,7 +308,7 @@ def covering_tests(
     # Same suite plus instrumentation, so the baseline cap is the honest bound.
     run_start = time.time()
     verdict = runner.run_capped(repo, cmd, repo.config.baseline_timeout)
-    if verdict in (runner.FAILED, runner.TIMED_OUT):
+    if verdict in (runner.FAILED, runner.ABORTED, runner.TIMED_OUT):
         raise EmptyCoverageError(f"the coverage run {verdict}")
     data_file = repo.root / lang_cfg.coverage_data_file
     if data_file.exists() and data_file.stat().st_mtime < run_start - _COARSEST_MTIME_STEP_S:
