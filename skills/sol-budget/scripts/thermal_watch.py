@@ -140,7 +140,7 @@ def _max_of(pattern: str) -> int | None:
         try:
             with open(path) as handle:
                 values.append(int(handle.read().strip()))
-        except (OSError, ValueError):
+        except (OSError, TypeError, ValueError):
             continue
     return max(values) if values else None
 
