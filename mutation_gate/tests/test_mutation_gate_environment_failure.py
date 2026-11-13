@@ -1,7 +1,6 @@
-"""Intent: #451 — a mutant run whose test command exits non-zero without any
-test failing (pytest internal or usage error, no tests collected) is the
-environment dying, not the suite noticing the mutant. Scoring it KILLED hides a
-real survivor, so the gate refuses the way a bad baseline does."""
+"""Intent: #451 — a mutant run that exits non-zero without any test failing
+(pytest internal or usage error, no tests collected) is the environment dying.
+Scoring it KILLED hides a survivor, so the gate refuses like a bad baseline."""
 
 import pytest
 
