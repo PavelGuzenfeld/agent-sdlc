@@ -109,7 +109,7 @@ def _sweep_point(load_gen: Path, threads: int, seconds: float,
     if threads > 0:
         cmds.append(_generator_command(load_gen, threads, seconds))
     if cuda is not None:
-        cmds.append([str(cuda), "--seconds", str(seconds)])
+        cmds.append([str(cuda.absolute()), "--seconds", str(seconds)])
     procs = [subprocess.Popen(c, stdout=subprocess.PIPE, text=True) for c in cmds]
     time.sleep(seconds * 0.2)  # let the generators reach steady state
     latencies = _victim_latencies()
