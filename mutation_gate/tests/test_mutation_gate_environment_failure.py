@@ -77,6 +77,12 @@ def test_a_run_ended_by_sigkill_blocks_instead_of_counting_as_killed(
         run_mutant(exit_code, prelude)
 
 
+def test_a_run_that_hit_a_gpu_out_of_memory_at_collection_blocks(run_mutant):
+    prelude = "printf 'ERROR collecting t.py\\nE   RuntimeError: CUDA out of %s. Tried\\n' memory; "
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 2"):
+        run_mutant(2, prelude)
+
+
 def test_a_run_that_exits_143_is_still_killed(run_mutant):
     assert run_mutant(143).verdict == runner.KILLED
 
