@@ -4,6 +4,7 @@ at when it happens, which is per-target.
 """
 
 import sys
+import types
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
@@ -313,3 +314,41 @@ def test_the_warm_start_branch_actually_runs(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["thermal_watch.py", "--seconds", "1"])
     assert tw.main() == 0
     assert "already warm" in capsys.readouterr().out
+
+
+class _UnreadableZone:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        raise TypeError("can't concat NoneType to bytes")
+
+
+def test_the_watch_skips_a_thermal_zone_whose_read_raises_type_error(
+        tmp_path, monkeypatch, capsys):
+    zones = {"thermal_zone0/temp": "60000\n",
+             "thermal_zone1/temp": "90000\n",
+             "thermal_zone2/temp": "71000\n"}
+    for name, value in zones.items():
+        (tmp_path / name).parent.mkdir(exist_ok=True)
+        (tmp_path / name).write_text(value)
+    zone_paths = sorted(str(tmp_path / name) for name in zones)
+    real_open = open
+
+    def faulty_open(path, *args, **kwargs):
+        if str(path).endswith("thermal_zone1/temp"):
+            return _UnreadableZone()
+        return real_open(path, *args, **kwargs)
+
+    fake_glob = types.SimpleNamespace(
+        glob=lambda pattern: zone_paths if "thermal_zone" in pattern else [])
+    monkeypatch.setattr(tw, "glob", fake_glob)
+    monkeypatch.setattr(tw, "open", faulty_open, raising=False)
+    monkeypatch.setattr(tw, "_load", lambda threads, seconds: [])
+    monkeypatch.setattr(tw, "_probe_ns", lambda: 1e6)
+    monkeypatch.setattr(sys, "argv", ["thermal_watch.py", "--seconds", "1"])
+    assert tw.main() == 0
+    assert "| 71.0C |" in capsys.readouterr().out
