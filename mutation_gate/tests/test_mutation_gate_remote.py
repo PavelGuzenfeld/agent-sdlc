@@ -5,6 +5,8 @@ hardware can be gated. A transport failure blocks; it is never a kill."""
 import hashlib
 import json
 import os
+import re
+import shlex
 import socket
 import shutil
 import stat
@@ -236,3 +238,62 @@ def test_a_tracked_file_deleted_from_the_tree_does_not_fail_the_sync(remote):
     os.system(f"git -C {remote.root} add gone.py")
     (remote.root / "gone.py").unlink()
     assert _sync_listing(remote) == ["./src/x.py"]
+
+
+DOCKER_SHIM = """#!/bin/sh
+case "$1" in
+run) exec sleep 30 ;;
+rm) echo "$@" >> "$HOME/docker-calls" ;;
+esac
+"""
+
+HANGING_DOCKER_COMMAND = "docker run --rm img {tests}"
+
+
+def _docker_calls(home):
+    log = home / "docker-calls"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+def _removals(remote):
+    return [call for call in _argv_calls(remote, "ssh") if "rm -f" in call[1]]
+
+
+def test_a_hung_remote_container_is_removed_through_ssh_and_never_locally(remote, tmp_path):
+    _install(remote.shims, "docker", DOCKER_SHIM)
+    verdict = runner.classify(remote, MUTANT, ["t.py"], HANGING_DOCKER_COMMAND, 1.0).verdict
+    run_call = _argv_calls(remote, "ssh")[0]
+    name = re.search(r"--name (mutation-gate-\S+)", run_call[1]).group(1)
+    assert verdict == runner.KILLED_TIMEOUT
+    assert _removals(remote) == [[REMOTE, f"docker rm -f {name}"]]
+    assert _docker_calls(remote.remote_home) == [f"rm -f {name}"]
+    assert _docker_calls(tmp_path / "local-home") == []
+
+
+def test_a_hung_remote_container_the_user_named_is_not_removed(remote):
+    _install(remote.shims, "docker", DOCKER_SHIM)
+    command = "docker run --name mine --rm img {tests}"
+    assert runner.classify(remote, MUTANT, ["t.py"], command, 1.0).verdict == runner.KILLED_TIMEOUT
+    assert _removals(remote) == []
+
+
+def test_a_remote_run_that_finishes_removes_no_container(remote):
+    _install(remote.shims, "docker", "#!/bin/sh\n")
+    runner.classify(remote, MUTANT, ["t.py"], "docker run --rm img {tests}", 30.0)
+    assert _removals(remote) == []
+
+
+def test_the_remote_command_runs_under_timeout_with_the_kill_grace_inside_the_cd(remote):
+    runner.classify(remote, MUTANT, ["t.py"], "sh -c 'echo {tests}'", 2.5)
+    (call,) = _argv_calls(remote, "ssh")
+    directory = call[1].split(" && ")[0]
+    assert call[1] == (
+        f"{directory} && timeout --kill-after=15 2.5 sh -c "
+        + shlex.quote("sh -c 'echo t.py'")
+    )
+
+
+def test_a_remote_run_without_a_timeout_has_no_timeout_wrapper(remote):
+    runner.run_capped(remote, "sh -c 'true'")
+    (call,) = _argv_calls(remote, "ssh")
+    assert call[1].endswith(" && sh -c 'true'")
