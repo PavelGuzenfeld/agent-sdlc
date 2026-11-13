@@ -150,7 +150,7 @@ def _gate_file(
     lines = _source_lines(repo, rel) if every else []
     total = len(generated)
     for index, m in enumerate(generated, 1):
-        tests = sorted({t.split("|")[0] for t in cover.get(m.line, [])})
+        tests = sorted({t.rsplit("|", 1)[0] for t in cover.get(m.line, [])})
         selected = all_tests if not tests else tests
         # Progress on every mutant: a silent run is indistinguishable from a hang.
         _emit(f"  [{index}/{total}] {rel}:{m.line}:{m.column} {m.old} => {m.new}")

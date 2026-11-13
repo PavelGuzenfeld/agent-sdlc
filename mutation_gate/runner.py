@@ -30,6 +30,8 @@ KILLED, SURVIVED, NO_TESTS = "KILLED", "SURVIVED", "NO-TESTS"
 KILLED_TIMEOUT = "KILLED-TIMEOUT"
 
 PASSED, FAILED, TIMED_OUT = "passed", "failed", "timed out"
+ABORTED = "aborted before any test failed"
+PYTEST_ABORT_EXIT_CODES = frozenset({3, 4, 5})
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
@@ -179,6 +181,8 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     except subprocess.TimeoutExpired:
         _terminate(proc, container)
         return TIMED_OUT
+    if proc.returncode in PYTEST_ABORT_EXIT_CODES:
+        return ABORTED
     if proc.returncode != 0:
         return FAILED
     if pattern and not re.search(pattern, (out or b"").decode(errors="ignore")):
@@ -282,6 +286,13 @@ def classify(
         return Result(mutant, NO_TESTS, [])
     with mutated(repo, mutant):
         verdict = _run_tests(repo, tests, test_command, timeout)
+    if verdict == ABORTED:
+        raise GateError(
+            f"mutant run {verdict} at {mutant.file}:{mutant.line}: no test failed, so "
+            "it proves nothing about the mutant. Pytest exits 3-5 on an internal "
+            "error, a usage error or no collected tests; check the environment "
+            "(an out-of-memory GPU, a missing image) and re-run."
+        )
     if verdict == PASSED:
         return Result(mutant, SURVIVED, tests)
     return Result(mutant, KILLED_TIMEOUT if verdict == TIMED_OUT else KILLED, tests)
