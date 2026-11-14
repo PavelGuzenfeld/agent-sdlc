@@ -50,6 +50,11 @@ def test_an_aborted_run_leaves_the_source_unmutated(run_mutant, tmp_path):
 
 GPU_OUT_OF_MEMORY = "printf 'torch.OutOfMemoryError: CUDA out of memory\\n'; "
 NO_DOCKER_DAEMON = "printf 'Cannot connect to the Docker daemon at unix:///x.sock\\n'; "
+NO_DOCKER_API = (
+    "printf 'failed to connect to the docker API at unix:///nonexistent; check if the path is"
+    " correct and if the daemon is running: dial unix /nonexistent: connect: no such file or directory\\n'; "
+)
+NO_DOCKER_API_FOR_BUILD = NO_DOCKER_API.replace("printf '", "printf 'ERROR: ")
 
 
 @pytest.mark.parametrize(
@@ -57,8 +62,10 @@ NO_DOCKER_DAEMON = "printf 'Cannot connect to the Docker daemon at unix:///x.soc
     [
         (GPU_OUT_OF_MEMORY, "reported a GPU out-of-memory error and exited 1"),
         (NO_DOCKER_DAEMON, "reported no reachable docker daemon and exited 1"),
+        (NO_DOCKER_API, "reported no reachable docker daemon and exited 1"),
+        (NO_DOCKER_API_FOR_BUILD, "reported no reachable docker daemon and exited 1"),
     ],
-    ids=["gpu", "docker"],
+    ids=["gpu", "docker", "docker-api", "docker-build"],
 )
 def test_a_failed_run_that_printed_an_environment_fault_blocks_naming_it(
     run_mutant, prelude, cause
@@ -137,6 +144,17 @@ def test_raises_the_marker():
 """
 
 
+PRINTING_TEST = """
+def test_prints_the_marker_then_fails():
+    print("CUDA out of memory")
+    assert 1 == 2
+"""
+
+LONG_ID_RAISING_TEST = RAISING_TEST.replace(
+    "test_raises_the_marker", "test_raises_the_marker" + "_from_a_test_with_a_long_name" * 3
+)
+
+
 @pytest.fixture
 def run_pytest(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "CACHE_ROOT", tmp_path / "cache")
@@ -144,9 +162,12 @@ def run_pytest(tmp_path, monkeypatch):
     (tmp_path / "src" / "x.py").write_text("a")
     repo = repo_mod.Repo(root=tmp_path, origin="", remotes=(), config=repo_mod.Config())
 
-    def _run(test_source: str, traceback_style: str) -> runner.Result:
+    def _run(test_source: str, traceback_style: str, color: str = "no") -> runner.Result:
         (tmp_path / "test_t.py").write_text(test_source)
-        command = f"{sys.executable} -m pytest -q -p no:cacheprovider --tb={traceback_style} {{tests}}"
+        command = (
+            f"{sys.executable} -m pytest -q -p no:cacheprovider --color={color}"
+            f" --tb={traceback_style} {{tests}}"
+        )
         return runner.classify(repo, MUTANT, ["test_t.py"], command, 60.0)
 
     return _run
@@ -161,6 +182,29 @@ def test_a_marker_only_in_echoed_test_code_is_still_killed(run_pytest, traceback
 def test_a_marker_in_the_raised_error_blocks(run_pytest, traceback_style):
     with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
         run_pytest(RAISING_TEST, traceback_style)
+
+
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native", "no"])
+def test_a_marker_printed_bare_in_captured_stdout_is_still_killed(run_pytest, traceback_style):
+    assert run_pytest(PRINTING_TEST, traceback_style).verdict == runner.KILLED
+
+
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native", "no"])
+def test_a_marker_in_the_raised_error_blocks_under_color(run_pytest, traceback_style):
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_pytest(RAISING_TEST, traceback_style, color="yes")
+
+
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native", "no"])
+def test_a_marker_only_in_echoed_test_code_is_still_killed_under_color(run_pytest, traceback_style):
+    assert run_pytest(ECHOING_TESTS, traceback_style, color="yes").verdict == runner.KILLED
+
+
+def test_a_marker_raised_by_a_long_test_id_under_tb_no_blocks_outside_ci(run_pytest, monkeypatch):
+    for name in ("COLUMNS", "CI", "BUILD_NUMBER"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_pytest(LONG_ID_RAISING_TEST, "no")
 
 
 def test_a_marker_raised_at_collection_under_tb_no_blocks(run_pytest):
