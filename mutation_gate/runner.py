@@ -39,6 +39,7 @@ ENVIRONMENT_FAILURE_CAUSES = {
     "CUDA out of memory": "a GPU out-of-memory error",
     "Cannot connect to the Docker daemon": "no reachable docker daemon",
 }
+ERROR_LINE_PATTERN = rb"^(?:E\s+[\w.]+: |(?:[\w.]+: )?)"
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
@@ -214,8 +215,8 @@ def _refuse_ssh_failure(returncode: int) -> None:
 
 def _refuse_environment_failure(returncode: int, found: list[str]) -> None:
     """Bare `MemoryError` is no marker: a mutant can raise it in plain code, a real kill.
-    Takes causes, not the output: pytest prints a failing frame's arguments, and a
-    marker printed there would block this repo's own gate."""
+    A marker counts only where ERROR_LINE_PATTERN puts it on an error line: pytest
+    echoes test source and frame arguments, and a marker there is test code (#465)."""
     if returncode in SIGKILL_EXIT_CODES:
         cause = f"was killed by SIGKILL (exit {returncode}), as the out-of-memory killer does"
     elif returncode != 0 and found:
@@ -272,7 +273,10 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
         return TIMED_OUT
     _refuse_ssh_failure(proc.returncode)
     out = out or b""
-    found = [label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items() if marker.encode() in out]
+    found = [
+        label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items()
+        if re.search(ERROR_LINE_PATTERN + re.escape(marker.encode()), out, re.MULTILINE)
+    ]
     _refuse_environment_failure(proc.returncode, found)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
         return ABORTED
