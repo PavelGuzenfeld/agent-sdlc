@@ -1237,3 +1237,46 @@ def test_blocked_non_cpp_file_does_not_offer_test_globs(tmp_path, monkeypatch, c
     assert f"  {rel}: BLOCKED — no covering tests" in lines
     assert not any("test_globs" in line for line in lines)
     assert "    uncovered = true" in lines
+
+
+def test_staged_gated_files_prints_only_gated_sources_without_taking_the_repo_lock(
+    tmp_path, monkeypatch, capsys
+):
+    repo = Repo(root=tmp_path, origin="", remotes=(),
+                config=Config(exclude_paths=["vendor/"]))
+    changed = {name: {1} for name in
+               ["src/b.py", "src/a.py", "README.md", "tests/test_a.py", "vendor/x.py"]}
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: repo)
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", _locked)
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: changed)
+    assert cli.main(["--staged", "--gated-files"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "src/a.py\nsrc/b.py\n"
+    assert captured.err == ""
+
+
+def test_staged_gated_files_prints_nothing_and_exits_zero_for_a_docs_only_change(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", _locked)
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {"README.md": {1}})
+    assert cli.main(["--staged", "--gated-files"]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_staged_gated_files_refuses_with_exit_two_when_the_diff_cannot_be_read(
+    tmp_path, monkeypatch, capsys
+):
+    def _unreadable(root, staged):
+        raise GateError("git diff failed")
+
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.mutants, "changed_lines", _unreadable)
+    assert cli.main(["--staged", "--gated-files"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "git diff failed" in captured.err

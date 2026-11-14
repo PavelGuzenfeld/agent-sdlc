@@ -293,6 +293,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="with --file, gate only these comma-separated line numbers")
     parser.add_argument("--dry-run", action="store_true",
                         help="print candidates and mutants; run no tests")
+    parser.add_argument("--gated-files", action="store_true",
+                        help="print the changed files the gate would test, one per line; run nothing")
     parser.add_argument("files", nargs="*", help="ignored; pre-commit passes filenames")
     args = parser.parse_args(argv)
     if args.lines and not args.file:
@@ -314,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
     if reason:
         _emit(f"mutation-gate skipped: {reason}")
         return 0
+
+    if args.gated_files:
+        return _print_gated_files(repo, staged)
 
     # Lock before guard_clean_start: recovery restores the *other* run's backup.
     try:
@@ -434,15 +439,9 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
     if args.file:
         changed = all_changed
     else:
-        changed = {}
-        for f, lines in all_changed.items():
-            if not mutants.language_of(f) or repo.is_test(f):
-                continue
-            prefix = _excluded(repo, f)
-            if prefix:
-                _emit(f"  {f}: not gated — {CONFIG_NAME} exclude_paths {prefix!r}")
-                continue
-            changed[f] = lines
+        changed, excluded = _gated_changes(repo, all_changed)
+        for f, prefix in excluded.items():
+            _emit(f"  {f}: not gated — {CONFIG_NAME} exclude_paths {prefix!r}")
     if not changed:
         _emit("mutation-gate: no gated source files in this change — no mutants, so no adversary review")
         _warn_stale_report(repo, staged)
@@ -512,6 +511,31 @@ def _run(repo, args, staged: bool, transcript_path: str | None = None) -> int:
         _emit("")
         _emit(f"── blind pass (code only, no spec; reports only, never blocks; saved to {path}) ──")
         _emit(findings)
+    return 0
+
+
+def _gated_changes(repo, all_changed: dict) -> tuple[dict, dict[str, str]]:
+    changed, excluded = {}, {}
+    for f, lines in all_changed.items():
+        if not mutants.language_of(f) or repo.is_test(f):
+            continue
+        prefix = _excluded(repo, f)
+        if prefix:
+            excluded[f] = prefix
+        else:
+            changed[f] = lines
+    return changed, excluded
+
+
+def _print_gated_files(repo, staged: bool) -> int:
+    try:
+        all_changed = mutants.changed_lines(repo.root, staged)
+    except GateError as exc:
+        _emit(f"mutation-gate refused: {exc}")
+        return 2
+    changed, _ = _gated_changes(repo, all_changed)
+    for f in sorted(changed):
+        print(f)
     return 0
 
 
