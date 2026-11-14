@@ -39,7 +39,7 @@ ENVIRONMENT_FAILURE_CAUSES = {
     "CUDA out of memory": "a GPU out-of-memory error",
     "Cannot connect to the Docker daemon": "no reachable docker daemon",
 }
-ERROR_LINE_PATTERN = rb"^(?:E\s+[\w.]+: |(?:[\w.]+: )?)"
+ERROR_LINE_PATTERN = rb"^(?:(?:E\s+|(?:FAILED|ERROR) \S+ - )[\w.]+: |(?:[\w.]+: )?)"
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"

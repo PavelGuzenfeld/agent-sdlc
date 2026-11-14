@@ -121,6 +121,9 @@ def test_echoes_the_marker_in_source():
 def test_echoes_the_marker_in_a_frame_argument():
     check("CUDA out of memory")
 
+def test_echoes_the_docker_marker_in_a_frame_argument():
+    check("Cannot connect to the Docker daemon")
+
 def test_echoes_the_marker_in_diff_context():
     assert "a\\nCUDA out of memory" == "b\\nCUDA out of memory"
 """
@@ -154,14 +157,15 @@ def test_a_marker_only_in_echoed_test_code_is_still_killed(run_pytest, traceback
     assert run_pytest(ECHOING_TESTS, traceback_style).verdict == runner.KILLED
 
 
-@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native"])
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native", "no"])
 def test_a_marker_in_the_raised_error_blocks(run_pytest, traceback_style):
     with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
         run_pytest(RAISING_TEST, traceback_style)
 
 
-def test_a_marker_only_in_the_summary_line_under_tb_no_is_killed(run_pytest):
-    assert run_pytest(RAISING_TEST, "no").verdict == runner.KILLED
+def test_a_marker_raised_at_collection_under_tb_no_blocks(run_pytest):
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 2"):
+        run_pytest('raise RuntimeError("CUDA out of memory")\n', "no")
 
 
 def test_a_marker_on_a_raw_traceback_final_line_blocks(tmp_path, run_mutant):
