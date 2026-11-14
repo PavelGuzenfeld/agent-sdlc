@@ -55,6 +55,7 @@ NO_DOCKER_API = (
     " correct and if the daemon is running: dial unix /nonexistent: connect: no such file or directory\\n'; "
 )
 NO_DOCKER_API_FOR_BUILD = NO_DOCKER_API.replace("printf '", "printf 'ERROR: ")
+NO_DOCKER_API_ON_STDERR = NO_DOCKER_API.replace("\\n'; ", "\\n' >&2; ")
 
 
 @pytest.mark.parametrize(
@@ -64,8 +65,9 @@ NO_DOCKER_API_FOR_BUILD = NO_DOCKER_API.replace("printf '", "printf 'ERROR: ")
         (NO_DOCKER_DAEMON, "reported no reachable docker daemon and exited 1"),
         (NO_DOCKER_API, "reported no reachable docker daemon and exited 1"),
         (NO_DOCKER_API_FOR_BUILD, "reported no reachable docker daemon and exited 1"),
+        (NO_DOCKER_API_ON_STDERR, "reported no reachable docker daemon and exited 1"),
     ],
-    ids=["gpu", "docker", "docker-api", "docker-build"],
+    ids=["gpu", "docker", "docker-api", "docker-build", "docker-api-stderr"],
 )
 def test_a_failed_run_that_printed_an_environment_fault_blocks_naming_it(
     run_mutant, prelude, cause
@@ -130,6 +132,9 @@ def test_echoes_the_marker_in_a_frame_argument():
 
 def test_echoes_the_docker_marker_in_a_frame_argument():
     check("Cannot connect to the Docker daemon")
+
+def test_echoes_the_docker_api_marker_in_a_frame_argument():
+    check("failed to connect to the docker API")
 
 def test_echoes_the_marker_in_diff_context():
     assert "a\\nCUDA out of memory" == "b\\nCUDA out of memory"
