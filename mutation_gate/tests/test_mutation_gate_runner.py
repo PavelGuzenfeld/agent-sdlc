@@ -15,7 +15,7 @@ def test_a_docker_test_command_cannot_write_root_owned_cache_dirs_into_the_repo(
     assert cmd.startswith(
         f"docker run --name {container} -e PYTHONDONTWRITEBYTECODE=1"
         " -e PYTHONPYCACHEPREFIX=/nonexistent/mutation-gate-pycache"
-        " -e PYTEST_ADDOPTS='-p no:cacheprovider' -e COLUMNS=1000 --rm"
+        " -e PYTEST_ADDOPTS='-p no:cacheprovider' -e COLUMNS=1000 -e BUILD_NUMBER=1 --rm"
     )
 
 
@@ -24,7 +24,7 @@ def test_a_command_that_names_its_own_container_keeps_that_name_and_gets_the_env
     assert cmd.startswith(
         "docker run -e PYTHONDONTWRITEBYTECODE=1"
         " -e PYTHONPYCACHEPREFIX=/nonexistent/mutation-gate-pycache"
-        " -e PYTEST_ADDOPTS='-p no:cacheprovider' -e COLUMNS=1000 --name mine"
+        " -e PYTEST_ADDOPTS='-p no:cacheprovider' -e COLUMNS=1000 -e BUILD_NUMBER=1 --name mine"
     )
     assert container is None, "docker rm -f must not target a name the pack never passed"
 

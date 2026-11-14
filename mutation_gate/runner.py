@@ -43,6 +43,10 @@ ENVIRONMENT_FAILURE_CAUSES = {
     DOCKER_LINE_PATTERN + rb"failed to connect to the docker API": "no reachable docker daemon",
 }
 ANSI_COLOR_RE = re.compile(rb"\x1b\[[0-9;]*m")
+CAPTURED_OUTPUT_RE = re.compile(
+    rb"^-+ Captured [^\n]*$.*?(?=^([-_=])\1* [^\n]* \1+$|^\S[^\n]*:\d+: |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
@@ -68,7 +72,10 @@ NO_ROOT_CACHE = (
     " -e PYTEST_ADDOPTS='-p no:cacheprovider'"
 )
 TERMINAL_WIDTH = "1000"
-DOCKER_RUN_ENVIRONMENT = f"{NO_ROOT_CACHE} -e COLUMNS={TERMINAL_WIDTH}"
+UNCUT_SUMMARY_ENVIRONMENT = {"COLUMNS": TERMINAL_WIDTH, "BUILD_NUMBER": "1"}
+DOCKER_RUN_ENVIRONMENT = NO_ROOT_CACHE + "".join(
+    f" -e {name}={value}" for name, value in UNCUT_SUMMARY_ENVIRONMENT.items()
+)
 
 REMOTE_ENV = "MUTATION_GATE_REMOTE"
 SSH_TRANSPORT_FAILURE_EXIT_CODE = 255
@@ -82,9 +89,9 @@ def _test_env() -> dict[str, str]:
     """The environment a repo's own command runs in. Git exports these into every
     hook and they override `-C`, so a suite that builds a temp repo stages into
     the commit being gated instead (flowdiff#83)."""
-    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED} | NO_BYTECODE | {
-        "COLUMNS": TERMINAL_WIDTH
-    }
+    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED} | NO_BYTECODE | (
+        UNCUT_SUMMARY_ENVIRONMENT
+    )
 
 
 @dataclass
@@ -209,7 +216,8 @@ def _on_remote(repo: Repo, cmd: str, timeout: float | None) -> str:
     _sync_to_remote(repo, remote, directory)
     if timeout is not None:
         cmd = f"timeout --kill-after={TERM_GRACE_SECONDS:g} {timeout:g} sh -c {shlex.quote(cmd)}"
-    return f"ssh {shlex.quote(remote)} {shlex.quote(f'cd {directory} && {cmd}')}"
+    exports = " ".join(f"{name}={value}" for name, value in UNCUT_SUMMARY_ENVIRONMENT.items())
+    return f"ssh {shlex.quote(remote)} {shlex.quote(f'export {exports}; cd {directory} && {cmd}')}"
 
 
 def _refuse_ssh_failure(returncode: int) -> None:
@@ -281,9 +289,10 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     _refuse_ssh_failure(proc.returncode)
     out = out or b""
     uncolored = ANSI_COLOR_RE.sub(b"", out)
+    reported = CAPTURED_OUTPUT_RE.sub(b"", uncolored)
     found = [
         label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items()
-        if re.search(marker, uncolored, re.MULTILINE)
+        if re.search(marker, reported, re.MULTILINE)
     ]
     _refuse_environment_failure(proc.returncode, found)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
