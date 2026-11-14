@@ -313,3 +313,20 @@ def test_a_remote_plain_pytest_run_under_tb_no_with_a_long_id_blocks_on_a_raised
     command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no --tb=no {{tests}}"
     with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
         runner.classify(remote, MUTANT, ["test_t.py"], command, 60.0)
+
+
+def test_a_remote_plain_pytest_run_without_a_timeout_with_a_long_id_blocks_on_a_raised_marker(
+    remote,
+):
+    (remote.root / "test_t.py").write_text(LONG_ID_RAISING_TEST)
+    command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no --tb=no test_t.py"
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        runner.run_capped(remote, command)
+
+
+def test_a_remote_test_that_only_prints_a_typed_marker_then_fails_is_still_killed(remote):
+    (remote.root / "test_t.py").write_text(
+        'def test_prints():\n    print("RuntimeError: CUDA out of memory")\n    assert 1 == 2\n'
+    )
+    command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no {{tests}}"
+    assert runner.classify(remote, MUTANT, ["test_t.py"], command, 60.0).verdict == runner.KILLED
