@@ -159,6 +159,19 @@ LONG_ID_RAISING_TEST = RAISING_TEST.replace(
     "test_raises_the_marker", "test_raises_the_marker" + "_from_a_test_with_a_long_name" * 3
 )
 
+THOUSANDS_LONG_ID_RAISING_TEST = RAISING_TEST.replace(
+    "test_raises_the_marker", "test_raises_the_marker" + "_from_a_test_with_a_long_name" * 100
+)
+
+TYPED_PRINTING_TEST = """
+import sys
+
+def test_prints_the_typed_marker_then_fails():
+    print("RuntimeError: CUDA out of memory")
+    print("torch.OutOfMemoryError: CUDA out of memory", file=sys.stderr)
+    assert 1 == 2
+"""
+
 
 @pytest.fixture
 def run_pytest(tmp_path, monkeypatch):
@@ -167,11 +180,13 @@ def run_pytest(tmp_path, monkeypatch):
     (tmp_path / "src" / "x.py").write_text("a")
     repo = repo_mod.Repo(root=tmp_path, origin="", remotes=(), config=repo_mod.Config())
 
-    def _run(test_source: str, traceback_style: str, color: str = "no") -> runner.Result:
+    def _run(
+        test_source: str, traceback_style: str, color: str = "no", report: str = "fE"
+    ) -> runner.Result:
         (tmp_path / "test_t.py").write_text(test_source)
         command = (
             f"{sys.executable} -m pytest -q -p no:cacheprovider --color={color}"
-            f" --tb={traceback_style} {{tests}}"
+            f" --tb={traceback_style} -r{report} {{tests}}"
         )
         return runner.classify(repo, MUTANT, ["test_t.py"], command, 60.0)
 
@@ -210,6 +225,28 @@ def test_a_marker_raised_by_a_long_test_id_under_tb_no_blocks_outside_ci(run_pyt
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
         run_pytest(LONG_ID_RAISING_TEST, "no")
+
+
+def test_a_marker_raised_by_a_test_id_thousands_of_characters_long_under_tb_no_blocks(
+    run_pytest, monkeypatch
+):
+    for name in ("COLUMNS", "CI", "BUILD_NUMBER"):
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_pytest(THOUSANDS_LONG_ID_RAISING_TEST, "no")
+
+
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native", "no"])
+def test_a_typed_marker_printed_to_captured_output_is_still_killed(run_pytest, traceback_style):
+    assert run_pytest(TYPED_PRINTING_TEST, traceback_style).verdict == runner.KILLED
+
+
+@pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native"])
+def test_a_marker_raised_after_a_test_printed_a_typed_marker_blocks_without_a_summary(
+    run_pytest, traceback_style
+):
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_pytest(TYPED_PRINTING_TEST + RAISING_TEST, traceback_style, report="N")
 
 
 def test_a_marker_raised_at_collection_under_tb_no_blocks(run_pytest):

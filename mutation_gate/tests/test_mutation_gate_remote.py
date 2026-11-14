@@ -10,6 +10,7 @@ import shlex
 import socket
 import shutil
 import stat
+import sys
 
 import pytest
 
@@ -23,7 +24,9 @@ import json, os, subprocess, sys
 open(os.environ["FAKE_REMOTE_HOME"] + ".ssh-argv", "a").write(json.dumps(sys.argv[1:]) + "\\n")
 if os.environ.get("FAKE_SSH_EXIT"):
     sys.exit(int(os.environ["FAKE_SSH_EXIT"]))
-env = dict(os.environ, HOME=os.environ["FAKE_REMOTE_HOME"])
+local_only = ("COLUMNS", "CI", "BUILD_NUMBER")
+env = {k: v for k, v in os.environ.items() if k not in local_only}
+env["HOME"] = os.environ["FAKE_REMOTE_HOME"]
 sys.exit(subprocess.run(["sh", "-c", sys.argv[2]], env=env).returncode)
 """
 
@@ -297,3 +300,33 @@ def test_a_remote_run_without_a_timeout_has_no_timeout_wrapper(remote):
     runner.run_capped(remote, "sh -c 'true'")
     (call,) = _argv_calls(remote, "ssh")
     assert call[1].endswith(" && sh -c 'true'")
+
+
+LONG_ID_RAISING_TEST = f"""
+def test_raises_the_marker{"_from_a_test_with_a_long_name" * 100}():
+    raise RuntimeError("CUDA out of memory. Tried to allocate 2 MiB")
+"""
+
+
+def test_a_remote_plain_pytest_run_under_tb_no_with_a_long_id_blocks_on_a_raised_marker(remote):
+    (remote.root / "test_t.py").write_text(LONG_ID_RAISING_TEST)
+    command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no --tb=no {{tests}}"
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        runner.classify(remote, MUTANT, ["test_t.py"], command, 60.0)
+
+
+def test_a_remote_plain_pytest_run_without_a_timeout_with_a_long_id_blocks_on_a_raised_marker(
+    remote,
+):
+    (remote.root / "test_t.py").write_text(LONG_ID_RAISING_TEST)
+    command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no --tb=no test_t.py"
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        runner.run_capped(remote, command)
+
+
+def test_a_remote_test_that_only_prints_a_typed_marker_then_fails_is_still_killed(remote):
+    (remote.root / "test_t.py").write_text(
+        'def test_prints():\n    print("RuntimeError: CUDA out of memory")\n    assert 1 == 2\n'
+    )
+    command = f"{sys.executable} -m pytest -q -p no:cacheprovider --color=no {{tests}}"
+    assert runner.classify(remote, MUTANT, ["test_t.py"], command, 60.0).verdict == runner.KILLED
