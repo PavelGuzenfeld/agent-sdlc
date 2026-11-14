@@ -35,10 +35,14 @@ PASSED, FAILED, TIMED_OUT = "passed", "failed", "timed out"
 ABORTED = "aborted before any test failed"
 PYTEST_ABORT_EXIT_CODES = frozenset({3, 4, 5})
 SIGKILL_EXIT_CODES = frozenset({128 + signal.SIGKILL, -signal.SIGKILL})
+ERROR_LINE_PATTERN = rb"^(?:E\s+|(?:FAILED|ERROR) \S+ - )?[\w.]+: "
+DOCKER_LINE_PATTERN = rb"^(?:[\w.]+: )?"
 ENVIRONMENT_FAILURE_CAUSES = {
-    "CUDA out of memory": "a GPU out-of-memory error",
-    "Cannot connect to the Docker daemon": "no reachable docker daemon",
+    ERROR_LINE_PATTERN + rb"CUDA out of memory": "a GPU out-of-memory error",
+    DOCKER_LINE_PATTERN + rb"Cannot connect to the Docker daemon": "no reachable docker daemon",
+    DOCKER_LINE_PATTERN + rb"failed to connect to the docker API": "no reachable docker daemon",
 }
+ANSI_COLOR_RE = re.compile(rb"\x1b\[[0-9;]*m")
 # Exit 0 with no pass marker: a runner that never loaded the code still exits 0,
 # and the gate would read that as every mutant surviving.
 NO_PASS_MARKER = "exited 0 without reporting a pass"
@@ -63,6 +67,8 @@ NO_ROOT_CACHE = (
     f"-e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPYCACHEPREFIX={UNWRITTEN_PYCACHE}"
     " -e PYTEST_ADDOPTS='-p no:cacheprovider'"
 )
+TERMINAL_WIDTH = "1000"
+DOCKER_RUN_ENVIRONMENT = f"{NO_ROOT_CACHE} -e COLUMNS={TERMINAL_WIDTH}"
 
 REMOTE_ENV = "MUTATION_GATE_REMOTE"
 SSH_TRANSPORT_FAILURE_EXIT_CODE = 255
@@ -76,7 +82,9 @@ def _test_env() -> dict[str, str]:
     """The environment a repo's own command runs in. Git exports these into every
     hook and they override `-C`, so a suite that builds a temp repo stages into
     the commit being gated instead (flowdiff#83)."""
-    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED} | NO_BYTECODE
+    return {k: v for k, v in os.environ.items() if k not in GIT_REPO_SCOPED} | NO_BYTECODE | {
+        "COLUMNS": TERMINAL_WIDTH
+    }
 
 
 @dataclass
@@ -134,7 +142,7 @@ def mutated(repo: Repo, mutant: Mutant):
 
 
 def _prepare_docker_run(cmd: str) -> tuple[str, str | None]:
-    """A `docker run` gets NO_ROOT_CACHE, and a unique --name when the command
+    """A `docker run` gets DOCKER_RUN_ENVIRONMENT, and a unique --name when the command
     names none. The returned name is what `_terminate` may `docker rm -f`, so it
     is None whenever the pack did not choose it.
 
@@ -147,9 +155,9 @@ def _prepare_docker_run(cmd: str) -> tuple[str, str | None]:
     if not DOCKER_RUN_RE.search(cmd):
         return cmd, None
     if "--name" in cmd:
-        return DOCKER_RUN_RE.sub(f"docker run {NO_ROOT_CACHE}", cmd, count=1), None
+        return DOCKER_RUN_RE.sub(f"docker run {DOCKER_RUN_ENVIRONMENT}", cmd, count=1), None
     name = f"mutation-gate-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    return DOCKER_RUN_RE.sub(f"docker run --name {name} {NO_ROOT_CACHE}", cmd, count=1), name
+    return DOCKER_RUN_RE.sub(f"docker run --name {name} {DOCKER_RUN_ENVIRONMENT}", cmd, count=1), name
 
 
 def _remote_dir(repo: Repo) -> str:
@@ -214,8 +222,8 @@ def _refuse_ssh_failure(returncode: int) -> None:
 
 def _refuse_environment_failure(returncode: int, found: list[str]) -> None:
     """Bare `MemoryError` is no marker: a mutant can raise it in plain code, a real kill.
-    Takes causes, not the output: pytest prints a failing frame's arguments, and a
-    marker printed there would block this repo's own gate."""
+    A marker counts only where ERROR_LINE_PATTERN puts it on an error line: pytest
+    echoes test source and frame arguments, and a marker there is test code (#465)."""
     if returncode in SIGKILL_EXIT_CODES:
         cause = f"was killed by SIGKILL (exit {returncode}), as the out-of-memory killer does"
     elif returncode != 0 and found:
@@ -272,7 +280,11 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
         return TIMED_OUT
     _refuse_ssh_failure(proc.returncode)
     out = out or b""
-    found = [label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items() if marker.encode() in out]
+    uncolored = ANSI_COLOR_RE.sub(b"", out)
+    found = [
+        label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items()
+        if re.search(marker, uncolored, re.MULTILINE)
+    ]
     _refuse_environment_failure(proc.returncode, found)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
         return ABORTED
