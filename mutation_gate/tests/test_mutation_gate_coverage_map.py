@@ -118,10 +118,11 @@ def test_candidates_finds_a_test_that_extends_sys_path_without_insert(tmp_path, 
     (tmp_path / "tools" / "geo_frame.py").write_text("def geo_to_local(): pass\n")
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
-    test_file = tests_dir / "test_geo_frame.py"
+    test_file = tests_dir / "test_frame_math.py"
     test_file.write_text(
         f"import sys\nfrom pathlib import Path\n{statement}\nfrom geo_frame import geo_to_local\n"
     )
+    (tests_dir / "test_unrelated.py").write_text("import sys\n")
     (tmp_path / ".git").mkdir()
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
 
