@@ -104,6 +104,41 @@ def test_candidates_finds_a_test_that_imports_via_sys_path_hack(tmp_path):
     assert coverage_map.candidates(repo, "tools/geo_frame.py") == [test_file]
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        'sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "tools")]',
+        'sys.path.append(str(Path(__file__).resolve().parent.parent / "tools"))',
+        'sys.path.extend([str(Path(__file__).resolve().parent.parent / "tools")])',
+    ],
+    ids=["slice_assignment", "append", "extend"],
+)
+def test_candidates_finds_a_test_that_extends_sys_path_without_insert(tmp_path, statement):
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "geo_frame.py").write_text("def geo_to_local(): pass\n")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    test_file = tests_dir / "test_geo_frame.py"
+    test_file.write_text(
+        f"import sys\nfrom pathlib import Path\n{statement}\nfrom geo_frame import geo_to_local\n"
+    )
+    (tmp_path / ".git").mkdir()
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+
+    assert coverage_map.candidates(repo, "tools/geo_frame.py") == [test_file]
+
+
+def test_sys_path_roots_ignores_calls_that_do_not_add_a_directory(tmp_path):
+    test_file = tmp_path / "test_geo_frame.py"
+    test_file.write_text(
+        "import sys\nfrom pathlib import Path\n"
+        'sys.path.remove([Path(__file__)])\n'
+        'sys.path.index(0, Path(__file__))\n'
+        'sys.path.insert(Path(__file__))\n'
+    )
+    assert coverage_map._sys_path_roots(test_file) == []
+
+
 def test_candidates_finds_a_colocated_vitest_test_declared_only_by_glob(tmp_path):
     lib = tmp_path / "web" / "lib"
     lib.mkdir(parents=True)

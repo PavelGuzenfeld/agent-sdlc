@@ -105,18 +105,43 @@ def _sys_path_roots(path: Path) -> list[Path]:
             resolved = _resolve_path_expr(node.value, file_path, names)
             if resolved is not None:
                 names[node.targets[0].id] = resolved
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "insert"
-            and isinstance(node.func.value, ast.Attribute)
-            and node.func.value.attr == "path"
-            and len(node.args) == 2
-        ):
-            resolved = _resolve_path_expr(node.args[1], file_path, names)
-            if resolved is not None:
-                roots.append(resolved)
+        else:
+            for added in _sys_path_additions(node):
+                resolved = _resolve_path_expr(added, file_path, names)
+                if resolved is not None:
+                    roots.append(resolved)
     return roots
+
+
+def _is_sys_path(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "path"
+
+
+def _list_elements(node: ast.AST) -> list[ast.expr]:
+    return node.elts if isinstance(node, ast.List) else []
+
+
+def _sys_path_additions(node: ast.AST) -> list[ast.expr]:
+    if (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Subscript)
+        and _is_sys_path(node.targets[0].value)
+        and isinstance(node.targets[0].slice, ast.Slice)
+    ):
+        return _list_elements(node.value)
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and _is_sys_path(node.func.value)
+    ):
+        if node.func.attr == "insert" and len(node.args) == 2:
+            return [node.args[1]]
+        if node.func.attr == "append" and len(node.args) == 1:
+            return [node.args[0]]
+        if node.func.attr == "extend" and len(node.args) == 1:
+            return _list_elements(node.args[0])
+    return []
 
 
 def _test_files(repo: Repo, language: str, suffix: str) -> list[Path]:
