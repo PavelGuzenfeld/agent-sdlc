@@ -194,7 +194,10 @@ class Graph:
     def digest(self) -> str:
         payload = json.dumps(
             {
-                "nodes": [vars(n) | {"crossings": list(n.crossings)} for n in self.nodes],
+                "nodes": [
+                    vars(n) | {"crossings": [_digest_form(c) for c in n.crossings]}
+                    for n in self.nodes
+                ],
                 "edges": [vars(e) for e in self.edges],
                 "window": [self.period, self.margin],
             },
@@ -247,6 +250,10 @@ def _flatten_rows(raw: dict, prefix: str = "") -> dict[str, Row]:
         elif isinstance(spec, dict):
             rows.update(_flatten_rows(spec, f"{key}."))
     return rows
+
+
+def _digest_form(crossing: Crossing) -> str | Crossing:
+    return crossing.name if crossing.count == 1 else crossing
 
 
 def _crossing(raw: str | dict) -> Crossing:

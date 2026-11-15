@@ -481,3 +481,28 @@ def test_a_counted_crossing_adds_to_the_other_crossings_of_the_node():
     crossings = ["syscall", {"name": "syscall", "count": 3}]
     floors = sol.solve(_graph([_node("a", crossings=crossings)]), _model()).floors["a"]
     assert floors.tax == 1.0e-6 + 3 * 1.0e-6
+
+
+@pytest.mark.parametrize(
+    ("crossings", "digest"),
+    [
+        (["syscall", "ioctl"], "sha256:39053e5fee1aa0bf"),
+        ([{"name": "syscall"}, {"name": "ioctl", "count": 1}], "sha256:39053e5fee1aa0bf"),
+        (["syscall"], "sha256:170c966b9c20f6e9"),
+    ],
+)
+def test_count_one_crossings_keep_the_digest_the_graph_had_before_counts_existed(crossings, digest):
+    graph = _graph([_node("a", bytes=GB, crossings=crossings)])
+    assert graph.digest == digest
+
+
+def test_a_crossing_count_above_one_changes_the_digest():
+    once = _graph([_node("a", bytes=GB, crossings=["syscall"])])
+    twice = _graph([_node("a", bytes=GB, crossings=[{"name": "syscall", "count": 2}])])
+    assert once.digest != twice.digest
+
+
+def test_crossing_counts_two_and_three_have_different_digests():
+    twice = _graph([_node("a", bytes=GB, crossings=[{"name": "syscall", "count": 2}])])
+    thrice = _graph([_node("a", bytes=GB, crossings=[{"name": "syscall", "count": 3}])])
+    assert twice.digest != thrice.digest
