@@ -95,6 +95,14 @@ __global__ void copy_kernel(const float4* __restrict__ src, float4* __restrict__
         dst[i] = src[i];
 }
 
+__global__ void negate_in_place_kernel(float4* __restrict__ buffer, size_t n) {
+    for (size_t i = blockIdx.x * size_t(blockDim.x) + threadIdx.x; i < n;
+         i += size_t(gridDim.x) * blockDim.x) {
+        const float4 v = buffer[i];
+        buffer[i] = make_float4(-v.x, -v.y, -v.z, -v.w);
+    }
+}
+
 __global__ void noop_kernel() {}
 
 // --- rows ----------------------------------------------------------------------
@@ -117,6 +125,23 @@ CopyRate copy_path(void* dst, const void* src, cudaMemcpyKind kind) {
         rate.push_back(double(COPY_BYTES) / (now_s() - a));
     }
     return {percentile(rate, 0.5), percentile(rate, 0.0)};
+}
+
+template <class Launch>
+CopyRate sustained_pass_rate(Launch launch) {
+    std::vector<double> bytes;
+    for (int s = 0; s < g_samples; ++s) {
+        CUDA_OR_DIE(cudaDeviceSynchronize());
+        const double a = now_s();
+        long passes = 0;
+        while (now_s() - a < g_sustained_seconds) {
+            launch();
+            ++passes;
+            CUDA_OR_DIE(cudaDeviceSynchronize());
+        }
+        bytes.push_back(double(passes) * double(COPY_BYTES) / (now_s() - a));
+    }
+    return {percentile(bytes, 0.5), percentile(bytes, 0.0)};
 }
 
 void bench_copy_paths() {
@@ -211,25 +236,23 @@ void bench_gpu_unit() {
     CUDA_OR_DIE(cudaMalloc(&src, COPY_BYTES));
     CUDA_OR_DIE(cudaMalloc(&dst, COPY_BYTES));
     CUDA_OR_DIE(cudaMemset(src, 1, COPY_BYTES));
-    std::vector<double> bytes;
-    for (int s = 0; s < g_samples; ++s) {
-        CUDA_OR_DIE(cudaDeviceSynchronize());
-        const double a = now_s();
-        long passes = 0;
-        while (now_s() - a < g_sustained_seconds) {
-            copy_kernel<<<blocks, threads>>>(src, dst, n);
-            ++passes;
-            CUDA_OR_DIE(cudaDeviceSynchronize());
-        }
-        bytes.push_back(double(passes) * double(COPY_BYTES) / (now_s() - a));
-    }
+    const CopyRate copy =
+        sustained_pass_rate([&] { copy_kernel<<<blocks, threads>>>(src, dst, n); });
+    const CopyRate in_place =
+        sustained_pass_rate([&] { negate_in_place_kernel<<<blocks, threads>>>(src, n); });
+    const bool in_place_wins = in_place.median > copy.median;
+    const CopyRate reported = in_place_wins ? in_place : copy;
     std::snprintf(method, sizeof method,
-                  "fabric_bw.cu float4 streaming copy kernel over %zuMiB, bytes copied "
-                  "not bus traffic — halve for read+write; each sample sustained %.1fs; "
-                  "median of %d, worst %.3g B/s",
-                  COPY_BYTES >> 20, g_sustained_seconds, g_samples, percentile(bytes, 0.0));
-    g_streaming_traffic = percentile(bytes, 0.5) * 2.0;
-    emit("sustained_bytes", percentile(bytes, 0.5), "B/s", method);
+                  "fabric_bw.cu higher of two float4 streaming kernels over %zuMiB — a "
+                  "two-buffer copy at median %.4g B/s and an in-place negate at median "
+                  "%.4g B/s; reports the %s; each element counted once, not bus traffic — "
+                  "halve for read+write; each sample sustained %.1fs; median of %d, "
+                  "worst %.3g B/s",
+                  COPY_BYTES >> 20, copy.median, in_place.median,
+                  in_place_wins ? "in-place negate" : "copy", g_sustained_seconds,
+                  g_samples, reported.worst);
+    g_streaming_traffic = reported.median * 2.0;
+    emit("sustained_bytes", reported.median, "B/s", method);
 
     announce("dispatch_latency / completion_latency");
     std::vector<double> dispatch, completion;
