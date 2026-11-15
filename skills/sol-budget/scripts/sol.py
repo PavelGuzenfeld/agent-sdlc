@@ -194,6 +194,17 @@ class Graph:
         )
         return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()[:16]
 
+    def has_path(self, src: str, dst: str) -> bool:
+        queue, seen = deque([src]), set()
+        while queue:
+            nid = queue.popleft()
+            if nid == dst:
+                return True
+            if nid not in seen:
+                seen.add(nid)
+                queue.extend(e.dst for e in self.edges if e.src == nid)
+        return False
+
     def hidden_copies(self) -> list[Edge]:
         """Edges the handoff matrix prices as copy/convert with no node to pay for it."""
         return [
@@ -302,6 +313,18 @@ def _unit_bandwidth(node: Node, model: MachineModel) -> Bandwidth:
     return Bandwidth(row.rate(), row.key)
 
 
+def _find_overlapping_nodes(graph: Graph, model: MachineModel) -> set[str]:
+    """Nodes with no path between them can run at once. Only their bytes meet at the
+    knee; a lone node or a serial chain never contends with itself."""
+    memory_nodes = [n.id for n in graph.nodes if model.shared(n.memory) and n.nbytes]
+    return {
+        a
+        for a in memory_nodes
+        for b in memory_nodes
+        if not graph.has_path(a, b) and not graph.has_path(b, a)
+    }
+
+
 def _critical_path(graph: Graph, floors: dict[str, Floors], model: MachineModel) -> float:
     indegree = {n.id: 0 for n in graph.nodes}
     out: dict[str, list[Edge]] = {n.id: [] for n in graph.nodes}
@@ -339,13 +362,14 @@ class Solution:
 def solve(graph: Graph, model: MachineModel) -> Solution:
     """Floors, critical path, and budgets, with the fabric made self-consistent.
 
-    Overlapping demand above the measured knee degrades every shared-memory node's
-    bandwidth and re-derives; that raises the critical path, which lowers offered
+    Overlapping demand above the measured knee degrades every overlapping shared-memory
+    node's bandwidth and re-derives; that raises the critical path, which lowers offered
     load, so the loop is monotone and terminates.
     """
     bw = {n.id: _unit_bandwidth(n, model) for n in graph.nodes}
     knee = graph_knee = model.knee().value
-    fabric_bytes = sum(n.nbytes for n in graph.nodes if model.shared(n.memory))
+    overlapping_nodes = _find_overlapping_nodes(graph, model)
+    fabric_bytes = sum(graph.node(nid).nbytes for nid in overlapping_nodes)
     degraded = False
     for iteration in range(1, MAX_FABRIC_ITERS + 1):
         floors = {n.id: _floors(n, model, bw[n.id]) for n in graph.nodes}
@@ -358,8 +382,8 @@ def solve(graph: Graph, model: MachineModel) -> Solution:
         degraded = True
         scale = graph_knee / offered
         bw = {
-            n.id: Bandwidth(bw[n.id].value * scale, bw[n.id].row)
-            if model.shared(n.memory)
+            n.id: Bandwidth(bw[n.id].value * scale, model.knee().row)
+            if n.id in overlapping_nodes
             else bw[n.id]
             for n in graph.nodes
         }

@@ -76,7 +76,7 @@ Exit condition: every unit and mechanism the hot path touches has a measured row
    completion, and the table records which one won.
 4. **Critical path.** Longest path through the DAG plus edge sync costs. `sol.py` sums
    overlapping fabric demand against §5's knee and, if it is over, degrades every
-   shared-memory node's bandwidth and re-derives until the graph is self-consistent.
+   overlapping shared-memory node's bandwidth and re-derives until the graph is self-consistent.
    If the resulting critical path exceeds the window minus margin, it stops: the graph
    is wrong, and no implementation reaches that deadline. Do not start coding.
 5. **Budgets.** `budget.md`, per node, as a fraction of SOL — 0.70 memory-bound, 0.50

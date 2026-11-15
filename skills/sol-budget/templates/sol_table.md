@@ -26,6 +26,7 @@ critical path SOL: 21.400 ms
 the row to re-measure when a stage comes in under its own SOL.
 
 `fabric iterations` above 1 means overlapping demand exceeded §5's knee and every
-shared-memory node's bandwidth was degraded until the graph was self-consistent. The
-memory floors in that table are therefore larger than the isolated §4 numbers, which
-is the point.
+overlapping shared-memory node's bandwidth was degraded until the graph was
+self-consistent. Those nodes' memory floors are therefore larger than the isolated §4
+numbers and name `fabric.knee` as their row; a lone node or serial chain keeps its §4
+number.

@@ -131,6 +131,84 @@ def test_overlap_past_the_knee_lowers_the_memory_floors_and_terminates():
     assert solution.floors["n0"].memory > isolated.memory
 
 
+FAST_CPU = MODEL.replace(
+    "sustained_bytes: {value: 1.0e9, unit: B/s, method: unit_bench, date: 2026-09-16}",
+    "sustained_bytes: {value: 4.0e9, unit: B/s, method: unit_bench, date: 2026-09-16}",
+    1,
+)
+
+
+def test_a_lone_node_above_the_knee_keeps_its_isolated_bandwidth():
+    solution = sol.solve(_graph([_node("a", bytes=GB)]), _model(FAST_CPU))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+    assert solution.floors["a"].regime_row == "units.cpu.sustained_bytes"
+
+
+def test_a_serial_chain_above_the_knee_keeps_its_isolated_bandwidth():
+    chain = _graph([_node("a", bytes=GB), _node("b", bytes=GB)], [{"from": "a", "to": "b"}])
+    solution = sol.solve(chain, _model(FAST_CPU))
+    assert not solution.degraded
+    assert solution.critical_path == 0.5
+
+
+def test_only_the_branches_that_overlap_are_degraded():
+    fan_out = _graph(
+        [_node("src", bytes=GB), _node("left", bytes=GB), _node("right", bytes=GB)],
+        [{"from": "src", "to": "left"}, {"from": "src", "to": "right"}],
+    )
+    solution = sol.solve(fan_out, _model(FAST_CPU))
+    assert solution.degraded
+    assert solution.floors["src"].memory == 0.25
+    assert GB <= 2 * GB / solution.critical_path <= GB * (1 + sol.FABRIC_TOL)
+
+
+def test_a_node_beside_compute_only_work_is_not_degraded():
+    graph = _graph([_node("a", bytes=GB), _node("b", ops=GB / 8)])
+    solution = sol.solve(graph, _model(FAST_CPU))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+
+
+def _derive_table(tmp_path, nodes_yaml):
+    perf = tmp_path / "perf"
+    perf.mkdir()
+    (perf / "machine_model.md").write_text(FAST_CPU)
+    (perf / "dataflow.yaml").write_text("target: test\nnodes:\n" + nodes_yaml)
+    sol.derive(perf)
+    return (perf / "sol_table.md").read_text()
+
+
+def test_a_lone_node_table_reports_no_degradation_and_its_unit_row(tmp_path):
+    table = _derive_table(tmp_path, "  - {id: a, unit: cpu, memory: dram, bytes: 1.0e9}\n")
+    assert "fabric iterations: 1\n" in table
+    assert "(degraded" not in table
+    assert "| a | cpu | memory |" in table
+    assert table.count("units.cpu.sustained_bytes |") == 1
+
+
+def test_a_degraded_table_row_names_the_knee(tmp_path):
+    nodes = "".join(f"  - {{id: n{i}, unit: cpu, memory: dram, bytes: 1.0e9}}\n" for i in range(4))
+    table = _derive_table(tmp_path, nodes)
+    assert "(degraded below isolated BW)" in table
+    assert table.count("| fabric.knee |") == 4
+    assert "units.cpu.sustained_bytes" not in table
+
+
+def test_a_node_beside_unit_private_traffic_is_not_degraded():
+    graph = _graph([_node("a", bytes=GB), _node("b", bytes=GB, memory="sram")])
+    solution = sol.solve(graph, _model(FAST_CPU))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+
+
+def test_a_degraded_node_names_the_knee_as_its_winning_row():
+    graph = _graph([_node(f"n{i}", bytes=GB) for i in range(4)])
+    floors = sol.solve(graph, _model(FAST_CPU)).floors["n0"]
+    assert floors.regime_row == "fabric.knee"
+    assert "fabric.knee" in sol.model_defect("n0", floors, measured=floors.sol / 2)
+
+
 def test_unit_private_memory_is_not_degraded_by_fabric_contention():
     shared = _graph([_node(f"n{i}", bytes=GB) for i in range(4)])
     private = _graph([_node(f"n{i}", bytes=GB, memory="sram") for i in range(4)])
