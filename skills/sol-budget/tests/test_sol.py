@@ -349,7 +349,7 @@ def test_a_node_beside_a_serial_chain_is_charged_one_chain_link_not_both():
         [{"from": "b", "to": "c"}],
     )
     solution = sol.solve(graph, _model(text))
-    assert solution.floors["a"].memory == 2.0
+    assert [solution.floors[n].memory for n in "abc"] == [2.0] * 3
 
 
 def test_four_mutually_parallel_nodes_each_get_a_quarter_of_the_knee():
@@ -357,3 +357,13 @@ def test_four_mutually_parallel_nodes_each_get_a_quarter_of_the_knee():
     graph = _graph([_node(f"n{i}", bytes=GB) for i in range(4)])
     solution = sol.solve(graph, _model(text))
     assert [solution.floors[f"n{i}"].memory for i in range(4)] == [4.0] * 4
+
+
+def test_a_node_beside_a_light_then_heavy_chain_is_charged_the_heavy_link():
+    text = MODEL.replace("sustained_bytes: {value: 1.0e9,", "sustained_bytes: {value: 0.625e9,", 1)
+    graph = _graph(
+        [_node("a", bytes=GB), _node("light", bytes=GB, ops=4 * GB), _node("heavy", bytes=GB)],
+        [{"from": "light", "to": "heavy"}],
+    )
+    solution = sol.solve(graph, _model(text))
+    assert solution.floors["a"].memory == 2.0
