@@ -637,3 +637,18 @@ def test_audit_refuses_on_a_broken_domain_file(tmp_path, monkeypatch, capsys):
     code = cli.main(["vocabulary", "audit"])
     assert code == 2
     assert "mutation-gate vocabulary refused" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("word", ["antichain", "descendant"])
+def test_core_graph_word_is_a_canonical_noun(word, tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup(word, capsys)
+    assert (code, out) == (0, f"{word}: noun\n  forms: {word}s\n")
+
+
+@pytest.mark.parametrize("word", ["antichain", "descendant"])
+def test_core_graph_word_plural_resolves_to_the_singular(word, tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup(f"{word}s", capsys)
+    assert code == 0
+    assert out.startswith(f"{word}: noun\n  {word}s is the plural")
