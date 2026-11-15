@@ -323,6 +323,13 @@ def test_parallel_nodes_half_again_over_the_knee_are_degraded_to_share_it():
 
 
 def test_parallel_nodes_exactly_at_the_knee_tolerance_are_not_degraded():
-    solution = _pair_at(GB * (1 + sol.FABRIC_TOL) / 2)
+    unit_rate = GB * (1 + sol.FABRIC_TOL) / 2
+    solution = _pair_at(unit_rate)
     assert not solution.degraded
-    assert solution.floors["p"].memory == GB / 505e6
+    assert solution.floors["p"].memory == GB / unit_rate
+
+
+def test_a_degraded_node_under_its_floor_blames_the_knee_not_its_unit_row():
+    floors = sol.solve(_fan_in(), _model(FAST_MODEL)).floors["p"]
+    message = sol.model_defect("p", floors, measured=floors.sol / 2)
+    assert "row fabric.knee)" in message
