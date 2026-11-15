@@ -521,6 +521,18 @@ pos = ["noun"]
 forms = ["plural"]
 
 [[concept]]
+word = "antichain"
+meaning = "a set of graph nodes none of which is reachable from another"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "descendant"
+meaning = "a node reachable from a given node by following edges forward"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
 word = "shape"
 meaning = "the sizes of an array's dimensions"
 pos = ["noun"]

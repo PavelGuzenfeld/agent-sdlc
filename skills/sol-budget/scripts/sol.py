@@ -19,9 +19,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 
 try:
@@ -325,8 +327,7 @@ def _critical_path(graph: Graph, floors: dict[str, Floors], model: MachineModel)
     return max(finish.values(), default=0.0)
 
 
-def _overlaps(graph: Graph, shared: set[str]) -> dict[str, set[str]]:
-    """Shared-fabric nodes with no path to or from each node, so the DAG lets them co-run."""
+def _descendants(graph: Graph) -> dict[str, set[str]]:
     out: dict[str, list[str]] = {n.id: [] for n in graph.nodes}
     for e in graph.edges:
         out[e.src].append(e.dst)
@@ -340,25 +341,54 @@ def _overlaps(graph: Graph, shared: set[str]) -> dict[str, set[str]]:
                 seen.add(nid)
                 stack.extend(out[nid])
         reach[start] = seen
+    return reach
+
+
+def _overlaps(reach: dict[str, set[str]], shared: set[str]) -> dict[str, set[str]]:
+    """Shared-fabric nodes with no path to or from each node, so the DAG lets them co-run.
+    Not all of them co-run with each other: `_heaviest_antichain` picks the set that can."""
     return {
         nid: {m for m in shared if m != nid and m not in reach[nid] and nid not in reach[m]}
         for nid in shared
     }
 
 
+FlowNetwork = dict[object, dict[object, Fraction | float]]
+
+
 def _heaviest_antichain(
-    candidates: set[str], overlaps: dict[str, set[str]], demand: dict[str, float]
-) -> float:
-    """Exact max-weight antichain by branching, exponential in the candidate count.
-    Fine for hand-written dataflows; move to a min-flow form if a wide one makes solve slow."""
-    if not candidates:
-        return 0.0
-    first = next(iter(candidates))
-    rest = candidates - {first}
-    return max(
-        _heaviest_antichain(rest, overlaps, demand),
-        demand[first] + _heaviest_antichain(rest & overlaps[first], overlaps, demand),
-    )
+    nodes: set[str], reach: dict[str, set[str]], weight: dict[str, float]
+) -> set[str]:
+    """Weighted Dilworth: min cut of source→L(u)→R(v)→sink over u<v, in exact Fractions.
+    The antichain is the cut's left side less every node that succeeds another in it."""
+    cap: FlowNetwork = defaultdict(lambda: defaultdict(Fraction))
+    for u in sorted(nodes):
+        cap["source"][("L", u)] = Fraction(weight[u])
+        cap[("R", u)]["sink"] = Fraction(weight[u])
+        for v in sorted(reach[u] & nodes):
+            cap[("L", u)][("R", v)] = math.inf
+    while "sink" in (parent := _reachable_from_source(cap)):
+        path = [("sink", parent["sink"])]
+        while path[-1][1] != "source":
+            path.append((path[-1][1], parent[path[-1][1]]))
+        bottleneck = min(cap[u][v] for v, u in path)
+        for v, u in path:
+            cap[u][v] -= bottleneck
+            cap[v][u] += bottleneck
+    cut = {u for u in nodes if ("L", u) in parent}
+    return {u for u in cut if not any(u in reach[m] for m in cut)}
+
+
+def _reachable_from_source(cap: FlowNetwork) -> dict[object, object]:
+    parent: dict[object, object] = {"source": "source"}
+    queue = deque(["source"])
+    while queue:
+        u = queue.popleft()
+        for v, left in list(cap[u].items()):
+            if left and v not in parent:
+                parent[v] = u
+                queue.append(v)
+    return parent
 
 
 @dataclass
@@ -382,14 +412,16 @@ def solve(graph: Graph, model: MachineModel) -> Solution:
     bw = {n.id: _unit_bandwidth(n, model) for n in graph.nodes}
     knee = model.knee()
     shared = {n.id for n in graph.nodes if model.shared(n.memory) and n.nbytes}
-    overlaps = _overlaps(graph, shared)
+    reach = _descendants(graph)
+    overlaps = _overlaps(reach, shared)
     degraded = False
     for iteration in range(1, MAX_FABRIC_ITERS + 1):
         floors = {n.id: _floors(n, model, bw[n.id]) for n in graph.nodes}
         critical = _critical_path(graph, floors, model)
         demand = {nid: graph.node(nid).nbytes / floors[nid].sol for nid in shared}
         offered = {
-            nid: demand[nid] + _heaviest_antichain(overlaps[nid], overlaps, demand)
+            nid: demand[nid]
+            + sum(demand[m] for m in _heaviest_antichain(overlaps[nid], reach, demand))
             for nid in shared
             if overlaps[nid]
         }
