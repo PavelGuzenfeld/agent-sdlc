@@ -238,7 +238,7 @@ def test_waiver_without_text_has_no_text_error():
     mutant = _mutant(2)
     lines = INDENTED_SOURCE.splitlines()
     textless = Waiver(reason="r", file="a.py", line=2, old="base + extra", new="base - extra")
-    assert waivers.find_text_error(textless, [mutant], lines) is None
+    assert waivers.find_text_mismatch_source(textless, [mutant], lines) is None
 
 
 def _load_text(tmp_path, text_line):

@@ -288,6 +288,23 @@ reject = ["src"]
 forms = ["plural"]
 
 [[concept]]
+word = "waiver"
+meaning = "a recorded exemption from a gate rule, with the reason it is allowed"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
+word = "stale"
+meaning = "no longer matching the code it was recorded against"
+pos = ["adjective"]
+
+[[concept]]
+word = "mismatch"
+meaning = "two values that should agree and do not"
+pos = ["noun"]
+forms = ["plural"]
+
+[[concept]]
 word = "file"
 meaning = "a named unit of stored data"
 pos = ["noun"]

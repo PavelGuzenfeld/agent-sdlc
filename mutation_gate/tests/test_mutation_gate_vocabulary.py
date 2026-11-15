@@ -652,3 +652,20 @@ def test_core_graph_word_plural_resolves_to_the_singular(word, tmp_path, monkeyp
     code, out, _ = _lookup(f"{word}s", capsys)
     assert code == 0
     assert out.startswith(f"{word}: noun\n  {word}s is the plural")
+
+
+GATE_WORDS = {
+    "waiver": ("noun", "waivers", "a recorded exemption from a gate rule, with the reason it is allowed"),
+    "stale": ("adjective", None, "no longer matching the code it was recorded against"),
+    "mismatch": ("noun", "mismatches", "two values that should agree and do not"),
+}
+
+
+@pytest.mark.parametrize("word", GATE_WORDS)
+def test_gate_vocabulary_word_resolves_as_a_canonical_core_concept(word, tmp_path, monkeypatch, capsys):
+    pos, plural, meaning = GATE_WORDS[word]
+    _repo(tmp_path, monkeypatch)
+    code, out, err = _lookup(word, capsys)
+    assert (code, err) == (0, "")
+    assert out == f"{word}: {pos}\n" + (f"  forms: {plural}\n" if plural else "")
+    assert vocabulary.load(tmp_path, "").concepts[word].meaning == meaning
