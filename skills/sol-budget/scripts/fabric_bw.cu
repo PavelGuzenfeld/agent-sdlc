@@ -101,8 +101,14 @@ __global__ void noop_kernel() {}
 
 // Bytes per second across one copy path, timed on the wall clock rather than with
 // cuda events: a pipeline pays wall time, and an event pair hides the launch.
-double copy_path(void* dst, const void* src, cudaMemcpyKind kind) {
+struct CopyRate {
+    double median;
+    double worst;
+};
+
+CopyRate copy_path(void* dst, const void* src, cudaMemcpyKind kind) {
     std::vector<double> rate;
+    CUDA_OR_DIE(cudaMemcpy(dst, src, COPY_BYTES, kind));
     for (int s = 0; s < g_samples; ++s) {
         CUDA_OR_DIE(cudaDeviceSynchronize());
         const double a = now_s();
@@ -110,7 +116,7 @@ double copy_path(void* dst, const void* src, cudaMemcpyKind kind) {
         CUDA_OR_DIE(cudaDeviceSynchronize());
         rate.push_back(double(COPY_BYTES) / (now_s() - a));
     }
-    return percentile(rate, 0.5);
+    return {percentile(rate, 0.5), percentile(rate, 0.0)};
 }
 
 void bench_copy_paths() {
@@ -123,37 +129,38 @@ void bench_copy_paths() {
 
     char method[640];
     announce("h2d_uncontended");
-    const double h2d = copy_path(device_a, pinned, cudaMemcpyHostToDevice);
+    const CopyRate h2d = copy_path(device_a, pinned, cudaMemcpyHostToDevice);
     std::snprintf(method, sizeof method,
                   "fabric_bw.cu cudaMemcpy of %zuMiB from pinned host memory, wall "
-                  "clock around a synchronised copy; median of %d. Uncontended — "
-                  "Phase 2 spends fabric.knee, never this",
-                  COPY_BYTES >> 20, g_samples);
-    emit("h2d_uncontended", h2d, "B/s", method);
+                  "clock around a synchronised copy; median of %d, worst %.3g B/s. "
+                  "Uncontended — Phase 2 spends fabric.knee, never this",
+                  COPY_BYTES >> 20, g_samples, h2d.worst);
+    emit("h2d_uncontended", h2d.median, "B/s", method);
 
     announce("h2d_pageable_uncontended");
-    const double pg = copy_path(device_a, pageable.data(), cudaMemcpyHostToDevice);
+    const CopyRate pg = copy_path(device_a, pageable.data(), cudaMemcpyHostToDevice);
     std::snprintf(method, sizeof method,
                   "fabric_bw.cu the same copy from pageable memory — the driver stages "
                   "it through its own pinned buffer, so this is what a stage pays when "
-                  "it forgets to pin; median of %d",
-                  g_samples);
-    emit("h2d_pageable_uncontended", pg, "B/s", method);
+                  "it forgets to pin; median of %d, worst %.3g B/s",
+                  g_samples, pg.worst);
+    emit("h2d_pageable_uncontended", pg.median, "B/s", method);
 
     announce("d2h_uncontended");
-    const double d2h = copy_path(pinned, device_a, cudaMemcpyDeviceToHost);
+    const CopyRate d2h = copy_path(pinned, device_a, cudaMemcpyDeviceToHost);
     std::snprintf(method, sizeof method,
-                  "fabric_bw.cu cudaMemcpy of %zuMiB device to pinned host; median of %d",
-                  COPY_BYTES >> 20, g_samples);
-    emit("d2h_uncontended", d2h, "B/s", method);
+                  "fabric_bw.cu cudaMemcpy of %zuMiB device to pinned host; "
+                  "median of %d, worst %.3g B/s",
+                  COPY_BYTES >> 20, g_samples, d2h.worst);
+    emit("d2h_uncontended", d2h.median, "B/s", method);
 
     announce("d2d_uncontended");
-    const double d2d = copy_path(device_b, device_a, cudaMemcpyDeviceToDevice);
+    const CopyRate d2d = copy_path(device_b, device_a, cudaMemcpyDeviceToDevice);
     std::snprintf(method, sizeof method,
                   "fabric_bw.cu cudaMemcpy of %zuMiB device to device, bytes copied not "
-                  "bus traffic — halve for read+write; median of %d",
-                  COPY_BYTES >> 20, g_samples);
-    emit("d2d_uncontended", d2d, "B/s", method);
+                  "bus traffic — halve for read+write; median of %d, worst %.3g B/s",
+                  COPY_BYTES >> 20, g_samples, d2d.worst);
+    emit("d2d_uncontended", d2d.median, "B/s", method);
 
     CUDA_OR_DIE(cudaFree(device_a));
     CUDA_OR_DIE(cudaFree(device_b));
