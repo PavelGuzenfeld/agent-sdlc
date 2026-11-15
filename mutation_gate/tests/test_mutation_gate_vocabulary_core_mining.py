@@ -34,6 +34,8 @@ EXCEPTIONS = {
     "press": "same as button: no test requires it canonical, kept as #167 landed it",
     "antichain": "#491 adds it for graph-node names; none of the six mined repos use it",
     "descendant": "same as antichain: added by #491, absent from the mined repos",
+    "waiver": "#512 adds it for gate-rule names; only the agent-sdlc mined repo uses it",
+    "mismatch": "same as waiver: added by #512, absent from five of the six mined repos",
     "viewer": "test_staged_tsx_component_passes_and_camel_case_function_blocks "
               "in test_mutation_gate_vocabulary_check.py (added by #167)",
 }
