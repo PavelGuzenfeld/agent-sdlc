@@ -473,5 +473,11 @@ def test_a_crossing_without_a_count_is_priced_once(tmp_path):
 @pytest.mark.parametrize("count", [0, -3, 2.5, "581", True])
 def test_a_crossing_count_that_is_not_a_positive_integer_is_refused(count):
     node = _node("a", crossings=[{"name": "syscall", "count": count}])
-    with pytest.raises(GraphDefect, match="syscall"):
+    with pytest.raises(GraphDefect, match="syscall.*count"):
         _graph([node])
+
+
+def test_a_counted_crossing_adds_to_the_other_crossings_of_the_node():
+    crossings = ["syscall", {"name": "syscall", "count": 3}]
+    floors = sol.solve(_graph([_node("a", crossings=crossings)]), _model()).floors["a"]
+    assert floors.tax == 1.0e-6 + 3 * 1.0e-6
