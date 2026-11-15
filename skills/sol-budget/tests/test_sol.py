@@ -124,18 +124,18 @@ def test_overlap_past_the_knee_lowers_the_memory_floors_and_terminates():
     # Four nodes, 1 GB each, on a 1 GB/s knee: 4 s of fabric demand cannot fit in the
     # 1 s the isolated per-unit bandwidth would predict.
     graph = _graph([_node(f"n{i}", bytes=GB) for i in range(4)])
-    isolated = sol._floors(graph.nodes[0], _model(), sol.Bandwidth(GB, "units.cpu.sustained_bytes"))
     solution = sol.solve(graph, _model())
     assert solution.degraded
     assert solution.fabric_iters < sol.MAX_FABRIC_ITERS
-    assert solution.floors["n0"].memory > isolated.memory
+    assert solution.floors["n0"].memory == 4.0
 
 
 def test_unit_private_memory_is_not_degraded_by_fabric_contention():
     shared = _graph([_node(f"n{i}", bytes=GB) for i in range(4)])
     private = _graph([_node(f"n{i}", bytes=GB, memory="sram") for i in range(4)])
     assert not sol.solve(private, _model()).degraded
-    assert sol.solve(private, _model()).floors["n0"].memory < sol.solve(shared, _model()).floors["n0"].memory
+    assert sol.solve(private, _model()).floors["n0"].memory == 1.0
+    assert sol.solve(shared, _model()).floors["n0"].memory == 4.0
 
 
 def test_an_undeclared_memory_type_is_refused_rather_than_assumed_shared():
