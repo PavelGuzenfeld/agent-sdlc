@@ -179,7 +179,7 @@ def path(repo: Repo) -> Path:
     return repo.root / WAIVERS_NAME
 
 
-def find_text_error(
+def find_text_mismatch_source(
     waiver: Waiver, every_mutant: list[Mutant], lines: list[str]
 ) -> str | None:
     for m in every_mutant:

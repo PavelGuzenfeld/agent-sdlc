@@ -64,7 +64,7 @@ def _warn_stale_waivers(repo, rel: str, wvs) -> None:
         return
     lines = _source_lines(repo, rel)
     for w in waivers.stale(wvs, rel, every, lines):
-        source = waivers.find_text_error(w, every, lines)
+        source = waivers.find_text_mismatch_source(w, every, lines)
         if source is not None:
             _emit(f"  {rel}: waiver at line {w.line} column {w.column} matches on every field "
                   f"but text: waiver {w.text!r} vs source {source!r}")
