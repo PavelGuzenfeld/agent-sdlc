@@ -97,7 +97,7 @@ def load(repo: Repo) -> list[Waiver]:
                 "is a bare literal and needs `line = <n>`; without it it would waive "
                 "every identical literal mutation in the file"
             )
-        out.append(Waiver(**entry))
+        out.append(Waiver(**{**entry, "text": entry.get("text", "").strip()}))
     return out
 
 
@@ -177,3 +177,14 @@ def suggest_uncovered(file: str) -> str:
 
 def path(repo: Repo) -> Path:
     return repo.root / WAIVERS_NAME
+
+
+def find_text_error(
+    waiver: Waiver, every_mutant: list[Mutant], lines: list[str]
+) -> str | None:
+    for m in every_mutant:
+        same_site = (m.file, m.line, m.old, m.new) == (waiver.file, waiver.line, waiver.old, waiver.new)
+        if same_site and (not waiver.column or waiver.column == m.column):
+            source = line_text(lines, m.line)
+            return source if waiver.text and waiver.text != source else None
+    return None

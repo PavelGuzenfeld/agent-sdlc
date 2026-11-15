@@ -62,7 +62,13 @@ def _warn_stale_waivers(repo, rel: str, wvs) -> None:
         every = _every_mutant(repo, rel)
     except (OSError, GateError, ValueError):
         return
-    for w in waivers.stale(wvs, rel, every, _source_lines(repo, rel)):
+    lines = _source_lines(repo, rel)
+    for w in waivers.stale(wvs, rel, every, lines):
+        source = waivers.find_text_error(w, every, lines)
+        if source is not None:
+            _emit(f"  {rel}: waiver at line {w.line} column {w.column} matches on every field "
+                  f"but text: waiver {w.text!r} vs source {source!r}")
+            continue
         _emit(f"  {rel}: waiver at line {w.line} column {w.column} matches no mutant "
               f"— stale after an edit above it? ({w.old!r} => {w.new!r})")
 
