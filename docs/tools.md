@@ -15,8 +15,8 @@ What runs without you asking, and the scripts behind it.
    |-- pre-commit stage ----> rules-check, mutation-gate, no-new-docs
    '-- commit-msg stage ----> commit-msg, diff-discipline, no-leaks
 
- agent finishes a turn  ----> Stop: mutation-gate-hook.sh      (repos with .mutation-gate.toml)
-                        ----> Stop: say-hook.sh                (speaks when armed)
+ agent finishes a turn  ----> Stop: say-hook.sh                (speaks when armed)
+                        ----> Stop: mutation-gate-hook.sh      (repos with .mutation-gate.toml)
                         ----> Stop: codex-review-hook.sh       (repos with agent-sdlc.codexReview)
 ```
 
@@ -28,8 +28,8 @@ What runs without you asking, and the scripts behind it.
 | `PreToolUse` (Bash) | `git-guardrail.sh` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `mutation_gate.host_exec` | `hooks/hooks.json` |
 | `PreToolUse` (Bash) | `bare-rm-guard.sh` | `hooks/hooks.json` |
-| `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `say-hook.sh` | `hooks/hooks.json` |
+| `Stop` | `mutation-gate-hook.sh` | `hooks/hooks.json` |
 | `Stop` | `codex-review-hook.sh` | `hooks/hooks.json` |
 
 - `session-preflight.sh` prints one `preflight: ...` line at session start,

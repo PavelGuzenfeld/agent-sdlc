@@ -61,7 +61,7 @@ test_command = "npm --prefix web run test"
 | `model_paths` | `[]` | Path prefixes in scope for model V&V, declared, never inferred; `rules sync` also builds `model-vv.md`'s `paths:` frontmatter from this. |
 | `model_spec` | `"docs/model-spec.md"` | Where the model spec's `MS-n` lines live: `issue:N`, a GitHub issue. Required once `model_paths` is set; a file path, including this default, is refused there. |
 | `model_test_paths` | `[]` | Test paths that must cite an `MS-n` spec line. |
-| `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a keyword-probe hit outside `model_paths` that isn't model code. |
+| `model_exclude` | `[]` | `[[model_exclude]]` entries, each a `path` and a `reason`: a keyword-probe hit (two distinct keywords, or wrap with pi) outside `model_paths` that isn't model code. |
 | `golden` | `[]` | `[[golden]]` entries, each a `source` and an `artifact`: a generated F/Q artefact and the SymPy source its hash is checked against. |
 | `pass_pattern` | `""` | Regex the test output must contain to count as green; empty trusts the exit code. |
 | `force_gate` | `false` | Gates a fork or an out-of-namespace checkout anyway. |
