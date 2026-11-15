@@ -13,7 +13,7 @@ first, not what they will say.
 **The fabric, before anything else.** One memory controller serves every unit, so
 "which unit does the work" is a question about who gets bandwidth, not about who is
 fastest. On the Orin the CPU alone sustains 26.8 GB/s of copy across 8 cores and the
-GPU sustains 47.5 GB/s on its own — but the §5 knee, where a victim's p99 turns up,
+GPU sustains 47.5 GB/s of copy on its own — but the §5 knee, where a victim's p99 turns up,
 sits at **14.2 GB/s**. A graph that budgets against either uncontended figure has
 already overspent by 2–3×.
 
