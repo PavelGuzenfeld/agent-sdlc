@@ -25,7 +25,7 @@ critical path SOL: 21.400 ms
 `regime` is the floor that won, and `row` is the machine-model row that produced it —
 the row to re-measure when a stage comes in under its own SOL.
 
-`fabric iterations` above 1 means overlapping demand exceeded §5's knee and every
-shared-memory node's bandwidth was degraded until the graph was self-consistent. The
-memory floors in that table are therefore larger than the isolated §4 numbers, which
-is the point.
+`fabric iterations` above 1 means overlapping demand exceeded §5's knee and each
+overlapping shared-memory node's bandwidth was degraded until the graph was
+self-consistent; their `row` reads `fabric.knee`. The memory floors of those nodes are
+therefore larger than the isolated §4 numbers, which is the point.

@@ -241,3 +241,88 @@ def test_derive_writes_both_artefacts_carrying_the_same_digest(tmp_path):
     solution = sol.derive(perf)
     assert solution.digest in (perf / "sol_table.md").read_text()
     assert solution.digest in (perf / "budget.md").read_text()
+
+
+FAST_MODEL = MODEL.replace(
+    "sustained_bytes: {value: 1.0e9,", "sustained_bytes: {value: 4.0e9,", 1
+)
+
+
+def _fan_in():
+    return _graph(
+        [_node("p", bytes=GB), _node("q", bytes=GB), _node("r", bytes=GB)],
+        [{"from": "p", "to": "r"}, {"from": "q", "to": "r"}],
+    )
+
+
+def _write_perf(tmp_path, dataflow):
+    perf = tmp_path / "perf"
+    perf.mkdir()
+    (perf / "machine_model.md").write_text(FAST_MODEL)
+    (perf / "dataflow.yaml").write_text(dataflow)
+    return perf
+
+
+def test_a_lone_node_above_the_knee_keeps_its_isolated_bandwidth():
+    solution = sol.solve(_graph([_node("a", bytes=GB)]), _model(FAST_MODEL))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+
+
+def test_a_serial_chain_above_the_knee_keeps_its_isolated_bandwidth():
+    chain = _graph([_node("a", bytes=GB), _node("b", bytes=GB)], [{"from": "a", "to": "b"}])
+    solution = sol.solve(chain, _model(FAST_MODEL))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+    assert solution.floors["b"].memory == 0.25
+    assert solution.critical_path == 0.5
+
+
+def test_parallel_producers_past_the_knee_share_it_while_their_consumer_does_not():
+    solution = sol.solve(_fan_in(), _model(FAST_MODEL))
+    assert solution.degraded
+    assert solution.floors["p"].memory == 2.0
+    assert solution.floors["q"].memory == 2.0
+    assert solution.floors["r"].memory == 0.25
+
+
+def test_a_lone_node_above_the_knee_is_not_reported_degraded_in_the_table(tmp_path):
+    perf = _write_perf(
+        tmp_path,
+        "target: test\nnodes:\n  - {id: a, unit: cpu, memory: dram, bytes: 1.0e9}\n",
+    )
+    sol.derive(perf)
+    table = (perf / "sol_table.md").read_text()
+    assert "fabric iterations: 1\n" in table
+    assert "| a | cpu | memory | 0.000 | 250.000 | 0.000 | 250.000 | units.cpu.sustained_bytes |" in table
+
+
+def test_a_node_degraded_by_overlap_names_the_knee_as_its_winning_row(tmp_path):
+    perf = _write_perf(
+        tmp_path,
+        "target: test\nnodes:\n"
+        "  - {id: p, unit: cpu, memory: dram, bytes: 1.0e9}\n"
+        "  - {id: q, unit: cpu, memory: dram, bytes: 1.0e9}\n",
+    )
+    sol.derive(perf)
+    table = (perf / "sol_table.md").read_text()
+    assert "| p | cpu | memory | 0.000 | 2000.000 | 0.000 | 2000.000 | fabric.knee |" in table
+
+
+def _pair_at(unit_bytes_per_s):
+    text = MODEL.replace(
+        "sustained_bytes: {value: 1.0e9,", f"sustained_bytes: {{value: {unit_bytes_per_s!r},", 1
+    )
+    return sol.solve(_graph([_node("p", bytes=GB), _node("q", bytes=GB)]), _model(text))
+
+
+def test_parallel_nodes_half_again_over_the_knee_are_degraded_to_share_it():
+    solution = _pair_at(0.75e9)
+    assert solution.degraded
+    assert solution.floors["p"].memory == 2.0
+
+
+def test_parallel_nodes_exactly_at_the_knee_tolerance_are_not_degraded():
+    solution = _pair_at(GB * (1 + sol.FABRIC_TOL) / 2)
+    assert not solution.degraded
+    assert solution.floors["p"].memory == GB / 505e6
