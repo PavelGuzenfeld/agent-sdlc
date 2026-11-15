@@ -32,6 +32,8 @@ EXCEPTIONS = {
               "test_mutation_gate_vocabulary_check.py, exempt the whole `_on_...` name "
               "before any word is checked); kept as #167 landed it",
     "press": "same as button: no test requires it canonical, kept as #167 landed it",
+    "antichain": "#491 adds it for graph-node names; none of the six mined repos use it",
+    "descendant": "same as antichain: added by #491, absent from the mined repos",
     "viewer": "test_staged_tsx_component_passes_and_camel_case_function_blocks "
               "in test_mutation_gate_vocabulary_check.py (added by #167)",
 }
