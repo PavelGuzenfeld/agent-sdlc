@@ -59,7 +59,7 @@ blocks when a mutant survives.
 | No covering tests for a gated file | Yes, unless an uncovered waiver exists | Always |
 | Model V&V probe: model code outside `model_paths` | Yes, unwaivable | Always |
 | Golden hash: `[[golden]]` artefact vs its SymPy source | Yes, unwaivable | A `[[golden]]` entry exists |
-| Spec: issue resolves, touched model tests cite a live `MS-n` | Yes | A `model_paths` file changed |
+| Spec: issue resolves, touched model tests cite a live `MS-n` | Yes | `model_paths` is set and a model file, a model test or the spec changed |
 | Added comment lines | Yes | `no_comments = true` |
 | Names vs the vocabulary and molds | Yes | `vocabulary` is set |
 | WordNet synonym collisions | Reports; blocks with `"block"` | `vocabulary` is set |
@@ -72,7 +72,7 @@ A real run on a function with two tests that never touch the boundary:
 
 ```text
 mutation-gate: 1 changed source file(s)
-  age.py: coverage came back empty — every mutant runs against all candidate tests
+  age.py: coverage came back empty (no data file at .coverage) — every mutant runs against all candidate tests
   age.py: baseline 0.5s, per-mutant timeout 30s (from baseline)
   [1/2] age.py:2:11 age >= 18 => age > 18
   [2/2] age.py:2:18 18 => 19
@@ -112,7 +112,7 @@ reason = "REPLACE ME — why no test can or should kill this"
   the mutation.
 - A waiver that no longer matches a mutant after an edit is reported as stale.
 - A mutant that times out counts as killed; the gate says so and suggests
-  setting `mutant_timeout`, or a `[[timeout]]` entry for one slow path.
+  setting `mutant_timeout`. A `[[timeout]]` entry sets the cap for one slow path.
 
 ## Model paths
 

@@ -53,7 +53,7 @@ mutation-gate --file age.py --lines 12,40  # gate two lines
   candidate test:
 
 ```text
-age.py: coverage came back empty — every mutant runs against all candidate tests
+age.py: coverage came back empty (no data file at .coverage) — every mutant runs against all candidate tests
 ```
 
 ## Adversary review
