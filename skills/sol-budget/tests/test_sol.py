@@ -444,3 +444,34 @@ def test_a_node_beside_two_separate_chains_is_charged_a_link_of_each():
     )
     solution = sol.solve(graph, _units_at(a=2.5e8, b=5.0e8, c=2.5e8, d=2.5e8, e=5.0e8))
     assert solution.floors["a"].memory == 5.0
+
+
+def _sol_table_row_of_node_a(tmp_path, crossing):
+    perf = tmp_path / "perf"
+    perf.mkdir(parents=True)
+    (perf / "machine_model.md").write_text(MODEL)
+    (perf / "dataflow.yaml").write_text(
+        "target: test\nnodes:\n"
+        f"  - {{id: a, unit: cpu, memory: dram, crossings: [{crossing}]}}\n"
+    )
+    assert sol.main(["--perf", str(perf)]) == 0
+    table = (perf / "sol_table.md").read_text().splitlines()
+    return next(row for row in table if row.startswith("| a "))
+
+
+def test_a_crossing_repeated_per_node_multiplies_its_tax_by_the_count(tmp_path):
+    row = _sol_table_row_of_node_a(tmp_path, "{name: syscall, count: 581}")
+    assert row == "| a | cpu | tax | 0.000 | 0.000 | 0.581 | 0.581 | tax.syscall |"
+
+
+def test_a_crossing_without_a_count_is_priced_once(tmp_path):
+    bare = _sol_table_row_of_node_a(tmp_path / "bare", "syscall")
+    assert bare == "| a | cpu | tax | 0.000 | 0.000 | 0.001 | 0.001 | tax.syscall |"
+    assert _sol_table_row_of_node_a(tmp_path / "named", "{name: syscall}") == bare
+
+
+@pytest.mark.parametrize("count", [0, -3, 2.5, "581", True])
+def test_a_crossing_count_that_is_not_a_positive_integer_is_refused(count):
+    node = _node("a", crossings=[{"name": "syscall", "count": count}])
+    with pytest.raises(GraphDefect, match="syscall"):
+        _graph([node])
