@@ -57,7 +57,7 @@ blocks when a mutant survives.
 |---|---|---|
 | Mutants on changed lines | Yes | Always |
 | No covering tests for a gated file | Yes, unless an uncovered waiver exists | Always |
-| Model V&V probe: model code outside `model_paths` | Yes, unwaivable | Always |
+| Model V&V probe: two distinct model keywords, or wrap with pi, outside `model_paths` | Yes, no waiver | Always, except under a `[[model_exclude]]` path |
 | Golden hash: `[[golden]]` artefact vs its SymPy source | Yes, unwaivable | A `[[golden]]` entry exists |
 | Spec: issue resolves, touched model tests cite a live `MS-n` | Yes | `model_paths` is set and a model file, a model test or the spec changed |
 | Added comment lines | Yes | `no_comments = true` |
