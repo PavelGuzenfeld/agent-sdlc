@@ -239,3 +239,42 @@ def test_waiver_without_text_has_no_text_error():
     lines = INDENTED_SOURCE.splitlines()
     textless = Waiver(reason="r", file="a.py", line=2, old="base + extra", new="base - extra")
     assert waivers.find_text_error(textless, [mutant], lines) is None
+
+
+def _load_text(tmp_path, text_line):
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    (tmp_path / ".mutation-gate-waivers.toml").write_text(_waiver_file(line=2, text=text_line))
+    return waivers.load(repo)[0]
+
+
+def test_loaded_waiver_text_drops_tab_indentation(tmp_path):
+    assert _load_text(tmp_path, f'text = """\t{SITE}"""\n').text == SITE
+
+
+def test_loaded_waiver_text_drops_trailing_whitespace(tmp_path):
+    assert _load_text(tmp_path, f'text = """{SITE}  \t"""\n').text == SITE
+
+
+def test_indented_waiver_text_returns_the_loaded_waiver_at_a_nonzero_column(tmp_path):
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    toml = _waiver_file(line=2, text=f'text = """{INDENTED_TEXT}"""\n').replace("line = 2\n", "line = 2\ncolumn = 12\n")
+    (tmp_path / ".mutation-gate-waivers.toml").write_text(toml)
+    loaded = waivers.load(repo)
+    mutant = _mutant(2, column=12)
+    assert waived(loaded, mutant, [mutant], INDENTED_SOURCE.splitlines()) is loaded[0]
+    assert loaded[0].column == 12
+
+
+def test_real_line_shift_gets_the_stale_after_an_edit_hint(tmp_path, monkeypatch, capsys):
+    source = "x = 1\ny = 2\ntotal = base + extra\n"
+    err = _dry_run_err(tmp_path, monkeypatch, capsys, source, _waiver_file(line=1, text=""))
+    assert (
+        "  a.py: waiver at line 1 column 0 matches no mutant "
+        "— stale after an edit above it? ('base + extra' => 'base - extra')\n"
+    ) in err
+
+
+def test_indentation_only_text_difference_gives_no_warning(tmp_path, monkeypatch, capsys):
+    waiver_toml = _waiver_file(line=2, text=f'text = """{INDENTED_TEXT}"""\n')
+    err = _dry_run_err(tmp_path, monkeypatch, capsys, INDENTED_SOURCE, waiver_toml)
+    assert "waiver at line" not in err
