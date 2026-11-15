@@ -75,9 +75,10 @@ Exit condition: every unit and mechanism the hot path touches has a measured row
    bytes ÷ mechanism ceiling. SOL is the largest of the three plus dispatch plus
    completion, and the table records which one won.
 4. **Critical path.** Longest path through the DAG plus edge sync costs. `sol.py` sums
-   each shared-memory node's demand plus the heaviest set of nodes that can all run with it
-   against §5's knee and, if it is over, degrades that node's bandwidth and re-derives
-   until the graph is self-consistent. A lone node or a serial chain keeps its §4 rate.
+   each shared-memory node's demand plus the heaviest set of nodes that can all run at
+   once alongside it against §5's knee and, if it is over, degrades that node's bandwidth
+   and re-derives until the graph is self-consistent. A lone node or a serial chain
+   keeps its §4 rate.
    If the resulting critical path exceeds the window minus margin, it stops: the graph
    is wrong, and no implementation reaches that deadline. Do not start coding.
 5. **Budgets.** `budget.md`, per node, as a fraction of SOL — 0.70 memory-bound, 0.50
