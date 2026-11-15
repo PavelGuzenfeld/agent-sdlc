@@ -325,6 +325,29 @@ def _critical_path(graph: Graph, floors: dict[str, Floors], model: MachineModel)
     return max(finish.values(), default=0.0)
 
 
+def _overlaps(graph: Graph, shared: set[str]) -> dict[str, set[str]]:
+    """Shared-fabric nodes with no path to or from each node, so the DAG lets them co-run.
+    Charging all of them at once over-prices a node beside a serial chain; revisit with a
+    max-weight antichain if that raises a false MODEL_DEFECT."""
+    out: dict[str, list[str]] = {n.id: [] for n in graph.nodes}
+    for e in graph.edges:
+        out[e.src].append(e.dst)
+    reach: dict[str, set[str]] = {}
+    for start in out:
+        seen: set[str] = set()
+        stack = list(out[start])
+        while stack:
+            nid = stack.pop()
+            if nid not in seen:
+                seen.add(nid)
+                stack.extend(out[nid])
+        reach[start] = seen
+    return {
+        nid: {m for m in shared if m != nid and m not in reach[nid] and nid not in reach[m]}
+        for nid in shared
+    }
+
+
 @dataclass
 class Solution:
     floors: dict[str, Floors]
@@ -339,30 +362,30 @@ class Solution:
 def solve(graph: Graph, model: MachineModel) -> Solution:
     """Floors, critical path, and budgets, with the fabric made self-consistent.
 
-    Overlapping demand above the measured knee degrades every shared-memory node's
-    bandwidth and re-derives; that raises the critical path, which lowers offered
-    load, so the loop is monotone and terminates.
+    A shared-memory node whose demand plus its overlapping nodes' demand is above the
+    measured knee gets its share of the knee and re-derives; lowering a bandwidth only
+    lowers demand, so the loop is monotone and terminates.
     """
     bw = {n.id: _unit_bandwidth(n, model) for n in graph.nodes}
-    knee = graph_knee = model.knee().value
-    fabric_bytes = sum(n.nbytes for n in graph.nodes if model.shared(n.memory))
+    knee = model.knee()
+    shared = {n.id for n in graph.nodes if model.shared(n.memory) and n.nbytes}
+    overlaps = _overlaps(graph, shared)
     degraded = False
     for iteration in range(1, MAX_FABRIC_ITERS + 1):
         floors = {n.id: _floors(n, model, bw[n.id]) for n in graph.nodes}
         critical = _critical_path(graph, floors, model)
-        if not fabric_bytes or critical <= 0:
-            return _finish(graph, floors, critical, iteration, degraded)
-        offered = fabric_bytes / critical
-        if offered <= knee * (1 + FABRIC_TOL):
+        demand = {nid: graph.node(nid).nbytes / floors[nid].sol for nid in shared}
+        offered = {
+            nid: demand[nid] + sum(demand[m] for m in overlaps[nid])
+            for nid in shared
+            if overlaps[nid]
+        }
+        over = {nid: load for nid, load in offered.items() if load > knee.value * (1 + FABRIC_TOL)}
+        if not over:
             return _finish(graph, floors, critical, iteration, degraded)
         degraded = True
-        scale = graph_knee / offered
-        bw = {
-            n.id: Bandwidth(bw[n.id].value * scale, bw[n.id].row)
-            if model.shared(n.memory)
-            else bw[n.id]
-            for n in graph.nodes
-        }
+        for nid, load in over.items():
+            bw[nid] = Bandwidth(bw[nid].value * knee.value / load, knee.row)
     raise ModelDefect(
         "fabric self-consistency did not converge in "
         f"{MAX_FABRIC_ITERS} iterations — check fabric.knee and the per-node byte counts"
