@@ -326,9 +326,7 @@ def _critical_path(graph: Graph, floors: dict[str, Floors], model: MachineModel)
 
 
 def _overlaps(graph: Graph, shared: set[str]) -> dict[str, set[str]]:
-    """Shared-fabric nodes with no path to or from each node, so the DAG lets them co-run.
-    Charging all of them at once over-prices a node beside a serial chain; revisit with a
-    max-weight antichain if that raises a false MODEL_DEFECT."""
+    """Shared-fabric nodes with no path to or from each node, so the DAG lets them co-run."""
     out: dict[str, list[str]] = {n.id: [] for n in graph.nodes}
     for e in graph.edges:
         out[e.src].append(e.dst)
@@ -348,6 +346,21 @@ def _overlaps(graph: Graph, shared: set[str]) -> dict[str, set[str]]:
     }
 
 
+def _heaviest_antichain(
+    candidates: set[str], overlaps: dict[str, set[str]], demand: dict[str, float]
+) -> float:
+    """Exact max-weight antichain by branching, exponential in the candidate count.
+    Fine for hand-written dataflows; move to a min-flow form if a wide one makes solve slow."""
+    if not candidates:
+        return 0.0
+    first = next(iter(candidates))
+    rest = candidates - {first}
+    return max(
+        _heaviest_antichain(rest, overlaps, demand),
+        demand[first] + _heaviest_antichain(rest & overlaps[first], overlaps, demand),
+    )
+
+
 @dataclass
 class Solution:
     floors: dict[str, Floors]
@@ -362,8 +375,8 @@ class Solution:
 def solve(graph: Graph, model: MachineModel) -> Solution:
     """Floors, critical path, and budgets, with the fabric made self-consistent.
 
-    A shared-memory node whose demand plus its overlapping nodes' demand is above the
-    measured knee gets its share of the knee and re-derives; lowering a bandwidth only
+    A shared-memory node whose demand plus its heaviest set of co-running nodes is above
+    the measured knee gets its share of the knee and re-derives; lowering a bandwidth only
     lowers demand, so the loop is monotone and terminates.
     """
     bw = {n.id: _unit_bandwidth(n, model) for n in graph.nodes}
@@ -376,7 +389,7 @@ def solve(graph: Graph, model: MachineModel) -> Solution:
         critical = _critical_path(graph, floors, model)
         demand = {nid: graph.node(nid).nbytes / floors[nid].sol for nid in shared}
         offered = {
-            nid: demand[nid] + sum(demand[m] for m in overlaps[nid])
+            nid: demand[nid] + _heaviest_antichain(overlaps[nid], overlaps, demand)
             for nid in shared
             if overlaps[nid]
         }
