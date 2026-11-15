@@ -534,7 +534,7 @@ reason = "an uncovered waiver names no line, so stale() excludes it either way; 
 
 [[waiver]]
 file = "mutation_gate/model_vv.py"
-line = 86
+line = 87
 column = 62
 old = """12"""
 new = """13"""
