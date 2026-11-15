@@ -96,8 +96,8 @@ __global__ void copy_kernel(const float4* __restrict__ src, float4* __restrict__
 }
 
 __global__ void negate_in_place_kernel(float4* __restrict__ buffer, size_t n) {
-    for (size_t i = blockIdx.x * size_t(blockDim.x) + threadIdx.x; i < n;
-         i += size_t(gridDim.x) * blockDim.x) {
+    const size_t i = blockIdx.x * size_t(blockDim.x) + threadIdx.x;
+    if (i < n) {
         const float4 v = buffer[i];
         buffer[i] = make_float4(-v.x, -v.y, -v.z, -v.w);
     }
@@ -236,10 +236,11 @@ void bench_gpu_unit() {
     CUDA_OR_DIE(cudaMalloc(&src, COPY_BYTES));
     CUDA_OR_DIE(cudaMalloc(&dst, COPY_BYTES));
     CUDA_OR_DIE(cudaMemset(src, 1, COPY_BYTES));
+    const unsigned blocks_per_buffer = unsigned((n + threads - 1) / threads);
     const CopyRate copy =
         sustained_pass_rate([&] { copy_kernel<<<blocks, threads>>>(src, dst, n); });
-    const CopyRate in_place =
-        sustained_pass_rate([&] { negate_in_place_kernel<<<blocks, threads>>>(src, n); });
+    const CopyRate in_place = sustained_pass_rate(
+        [&] { negate_in_place_kernel<<<blocks_per_buffer, threads>>>(src, n); });
     const bool in_place_wins = in_place.median > copy.median;
     const CopyRate reported = in_place_wins ? in_place : copy;
     std::snprintf(method, sizeof method,
