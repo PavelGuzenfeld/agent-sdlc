@@ -192,3 +192,50 @@ def test_matching_line_text_does_not_cover_the_same_mutation_in_another_file():
     other = Mutant(file="b.py", line=1, start=0, end=1, old="base + extra", new="base - extra",
                    kind="operator", column=0)
     assert waived([_waiver(1)], other, [other], [SITE]) is None
+
+
+INDENTED_SOURCE = "def f():\n    total = base + extra\n"
+INDENTED_TEXT = '    total = base + extra'
+
+
+def test_waiver_text_keeping_the_source_indentation_waives_its_mutant(tmp_path):
+    repo = Repo(root=tmp_path, origin="", remotes=(), config=Config())
+    (tmp_path / ".mutation-gate-waivers.toml").write_text(
+        _waiver_file(line=2, text=f'text = """{INDENTED_TEXT}"""\n')
+    )
+    mutant = _mutant(2)
+    lines = INDENTED_SOURCE.splitlines()
+    assert waived(waivers.load(repo), mutant, [mutant], lines) is not None
+
+
+def test_text_mismatch_warning_names_text_with_both_values(tmp_path, monkeypatch, capsys):
+    waiver_toml = _waiver_file(line=2, text='text = """total = other"""\n')
+    err = _dry_run_err(tmp_path, monkeypatch, capsys, INDENTED_SOURCE, waiver_toml)
+    assert (
+        "a.py: waiver at line 2 column 0 matches on every field but text: "
+        "waiver 'total = other' vs source 'total = base + extra'\n"
+    ) in err
+    assert "edit above" not in err
+
+
+def test_text_mismatch_warning_is_given_for_every_stale_waiver(tmp_path, monkeypatch, capsys):
+    two_waivers = _waiver_file(line=2, text='text = """first"""\n') + _waiver_file(
+        line=2, text='text = """second"""\n'
+    )
+    err = _dry_run_err(tmp_path, monkeypatch, capsys, INDENTED_SOURCE, two_waivers)
+    assert "waiver 'first' vs source" in err and "waiver 'second' vs source" in err
+
+
+def test_text_mismatch_warning_names_text_when_the_waiver_column_matches(tmp_path, monkeypatch, capsys):
+    waiver_toml = _waiver_file(line=2, text='text = """total = other"""\n').replace(
+        "line = 2\n", "line = 2\ncolumn = 12\n"
+    )
+    err = _dry_run_err(tmp_path, monkeypatch, capsys, INDENTED_SOURCE, waiver_toml)
+    assert "waiver at line 2 column 12 matches on every field but text" in err
+
+
+def test_waiver_without_text_has_no_text_error():
+    mutant = _mutant(2)
+    lines = INDENTED_SOURCE.splitlines()
+    textless = Waiver(reason="r", file="a.py", line=2, old="base + extra", new="base - extra")
+    assert waivers.find_text_error(textless, [mutant], lines) is None
