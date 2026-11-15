@@ -25,6 +25,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
+from typing import NamedTuple
 
 try:
     import yaml
@@ -83,6 +84,11 @@ class Bandwidth:
     row: str
 
 
+class Crossing(NamedTuple):
+    name: str
+    count: int = 1
+
+
 @dataclass(frozen=True)
 class Node:
     id: str
@@ -90,7 +96,7 @@ class Node:
     ops: float = 0.0
     nbytes: float = 0.0
     memory: str = ""
-    crossings: tuple[str, ...] = ()
+    crossings: tuple[Crossing, ...] = ()
     crossing_bytes: float = 0.0
     fraction: float | None = None
 
@@ -243,6 +249,15 @@ def _flatten_rows(raw: dict, prefix: str = "") -> dict[str, Row]:
     return rows
 
 
+def _crossing(raw: str | dict) -> Crossing:
+    if isinstance(raw, str):
+        return Crossing(raw)
+    name, count = str(raw["name"]), raw.get("count", 1)
+    if type(count) is not int or count < 1:
+        raise GraphDefect(f"crossing {name!r} count must be a positive integer, got {count!r}")
+    return Crossing(name, count)
+
+
 def _node(raw: dict) -> Node:
     return Node(
         id=str(raw["id"]),
@@ -250,7 +265,7 @@ def _node(raw: dict) -> Node:
         ops=float(raw.get("ops", 0.0)),
         nbytes=float(raw.get("bytes", 0.0)),
         memory=str(raw.get("memory", "")),
-        crossings=tuple(raw.get("crossings") or ()),
+        crossings=tuple(_crossing(c) for c in raw.get("crossings") or ()),
         crossing_bytes=float(raw.get("crossing_bytes", 0.0)),
         fraction=None if raw.get("fraction") is None else float(raw["fraction"]),
     )
@@ -279,8 +294,8 @@ def _floors(node: Node, model: MachineModel, bw: Bandwidth) -> Floors:
         memory, rows["memory"] = node.nbytes / bw.value, bw.row
     tax = 0.0
     for crossing in node.crossings:
-        row = model.row(f"tax.{crossing}")
-        tax += row.spend()
+        row = model.row(f"tax.{crossing.name}")
+        tax += crossing.count * row.spend()
         rows.setdefault("tax", row.key)
     if node.crossing_bytes:
         row = model.row(f"tax.{node.unit}_ceiling")

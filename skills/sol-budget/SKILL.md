@@ -65,7 +65,9 @@ Exit condition: every unit and mechanism the hot path touches has a measured row
 1. **Graph.** Write `perf/dataflow.yaml`. Nodes are stages with the unit that runs
    them. Every non-`inplace` cell of the handoff matrix becomes its own copy or convert
    node, and the edge names it with `via:`. Every kernel or runtime crossing — syscall,
-   socket op, hot alloc, lock, wake, FFI — is a `crossings:` entry priced from §8.
+   socket op, hot alloc, lock, wake, FFI — is a `crossings:` entry priced from §8. A
+   crossing paid repeatedly per run is `{name: syscall, count: 581}`; a bare name is
+   count 1.
    Nothing hides inside a library call.
 2. **Fundamental work.** Per node, the compulsory ops and compulsory bytes the
    algorithm requires. A miss, a re-read or a conversion is a design decision, so it is
