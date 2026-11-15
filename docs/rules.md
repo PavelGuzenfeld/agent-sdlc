@@ -8,7 +8,7 @@ rules sync` writes them into a repo as `.claude/rules/*.md` and an
 
 | Rule | In one line | Enforced by |
 |---|---|---|
-| Code clarity | No comments; docstrings of three lines at most, and only for what code can't say | `no-comments` (opt-in) |
+| Code clarity | No comments; docstrings of three lines at most, and only for what code can't say | `mutation-gate` with `no_comments = true` (opt-in) |
 | Diff discipline | Smallest change that satisfies the ask; stop at ~40 lines without a ticket | `diff-discipline` |
 | Model V&V | Spec issue, units at every boundary, symbolic golden, consistency harness | `mutation-gate` model checks |
 | Naming | Canonical dictionary words, in spoken-English order, in the kind's mold | `vocabulary` checks |

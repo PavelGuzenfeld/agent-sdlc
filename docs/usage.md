@@ -16,7 +16,7 @@ cd agent-sdlc
 ```
 
 - The plugin ships skills, commands, `bin/` and the session-preflight,
-  git-guardrail, host-exec, `/say` and Stop-time gate hooks.
+  git-guardrail, host-exec, `/say`, Stop-time gate and codex-review hooks.
 - `--deps` installs `mutation-gate` and the tools it calls.
 - Or load it for one session, without installing: `claude --plugin-dir /path/to/agent-sdlc`.
 
@@ -236,7 +236,7 @@ does:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: pip install agent-sdlc==0.5.6
+      - run: pip install agent-sdlc==0.5.7
       - run: |
           base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
           mutation-gate commit-msg --range "$base..HEAD"
