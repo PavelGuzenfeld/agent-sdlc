@@ -367,3 +367,80 @@ def test_a_node_beside_a_light_then_heavy_chain_is_charged_the_heavy_link():
     )
     solution = sol.solve(graph, _model(text))
     assert solution.floors["a"].memory == 2.0
+
+
+def _units_at(**rates):
+    raw = sol.yaml.safe_load(sol._yaml_block(MODEL))
+    cpu = raw["units"]["cpu"]
+    for unit, rate in rates.items():
+        raw["units"][unit] = {**cpu, "sustained_bytes": {**cpu["sustained_bytes"], "value": rate}}
+    return MachineModel(raw)
+
+
+def _on(unit):
+    return _node(unit, unit=unit, bytes=GB)
+
+
+def test_a_node_beside_a_serial_chain_is_charged_one_link_of_the_chain_not_both():
+    graph = _graph([_on("a"), _on("b"), _on("c")], [{"from": "b", "to": "c"}])
+    solution = sol.solve(graph, _units_at(a=6.0e8, b=6.0e8, c=6.0e8))
+    assert solution.floors["a"].memory == 2.0
+
+
+def test_each_link_of_a_chain_beside_a_node_is_charged_that_node_not_the_other_link():
+    graph = _graph([_on("a"), _on("b"), _on("c")], [{"from": "b", "to": "c"}])
+    solution = sol.solve(graph, _units_at(a=6.0e8, b=6.0e8, c=6.0e8))
+    assert solution.floors["b"].memory == 2.0
+    assert solution.floors["c"].memory == 2.0
+
+
+@pytest.mark.parametrize("edge", [("heavy", "light"), ("light", "heavy")])
+def test_a_node_beside_a_serial_chain_is_charged_its_heavier_link(edge):
+    graph = _graph([_on("a"), _on("heavy"), _on("light")], [{"from": edge[0], "to": edge[1]}])
+    solution = sol.solve(graph, _units_at(a=2.5e8, heavy=1.0e9, light=5.0e8))
+    assert solution.floors["a"].memory == 5.0
+
+
+def test_a_heavy_parent_is_outweighed_by_its_two_children_running_together():
+    graph = _graph(
+        [_on("a"), _on("parent"), _on("left"), _on("right")],
+        [{"from": "parent", "to": "left"}, {"from": "parent", "to": "right"}],
+    )
+    solution = sol.solve(graph, _units_at(a=2.5e8, parent=6.25e8, left=5.0e8, right=5.0e8))
+    assert solution.floors["a"].memory == 5.0
+
+
+def test_a_node_beside_a_fan_in_is_charged_every_producer_not_the_consumer():
+    graph = _graph(
+        [_on("a"), _on("b"), _on("c"), _on("d"), _on("e")],
+        [{"from": "c", "to": "b"}, {"from": "d", "to": "b"}, {"from": "e", "to": "b"}],
+    )
+    solution = sol.solve(graph, _units_at(a=5.0e8, b=3.75e8, c=1.25e8, d=3.75e8, e=2.5e8))
+    assert solution.floors["a"].memory == 2.5
+
+
+def test_a_parent_is_not_charged_for_its_own_children():
+    graph = _graph(
+        [_on("a"), _on("parent"), _on("left"), _on("right")],
+        [{"from": "parent", "to": "left"}, {"from": "parent", "to": "right"}],
+    )
+    solution = sol.solve(graph, _units_at(a=2.5e8, parent=6.25e8, left=5.0e8, right=5.0e8))
+    assert solution.floors["parent"].memory == 1.6
+
+
+def test_a_node_is_charged_a_concurrent_pair_that_shares_no_layer():
+    graph = _graph(
+        [_on("a"), _on("x"), _on("y"), _on("z"), _on("w")],
+        [{"from": "x", "to": "y"}, {"from": "x", "to": "z"}, {"from": "z", "to": "w"}],
+    )
+    solution = sol.solve(graph, _units_at(a=2.5e8, x=5.0e8, y=5.0e8, z=2.5e8, w=5.0e8))
+    assert solution.floors["a"].memory == 5.0
+
+
+def test_a_node_beside_two_separate_chains_is_charged_a_link_of_each():
+    graph = _graph(
+        [_on("a"), _on("b"), _on("c"), _on("d"), _on("e")],
+        [{"from": "b", "to": "c"}, {"from": "d", "to": "e"}],
+    )
+    solution = sol.solve(graph, _units_at(a=2.5e8, b=5.0e8, c=2.5e8, d=2.5e8, e=5.0e8))
+    assert solution.floors["a"].memory == 5.0
