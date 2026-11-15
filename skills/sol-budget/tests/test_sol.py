@@ -269,6 +269,13 @@ def test_a_lone_node_above_the_knee_keeps_its_isolated_bandwidth():
     assert solution.floors["a"].memory == 0.25
 
 
+def test_a_node_beside_compute_only_work_keeps_its_isolated_bandwidth():
+    graph = _graph([_node("a", bytes=GB), _node("b", ops=GB / 8)])
+    solution = sol.solve(graph, _model(FAST_MODEL))
+    assert not solution.degraded
+    assert solution.floors["a"].memory == 0.25
+
+
 def test_a_serial_chain_above_the_knee_keeps_its_isolated_bandwidth():
     chain = _graph([_node("a", bytes=GB), _node("b", bytes=GB)], [{"from": "a", "to": "b"}])
     solution = sol.solve(chain, _model(FAST_MODEL))
