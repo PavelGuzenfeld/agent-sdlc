@@ -100,7 +100,7 @@ magnitude work runs in a container, never in-head. Commit the script.
 - The mutation gate enforces Layer 0 mechanically: spec present (the pinned
   issue resolves) when a `model_paths` file changes, a diff-touched model test cites an
   `MS-n` that exists and is
-  untagged, and a keyword probe blocks once on model code not declared in `model_paths`. A
+  untagged, and a keyword probe (two distinct keywords, or wrap with pi) blocks once on model code not declared in `model_paths`. A
   declared `[[golden]]` artefact must carry its SymPy source's sha256 (Layer 3). On green, the
   Layer 0 blind pass runs over `model_paths` — code only — and reports.
 - Layers 1, 2, 4 and 5 have no hook. They hold because they are read.

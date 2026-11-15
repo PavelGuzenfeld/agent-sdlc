@@ -34,7 +34,8 @@ PROBE_TOKENS = (
     r"atan2", r"jacobian", r"cholesky", r"covariance", r"innovation",
     r"residual", r"process noise", r"\bdt\b", r"sigma",
 )
-PROBE_RE = re.compile("|".join(PROBE_TOKENS), re.IGNORECASE)
+PROBE_RES = tuple(re.compile(token, re.IGNORECASE) for token in PROBE_TOKENS)
+PROBE_MIN_DISTINCT = 2
 WRAP_RE = re.compile(r"wrap", re.IGNORECASE)
 PI_RE = re.compile(r"\bpi\b|M_PI|two_pi|TWO_PI", re.IGNORECASE)
 
@@ -130,9 +131,11 @@ def tagged(line: str) -> bool:
 
 
 def probe_hit(text: str) -> str | None:
-    m = PROBE_RE.search(text)
-    if m:
-        return m.group(0)
+    """One keyword alone collides with ordinary code, such as residual in a max-flow graph
+    (#492), so it takes PROBE_MIN_DISTINCT different ones. Wrap with pi is already two."""
+    seen = [m.group(0) for token in PROBE_RES if (m := token.search(text))]
+    if len(seen) >= PROBE_MIN_DISTINCT:
+        return ", ".join(seen)
     if WRAP_RE.search(text) and PI_RE.search(text):
         return "wrap+pi"
     return None

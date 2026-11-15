@@ -1,12 +1,14 @@
 """Intent: dotfiles#56 — Layer 0 of model-vv.md becomes a hook. The seven
-acceptance steps in the issue's design comment, one failure mode each."""
+acceptance steps in the issue's design comment, one failure mode each.
+#492 — one model keyword alone, such as residual in flow-network code, is not model code."""
 
+import contextlib
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from mutation_gate import model_vv
+from mutation_gate import cli, model_vv
 from mutation_gate.repo import Config, GateError, Golden, Repo
 from mutation_gate.waivers import Waiver
 
@@ -104,8 +106,8 @@ def test_change_outside_model_and_test_scope_is_silent(tmp_path):
 
 def test_probe_hit_outside_model_paths_blocks_even_with_no_model_paths_declared(tmp_path):
     repo = _repo(tmp_path)
-    _write(tmp_path, "scripts/bearing.py", "from math import atan2\n")
-    findings = model_vv.check(repo, {"scripts/bearing.py": {1}}, [], staged=False)
+    _write(tmp_path, "scripts/bearing.py", "from math import atan2\ncovariance = None\n")
+    findings =model_vv.check(repo, {"scripts/bearing.py": {1}}, [], staged=False)
     assert _checks(findings) == ["probe"]
     assert findings[0].file == "scripts/bearing.py"
 
@@ -120,7 +122,7 @@ def test_probe_needs_wrap_and_pi_together(tmp_path):
 
 def test_probe_skips_test_files(tmp_path):
     repo = _repo(tmp_path)
-    _write(tmp_path, "tests/test_geo.py", "from math import atan2\n")
+    _write(tmp_path, "tests/test_geo.py", "from math import atan2\ncovariance = None\n")
     assert model_vv.check(repo, {"tests/test_geo.py": {1}}, [], staged=False) == []
 
 
@@ -128,7 +130,7 @@ def test_model_exclude_with_reason_clears_the_probe(tmp_path):
     _write(tmp_path, ".mutation-gate.toml",
            '[[model_exclude]]\npath = "scripts/"\nreason = "plot annotations, no estimation"\n')
     repo = Repo(root=tmp_path, origin="", remotes=(), config=Config.load(tmp_path))
-    _write(tmp_path, "scripts/bearing.py", "from math import atan2\n")
+    _write(tmp_path, "scripts/bearing.py", "from math import atan2\ncovariance = None\n")
     assert model_vv.check(repo, {"scripts/bearing.py": {1}}, [], staged=False) == []
 
 
@@ -417,3 +419,66 @@ def test_source_error_sends_output_to_reader(monkeypatch, tmp_path):
     monkeypatch.setattr(model_vv.mutants, "render_error_line", lambda result: "stub-line")
     with pytest.raises(GateError, match="stub-line"):
         model_vv.test_extents(fixture, "python")
+
+
+FLOW_NETWORK = (
+    "def _residual_tree(graph, flow):\n"
+    "    residual = {}\n"
+    "    for u, v in graph.edges:\n"
+    "        residual[u, v] = graph.capacity(u, v) - flow[u, v]\n"
+    "    return residual\n"
+)
+
+KALMAN_UPDATE = (
+    "def update(x, covariance, z, h, r):\n"
+    "    innovation = z - h @ x\n"
+    "    residual_covariance = h @ covariance @ h.T + r\n"
+    "    return innovation, residual_covariance\n"
+)
+
+
+def _staged_gate_run(tmp_path, monkeypatch, capsys, rel: str, text: str) -> tuple[int, str]:
+    _write(tmp_path, rel, text)
+    monkeypatch.setattr(cli, "discover", lambda cwd=None: _repo(tmp_path))
+    monkeypatch.setattr(cli, "skip_reason", lambda repo: None)
+    monkeypatch.setattr(cli.runner, "repo_lock", lambda repo: contextlib.nullcontext())
+    monkeypatch.setattr(cli.mutants, "changed_lines", lambda root, staged: {rel: _all_lines(tmp_path, rel)})
+    monkeypatch.setattr(cli.model_vv, "git", lambda *args, **kwargs: text)
+    monkeypatch.setattr(cli.mutants.shutil, "which", lambda name: None)
+    code = cli.main(["--staged"])
+    return code, capsys.readouterr().err
+
+
+def test_residual_in_flow_network_code_passes_the_staged_model_vv_probe(tmp_path, monkeypatch, capsys):
+    code, err = _staged_gate_run(tmp_path, monkeypatch, capsys, "graphs/maxflow.py", FLOW_NETWORK)
+    assert "BLOCKED: model-vv" not in err
+    assert "ast-grep" in err
+    assert code == 2
+
+
+def test_filter_update_with_several_model_keywords_is_still_blocked_by_the_staged_probe(
+    tmp_path, monkeypatch, capsys,
+):
+    code, err = _staged_gate_run(tmp_path, monkeypatch, capsys, "estimation/update.py", KALMAN_UPDATE)
+    assert code == 1
+    assert "BLOCKED: model-vv" in err
+    assert "estimation/update.py" in err
+
+
+def test_exactly_two_distinct_keywords_block(tmp_path):
+    repo = _repo(tmp_path)
+    _write(tmp_path, "scripts/noise.py", "sigma = 1.0\ndt = 0.1\n")
+    assert _checks(model_vv.check(repo, {"scripts/noise.py": {1}}, [], staged=False)) == ["probe"]
+
+
+def test_one_keyword_repeated_does_not_block(tmp_path):
+    repo = _repo(tmp_path)
+    _write(tmp_path, "scripts/bearing.py", "from math import atan2\nb = atan2(1, 2)\nc = atan2(3, 4)\n")
+    assert model_vv.check(repo, {"scripts/bearing.py": {1}}, [], staged=False) == []
+
+
+def test_probe_finding_names_every_distinct_keyword_it_saw(tmp_path):
+    repo = _repo(tmp_path)
+    _write(tmp_path, "scripts/noise.py", "sigma = 1.0\ndt = 0.1\n")
+    [finding] = model_vv.check(repo, {"scripts/noise.py": {1}}, [], staged=False)
+    assert "dt, sigma" in finding.detail
