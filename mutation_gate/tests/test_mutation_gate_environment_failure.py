@@ -94,6 +94,31 @@ def test_a_run_that_hit_a_gpu_out_of_memory_at_collection_blocks(run_mutant):
         run_mutant(2, prelude)
 
 
+KEYERROR_FAILURES_THEN_GPU_OUT_OF_MEMORY = (
+    "printf '____ test_a ____\\nE   KeyError: x\\n____ test_b ____\\nE   KeyError: y\\n"
+    "____ test_c ____\\nE   torch.OutOfMemoryError: CUDA out of memory. Tried\\n'; "
+)
+
+
+def test_a_run_whose_tests_failed_before_a_gpu_out_of_memory_is_killed(run_mutant):
+    assert run_mutant(1, KEYERROR_FAILURES_THEN_GPU_OUT_OF_MEMORY).verdict == runner.KILLED
+
+
+def test_a_run_whose_only_failure_is_a_gpu_out_of_memory_still_blocks(run_mutant):
+    prelude = "printf '____ test_c ____\\nE   torch.OutOfMemoryError: CUDA out of memory. Tried\\n'; "
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_mutant(1, prelude)
+
+
+def test_a_run_whose_tests_failed_only_after_a_gpu_out_of_memory_still_blocks(run_mutant):
+    prelude = (
+        "printf 'E   torch.OutOfMemoryError: CUDA out of memory. Tried\\n"
+        "____ test_d ____\\nE   KeyError: y\\n'; "
+    )
+    with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
+        run_mutant(1, prelude)
+
+
 def test_a_run_that_exits_143_is_still_killed(run_mutant):
     assert run_mutant(143).verdict == runner.KILLED
 
@@ -172,6 +197,8 @@ def test_prints_the_typed_marker_then_fails():
     assert 1 == 2
 """
 
+PASSING_TYPED_PRINTING_TEST = TYPED_PRINTING_TEST.replace("    assert 1 == 2\n", "")
+
 
 @pytest.fixture
 def run_pytest(tmp_path, monkeypatch):
@@ -242,11 +269,11 @@ def test_a_typed_marker_printed_to_captured_output_is_still_killed(run_pytest, t
 
 
 @pytest.mark.parametrize("traceback_style", ["auto", "short", "line", "native"])
-def test_a_marker_raised_after_a_test_printed_a_typed_marker_blocks_without_a_summary(
+def test_a_marker_raised_after_a_passing_test_printed_a_typed_marker_blocks_without_a_summary(
     run_pytest, traceback_style
 ):
     with pytest.raises(repo_mod.GateError, match="reported a GPU out-of-memory error and exited 1"):
-        run_pytest(TYPED_PRINTING_TEST + RAISING_TEST, traceback_style, report="N")
+        run_pytest(PASSING_TYPED_PRINTING_TEST + RAISING_TEST, traceback_style, report="N")
 
 
 def test_a_marker_raised_at_collection_under_tb_no_blocks(run_pytest):
