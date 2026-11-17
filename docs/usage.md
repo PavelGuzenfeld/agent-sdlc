@@ -236,7 +236,7 @@ does:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: pip install agent-sdlc==0.5.9
+      - run: pip install agent-sdlc==0.5.10
       - run: |
           base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
           mutation-gate commit-msg --range "$base..HEAD"
