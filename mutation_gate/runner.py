@@ -42,6 +42,7 @@ ENVIRONMENT_FAILURE_CAUSES = {
     DOCKER_LINE_PATTERN + rb"Cannot connect to the Docker daemon": "no reachable docker daemon",
     DOCKER_LINE_PATTERN + rb"failed to connect to the docker API": "no reachable docker daemon",
 }
+TEST_FAILURE_LINE_RE = re.compile(rb"^E\s+\S", re.MULTILINE)
 ANSI_COLOR_RE = re.compile(rb"\x1b\[[0-9;]*m")
 CAPTURED_OUTPUT_RE = re.compile(
     rb"^-+ Captured [^\n]*$.*?(?=^([-_=])\1* [^\n]* \1+$|^\S[^\n]*:\d+: |\Z)",
@@ -292,7 +293,8 @@ def run_capped(repo: Repo, command: str, timeout: float | None = None) -> str:
     reported = CAPTURED_OUTPUT_RE.sub(b"", uncolored)
     found = [
         label for marker, label in ENVIRONMENT_FAILURE_CAUSES.items()
-        if re.search(marker, reported, re.MULTILINE)
+        if (hit := re.search(marker, reported, re.MULTILINE))
+        and not TEST_FAILURE_LINE_RE.search(reported[:hit.start()])
     ]
     _refuse_environment_failure(proc.returncode, found)
     if proc.returncode in PYTEST_ABORT_EXIT_CODES:
