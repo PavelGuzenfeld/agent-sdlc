@@ -25,6 +25,12 @@ repo defaults to squash-only merges with delete-branch-on-merge.
 The one carve-out: a batch of confirmed `size:tiny` follow-ups may share one
 worker, one branch and one PR, with a `Closes #N` line per ticket.
 
+When the ticket lives in an external tracker, the PR title leads with its key
+(`KEY-123: …`) and the ticket gets the PR URL the moment the PR opens.
+`Closes #N` fires only on the default branch: a merge into any other branch
+is followed by closing its linked issues by hand and moving the ticket to its
+merged state.
+
 Every ticket and its PR name one responsible person as assignee. Triage
 sets it alongside the `model:*` label — the label approves, the assignee
 names who works it. An agent works only tickets assigned to the `gh` user
