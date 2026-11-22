@@ -31,6 +31,11 @@ When the ticket lives in an external tracker, the PR title leads with its key
 is followed by closing its linked issues by hand and moving the ticket to its
 merged state.
 
+In tracker text — ticket bodies, comments, PR bodies — every ticket key, issue,
+PR, commit and branch is written as a link to it. A bare key or SHA counts as
+unwritten; a code block renders no links, so a tree of references is a nested
+list.
+
 Every ticket and its PR name one responsible person as assignee. Triage
 sets it alongside the `model:*` label — the label approves, the assignee
 names who works it. An agent works only tickets assigned to the `gh` user
