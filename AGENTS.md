@@ -96,6 +96,18 @@ Once the words are picked, run `mutation-gate vocabulary lookup --kind <kind>
 <name>` against the candidate. It checks the name against the mold for that
 kind and prints the fix when it does not fit.
 
+## Neutral intent
+
+Name the action, not a violent metaphor for it. `clear`, not `nuke`.
+`teardown`, not `destroy`.
+
+Established field terms are exempt: mutation testing's `kill`/`survived`, Unix
+signals, POSIX process vocabulary. The test is whether the word names the intent
+or borrows violence for colour.
+
+An existing violent name found while reading gets a follow-up ticket
+(`follow-up` + `clarity`), not a drive-by rename.
+
 ## Kinds
 
 `--kind` takes one of: function, method, variable, field, constant, local,
