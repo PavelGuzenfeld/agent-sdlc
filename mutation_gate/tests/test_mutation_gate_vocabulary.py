@@ -669,3 +669,39 @@ def test_gate_vocabulary_word_resolves_as_a_canonical_core_concept(word, tmp_pat
     assert (code, err) == (0, "")
     assert out == f"{word}: {pos}\n" + (f"  forms: {plural}\n" if plural else "")
     assert vocabulary.load(tmp_path, "").concepts[word].meaning == meaning
+
+
+@pytest.mark.parametrize("spelling", ["nuke", "purge", "wipe"])
+def test_rejected_synonym_points_to_clear(spelling, tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup(spelling, capsys)
+    assert code == 0
+    assert out == f"clear: verb\n  {spelling} is a rejected synonym of clear\n"
+
+
+def test_rejected_synonym_points_to_teardown(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("destroy", capsys)
+    assert code == 0
+    assert out == "teardown: verb\n  destroy is a rejected synonym of teardown\n"
+
+
+def test_emit_is_a_canonical_verb(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("emit", capsys)
+    assert code == 0
+    assert out == "emit: verb\n  forms: emits, emitted, emitting, emitter\n"
+
+
+def test_clear_is_a_canonical_verb(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("clear", capsys)
+    assert code == 0
+    assert out == "clear: verb\n  forms: clears, cleared, clearing\n"
+
+
+def test_teardown_is_a_canonical_verb(tmp_path, monkeypatch, capsys):
+    _repo(tmp_path, monkeypatch)
+    code, out, _ = _lookup("teardown", capsys)
+    assert code == 0
+    assert out == "teardown: verb\n  forms: teardowns\n"

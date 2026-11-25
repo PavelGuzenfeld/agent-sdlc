@@ -891,6 +891,27 @@ pos = ["verb"]
 forms = ["-s", "-ing"]
 irregular = { "-ed" = "set" }
 
+[[concept]]
+word = "clear"
+meaning = "remove all entries from a collection or a cache"
+pos = ["verb"]
+reject = ["nuke", "purge", "wipe"]
+forms = ["-s", "-ed", "-ing"]
+
+[[concept]]
+word = "emit"
+meaning = "send a value or an event to its listeners"
+pos = ["verb"]
+forms = ["-s", "-ed", "-ing", "-er"]
+irregular = { "-ed" = "emitted", "-ing" = "emitting", "-er" = "emitter" }
+
+[[concept]]
+word = "teardown"
+meaning = "release the resources a thing holds and leave it unusable"
+pos = ["verb"]
+reject = ["destroy"]
+forms = ["-s"]
+
 [[symbol]]
 word = "i"
 meaning = "loop index"
@@ -970,6 +991,9 @@ pair = ["point", "item"]
 
 [[distinct]]
 pair = ["source", "reference"]
+
+[[distinct]]
+pair = ["make", "clear"]
 
 [[distinct]]
 pair = ["image", "range"]

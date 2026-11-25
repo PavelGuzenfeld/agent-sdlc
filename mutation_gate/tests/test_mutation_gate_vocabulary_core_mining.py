@@ -38,6 +38,8 @@ EXCEPTIONS = {
     "mismatch": "same as waiver: added by #512, absent from five of the six mined repos",
     "viewer": "test_staged_tsx_component_passes_and_camel_case_function_blocks "
               "in test_mutation_gate_vocabulary_check.py (added by #167)",
+    "teardown": "#530 adds it as the neutral replacement for destroy; "
+                "none of the six mined repos use it",
 }
 
 

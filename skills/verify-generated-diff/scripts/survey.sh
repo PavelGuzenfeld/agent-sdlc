@@ -110,7 +110,7 @@ out=$(git diff --stat -M "$BASE" -- '*test*' '*spec*' "${EX[@]}" | tail -1)
 cat <<'EOF'
   These were probably written from the implementation, so they encode what the
   code does rather than what it should do. Do not read them as a specification.
-  Attack them with Pass A before trusting a single green result.
+  Challenge them with Pass A before trusting a single green result.
 EOF
 
 hr "next"

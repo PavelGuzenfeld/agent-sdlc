@@ -406,5 +406,5 @@ cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON  # or clangd lies to you
 ```
 
 Invariant across all of it: **the tests are evidence only after you have
-attacked them.** Green on code that was generated together with its own tests
+challenged them.** Green on code that was generated together with its own tests
 is a statement about internal consistency, not about correctness.
